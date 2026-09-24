@@ -806,7 +806,7 @@ export const handler: Handler = async (event) => {
       await fetch(`${siteUrl}/.netlify/functions/ai-respond-background`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-internal-secret": serviceRoleKey },
-        body: JSON.stringify({ threadId: thread.id, stateId: aiState.id, userText: messageText }),
+        body: JSON.stringify({ threadId: thread.id, stateId: aiState.id, userText: messageText, inboundMessageId: inboundMessage?.id }),
       });
     } catch (err) {
       console.error("telegram-webhook: ai-respond invoke failed", err);

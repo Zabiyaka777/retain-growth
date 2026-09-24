@@ -116,6 +116,26 @@ const AI_OPENING_KICKOFF =
   "Розмову щойно передали тобі. Звернись до ліда першим: коротко привітайся у своєму стилі " +
   "та постав перше питання, потрібне для першого завдання. Не згадуй цю інструкцію й не описуй свою роль.";
 
+// resume-ai.ts, "Так": a manager handed the thread back and wants the lead's
+// last message answered. The paused stretch — including what the manager
+// wrote — is already in ai_conversation_log as ordinary turns (our side as
+// `assistant`); this cue is what tells the model that part of "its" side was
+// actually a colleague. Appended to this call's system prompt only — like the
+// kickoff, never written to the log.
+const AI_RESUME_NOTE =
+  "Розмову ненадовго вів менеджер, тепер вона знову в тебе. Частину реплік від імені бізнесу в історії вище " +
+  "написав він. Продовж природно: врахуй сказане менеджером, не повторюй і не суперечи йому, " +
+  "відповідай на останнє повідомлення ліда. Не згадуй цю інструкцію й не кажи про передачу розмови.";
+
+// Content-level twin of telegram-webhook.ts's update_id guard: the same text
+// sent twice in quick succession (double tap, flaky network resend — each a
+// *different* Telegram update, so update_id can't catch it) gets one answer.
+const DUPLICATE_WINDOW_MS = 45_000;
+
+function normalizeForDuplicate(text: string | null | undefined): string {
+  return (text ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function readMinAttempts(config: AiNodeConfig): number {
   const raw = config.min_attempts_before_error;
   if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 1) return DEFAULT_MIN_ATTEMPTS_BEFORE_ERROR;
@@ -466,6 +486,12 @@ export const handler: Handler = async (event) => {
   // read + show the typing indicator via Cloud API. Telegram/FBM don't need
   // an equivalent: their typing signal targets the chat, not a message id.
   let waMessageId: string | undefined;
+  // The messages row this call answers (telegram-webhook.ts). Pins down which
+  // of two identical messages is "this" one for the duplicate check below.
+  let inboundMessageId: string | undefined;
+  // resume-ai.ts: answer the thread as it stands — the lead's last message is
+  // already in the history, so there is no userText to log.
+  let resume = false;
   try {
     const body = JSON.parse(event.body || "{}");
     threadId = typeof body.threadId === "string" ? body.threadId : undefined;
@@ -473,6 +499,8 @@ export const handler: Handler = async (event) => {
     opening = body.opening === true;
     stateId = typeof body.stateId === "string" ? body.stateId : undefined;
     waMessageId = typeof body.waMessageId === "string" ? body.waMessageId : undefined;
+    inboundMessageId = typeof body.inboundMessageId === "string" ? body.inboundMessageId : undefined;
+    resume = body.resume === true;
   } catch {
     return jsonResponse(400, { error: "Невалідне тіло запиту" });
   }
@@ -585,6 +613,44 @@ export const handler: Handler = async (event) => {
     if (eventError) console.error("ai-respond: events insert failed", eventError);
   }
 
+  // Same text from the lead within DUPLICATE_WINDOW_MS of an earlier inbound
+  // message → the earlier one's call answers, this one stays silent. Only
+  // messages strictly before this one count (ties broken by id), so of two
+  // identical messages exactly one is ever the "earlier" — never both skip.
+  // Empty bodies (voice notes, media) are never treated as duplicates.
+  if (!opening && !resume && inboundMessageId) {
+    const { data: current } = await supabase
+      .from("messages")
+      .select("id, body, created_at")
+      .eq("id", inboundMessageId)
+      .eq("thread_id", threadId)
+      .maybeSingle();
+    const currentText = normalizeForDuplicate(current?.body as string | null);
+    if (current && currentText) {
+      const since = new Date(Date.parse(current.created_at as string) - DUPLICATE_WINDOW_MS).toISOString();
+      const { data: earlier, error: earlierError } = await supabase
+        .from("messages")
+        .select("id, body")
+        .eq("thread_id", threadId)
+        .eq("direction", "inbound")
+        .neq("id", current.id)
+        .gte("created_at", since)
+        .or(`created_at.lt.${current.created_at},and(created_at.eq.${current.created_at},id.lt.${current.id})`);
+      if (earlierError) console.error("ai-respond: duplicate lookup failed", earlierError);
+      const duplicateOf = (earlier ?? []).find((m) => normalizeForDuplicate(m.body as string | null) === currentText);
+      if (duplicateOf) {
+        const { error: eventError } = await supabase.from("events").insert({
+          org_id: orgId,
+          type: "ai_duplicate_inbound_skipped",
+          level: "info",
+          payload: { thread_id: threadId, message_id: current.id, duplicate_of: duplicateOf.id },
+        });
+        if (eventError) console.error("ai-respond: events insert failed", eventError);
+        return jsonResponse(200, { ok: false, reason: "duplicate_inbound" });
+      }
+    }
+  }
+
   const { data: node, error: nodeError } = await supabase
     .from("funnel_nodes")
     .select("config")
@@ -634,7 +700,10 @@ export const handler: Handler = async (event) => {
   const memorySection = buildMemorySection((memoryRows ?? []) as { key: string; value: string }[]);
   const basePrompt = buildSystemPrompt(config);
   // Guardrails last: closest to the conversation, hardest to drift away from.
-  const systemPrompt = [basePrompt, memorySection, taskSection, escalationSection, AI_GUARDRAILS]
+  // The resume cue goes into the one leading system message rather than a
+  // trailing one: several providers behind OpenRouter only accept `system`
+  // at the start of the conversation.
+  const systemPrompt = [basePrompt, memorySection, taskSection, escalationSection, AI_GUARDRAILS, resume ? AI_RESUME_NOTE : ""]
     .filter(Boolean)
     .join("\n\n");
 
@@ -671,7 +740,7 @@ export const handler: Handler = async (event) => {
   // Voice note: swap in its transcript and carry on down the ordinary text
   // path — logged to ai_conversation_log, sent to the model and answered
   // exactly like a typed message.
-  if (!opening && !userText) {
+  if (!opening && !resume && !userText) {
     const transcript = await resolveVoiceTranscript(supabase, threadId);
     if (transcript) {
       userText = transcript;
@@ -691,8 +760,9 @@ export const handler: Handler = async (event) => {
 
   // Log the lead's turn first so the history read below already contains it —
   // one source of truth for what was actually sent to the model. An opening
-  // turn has no lead message to log.
-  if (!opening) {
+  // turn has no lead message to log, and neither has a resume (resume-ai.ts
+  // already copied the lead's messages in).
+  if (!opening && !resume) {
     const { error: userLogError } = await supabase.from("ai_conversation_log").insert({
       org_id: orgId,
       thread_id: threadId,

@@ -1,4 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
 import { IconArchiveBox, IconBan, IconBell, IconBellOff, IconCheckCircle, IconClose, IconInbox, IconSpinner, IconTrash } from './icons'
 
@@ -164,6 +166,11 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
   const [showAttachForm, setShowAttachForm] = useState(false)
   const [attachFunnelDraft, setAttachFunnelDraft] = useState('')
   const [attachNodeDraft, setAttachNodeDraft] = useState('')
+  // "Увімкнути AI": which stopped state the confirm dialog is about (null =
+  // closed), and a one-line outcome shown next to the badge afterwards.
+  const [resumeTarget, setResumeTarget] = useState<FunnelStateRef | null>(null)
+  const [resumeBusy, setResumeBusy] = useState(false)
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null)
 
   const [actionPending, setActionPending] = useState<'blocked' | 'archived' | 'closed' | 'subscription' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -355,6 +362,123 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
       cancelled = true
     }
   }, [leadId, threadId])
+
+  // One funnel_states row as it stands now → where it belongs in this card:
+  // the active/ai_active list, the stopped badge, or nowhere (completed).
+  // Shared by Realtime and by this component's own actions, so a row can
+  // never sit in both lists (e.g. a stopped row re-attached from here).
+  const applyFunnelStateRow = useCallback((row: FunnelStateRef) => {
+    const isLive = row.status === 'active' || row.status === 'ai_active'
+    setFunnelStates((prev) => {
+      const at = prev.findIndex((s) => s.id === row.id)
+      if (!isLive) return at === -1 ? prev : prev.filter((s) => s.id !== row.id)
+      if (at === -1) return [...prev, row]
+      const next = prev.slice()
+      next[at] = row
+      return next
+    })
+    setStoppedFunnelStates((prev) => {
+      const without = prev.filter((s) => s.id !== row.id)
+      return row.status === 'stopped' ? [...without, row] : without.length === prev.length ? prev : without
+    })
+    // The move picker follows the row's node — unless the manager has
+    // already picked a different target there and hasn't applied it yet.
+    setMoveNodeDrafts((prev) => {
+      if (!isLive) {
+        if (!(row.id in prev)) return prev
+        const next = { ...prev }
+        delete next[row.id]
+        return next
+      }
+      return { ...prev, [row.id]: prev[row.id] && prev[row.id] !== row.funnel_node_id ? prev[row.id] : (row.funnel_node_id ?? '') }
+    })
+  }, [])
+
+  const removeFunnelStateRow = useCallback((id: string) => {
+    setFunnelStates((prev) => (prev.some((s) => s.id === id) ? prev.filter((s) => s.id !== id) : prev))
+    setStoppedFunnelStates((prev) => (prev.some((s) => s.id === id) ? prev.filter((s) => s.id !== id) : prev))
+  }, [])
+
+  // The funnel/node catalogs are loaded once with the card; a funnel or node
+  // created after that (another tab, the builder) would otherwise show up
+  // here as "Воронку видалено". Read by the Realtime handler through refs so
+  // the subscription doesn't reconnect whenever a catalog changes.
+  const funnelsRef = useRef(funnels)
+  funnelsRef.current = funnels
+  const funnelNodesRef = useRef(funnelNodes)
+  funnelNodesRef.current = funnelNodes
+  const reloadCatalogs = useCallback(async () => {
+    const [f, n] = await Promise.all([
+      supabase.from('funnels').select('id, name').order('name'),
+      supabase.from('funnel_nodes').select('id, funnel_id, type, config'),
+    ])
+    if (!f.error && f.data) setFunnels(f.data as FunnelRef[])
+    if (!n.error && n.data) setFunnelNodes(n.data as FunnelNodeRef[])
+  }, [])
+
+  // Catch-up after a Realtime reconnect or the tab coming back: events in
+  // between were never delivered, so read both lists fresh.
+  const reloadFunnelStates = useCallback(async () => {
+    if (!threadId) return
+    const { data, error } = await supabase
+      .from('funnel_states')
+      .select('id, funnel_id, funnel_node_id, status')
+      .eq('thread_id', threadId)
+      .in('status', ['active', 'ai_active', 'stopped'])
+      .order('created_at', { ascending: true })
+    if (error || !data) return
+    const rows = data as FunnelStateRef[]
+    setFunnelStates(rows.filter((r) => r.status !== 'stopped'))
+    setStoppedFunnelStates(rows.filter((r) => r.status === 'stopped'))
+    setMoveNodeDrafts((prev) => Object.fromEntries(rows.filter((r) => r.status !== 'stopped').map((r) => [r.id, prev[r.id] ?? r.funnel_node_id ?? ''])))
+  }, [threadId])
+
+  // Keeps the "Воронка" block live without a refetch — the graph advancing
+  // on its own, a manual reply pausing AI (pause-ai.ts), move/stop/attach from
+  // another tab. Same approach as useLeadIndicators: INSERT/UPDATE filtered to
+  // this thread server-side; DELETE can't be filtered (the old row is PK-only)
+  // so it's matched against the ids already on screen. RLS limits every event
+  // to the caller's org.
+  useEffect(() => {
+    if (!threadId) return
+    let hasSubscribed = false
+    const onRow = (payload: RealtimePostgresChangesPayload<FunnelStateRef>) => {
+      if (payload.eventType === 'DELETE') {
+        const goneId = (payload.old as Partial<FunnelStateRef>).id
+        if (goneId) removeFunnelStateRow(goneId)
+        return
+      }
+      const row = payload.new
+      applyFunnelStateRow({ id: row.id, funnel_id: row.funnel_id, funnel_node_id: row.funnel_node_id, status: row.status })
+      const unknownFunnel = !funnelsRef.current.some((f) => f.id === row.funnel_id)
+      const unknownNode = !!row.funnel_node_id && !funnelNodesRef.current.some((n) => n.id === row.funnel_node_id)
+      if (unknownFunnel || unknownNode) void reloadCatalogs()
+    }
+    const channel = supabase
+      .channel(`lead-profile-funnels-${threadId}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'funnel_states', filter: `thread_id=eq.${threadId}` }, onRow)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'funnel_states', filter: `thread_id=eq.${threadId}` }, onRow)
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'funnel_states' }, onRow)
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') return
+        if (hasSubscribed) void reloadFunnelStates()
+        hasSubscribed = true
+      })
+
+    let timer: number | undefined
+    function onVisibility() {
+      if (document.visibilityState !== 'visible') return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => void reloadFunnelStates(), 400)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+      void supabase.removeChannel(channel)
+    }
+  }, [threadId, applyFunnelStateRow, removeFunnelStateRow, reloadFunnelStates, reloadCatalogs])
 
   async function updateStatus(status: 'blocked' | 'archived') {
     setActionError(null)
@@ -557,8 +681,8 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
   // All three funnel actions go through one endpoint; the server decides what
   // each one is allowed to touch — move/stop by a specific stateId, attach by
   // threadId+funnelId — so none of them can affect any funnel_states row but
-  // the one this call names. Nothing here advances the funnel itself — a move
-  // only repositions the marker and lets cron run the node.
+  // the one this call names. The server also kicks funnel-advance right away
+  // after a move/attach, so the node runs now rather than on the next cron.
   //
   // busyKey identifies which row's spinner this call owns (a state.id, or
   // 'attach' for the "add funnel" form) so one in-flight action never
@@ -598,21 +722,56 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
     const nodeId = moveNodeDrafts[row.id]
     if (!nodeId || nodeId === row.funnel_node_id) return
     const updated = await callManageFunnel({ action: 'move', stateId: row.id, nodeId }, row.id)
-    if (updated) {
-      setFunnelStates((prev) => prev.map((s) => (s.id === updated.id ? updated : s)))
-    }
+    if (updated) applyFunnelStateRow(updated)
   }
 
   async function handleStopFunnel(row: FunnelStateRef, funnelName: string) {
     if (!window.confirm(`Відключити ${leadLabel(lead)} від воронки «${funnelName}»? Інші воронки цього ліда це не торкнеться.`)) return
     const result = await callManageFunnel({ action: 'stop', stateId: row.id }, row.id)
-    if (result !== false) {
-      setFunnelStates((prev) => prev.filter((s) => s.id !== row.id))
-      setMoveNodeDrafts((prev) => {
-        const next = { ...prev }
-        delete next[row.id]
-        return next
+    if (result !== false) applyFunnelStateRow(result ?? { ...row, status: 'stopped' })
+  }
+
+  // Stopped rows the AI can actually come back to: only those parked on an AI
+  // node. A funnel stopped anywhere else isn't "paused AI" (resume-ai.ts
+  // refuses those too), even though the badge lists every stopped row.
+  const resumableStates = stoppedFunnelStates.filter((row) => funnelNodes.find((n) => n.id === row.funnel_node_id)?.type === 'ai')
+
+  async function handleResumeAi(reply: boolean) {
+    if (!resumeTarget) return
+    setResumeBusy(true)
+    setResumeNotice(null)
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setResumeNotice('Сесія недійсна, увійдіть знову')
+      setResumeBusy(false)
+      return
+    }
+    try {
+      const res = await fetch('/.netlify/functions/resume-ai', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ stateId: resumeTarget.id, reply }),
       })
+      const data = await res.json()
+      if (!res.ok) {
+        setResumeNotice(data.error ?? 'Не вдалося увімкнути AI')
+        return
+      }
+      applyFunnelStateRow({ ...resumeTarget, status: 'ai_active' })
+      setResumeNotice(
+        !reply
+          ? 'AI увімкнено — відповість на наступне повідомлення ліда'
+          : data.replying
+            ? 'AI увімкнено й уже відповідає на останнє повідомлення'
+            : data.reason === 'no_pending_inbound'
+              ? 'AI увімкнено. Останнє повідомлення в чаті не від ліда — AI відповість на наступне'
+              : 'AI увімкнено, але запустити відповідь не вдалося — відповість на наступне повідомлення',
+      )
+      setResumeTarget(null)
+    } catch {
+      setResumeNotice('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setResumeBusy(false)
     }
   }
 
@@ -627,7 +786,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
       // the lead already has a (stopped) row in resets that row in place
       // rather than creating a second one — mirror that here instead of
       // blindly appending, so the list can never show a duplicate.
-      setFunnelStates((prev) => (prev.some((s) => s.id === state.id) ? prev.map((s) => (s.id === state.id ? state : s)) : [...prev, state]))
+      applyFunnelStateRow(state)
       setMoveNodeDrafts((prev) => ({ ...prev, [state.id]: state.funnel_node_id ?? '' }))
       setAttachFunnelDraft('')
       setAttachNodeDraft('')
@@ -911,7 +1070,67 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
             AI зупинено
           </span>
         )}
+        {resumableStates.length > 0 && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '0.25rem 0.625rem', fontSize: '0.75rem', minHeight: 0 }}
+            onClick={() => {
+              setResumeNotice(null)
+              setResumeTarget(resumableStates[resumableStates.length - 1])
+            }}
+          >
+            Увімкнути AI
+          </button>
+        )}
+        {resumeNotice && <span className="flow-node-hint" style={{ margin: 0 }}>{resumeNotice}</span>}
       </div>
+
+      {resumeTarget &&
+        createPortal(
+          <div className="modal-backdrop" onClick={() => !resumeBusy && setResumeTarget(null)}>
+            <div className="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="resume-ai-title" onClick={(e) => e.stopPropagation()}>
+              <h2 className="modal-title" id="resume-ai-title">
+                Увімкнути AI
+              </h2>
+              {resumableStates.length > 1 && (
+                <select
+                  className="input"
+                  value={resumeTarget.id}
+                  onChange={(e) => setResumeTarget(resumableStates.find((r) => r.id === e.target.value) ?? resumeTarget)}
+                  aria-label="Воронка"
+                >
+                  {resumableStates.map((row) => {
+                    const node = funnelNodes.find((n) => n.id === row.funnel_node_id)
+                    return (
+                      <option key={row.id} value={row.id}>
+                        {(funnels.find((f) => f.id === row.funnel_id)?.name ?? 'Воронку видалено') + (node ? ` → ${nodeLabel(node)}` : '')}
+                      </option>
+                    )
+                  })}
+                </select>
+              )}
+              <p style={{ margin: 0 }}>АІ має відповісти на останнє повідомлення ліда?</p>
+              <p className="flow-node-hint" style={{ margin: 0 }}>
+                AI побачить усе листування за час паузи, включно з вашими повідомленнями. «Так» — відповість зараз,
+                якщо останнім писав лід. «Ні» — підхопить лише наступне нове повідомлення ліда.
+              </p>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-ghost" disabled={resumeBusy} onClick={() => setResumeTarget(null)}>
+                  Скасувати
+                </button>
+                <button type="button" className="btn btn-secondary" disabled={resumeBusy} onClick={() => handleResumeAi(false)}>
+                  Ні
+                </button>
+                <button type="button" className="btn btn-primary" disabled={resumeBusy} onClick={() => handleResumeAi(true)}>
+                  {resumeBusy ? <IconSpinner size={14} /> : null}
+                  Так
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <div className="profile-actions">
         {lead.status !== 'blocked' && (

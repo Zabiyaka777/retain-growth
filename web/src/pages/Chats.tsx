@@ -215,6 +215,10 @@ function activityText(entry: ActivityRow): string {
       return d.funnel_name
         ? `AI зупинено — менеджер відповів вручну (${quoted(d.funnel_name)}${d.node_label ? ` → ${quoted(d.node_label)}` : ''})`
         : 'AI зупинено — менеджер відповів вручну'
+    case 'ai_resumed_by_manager': {
+      const where = d.funnel_name ? ` (${quoted(d.funnel_name)}${d.node_label ? ` → ${quoted(d.node_label)}` : ''})` : ''
+      return `AI увімкнено${where}${d.replied ? ' — з відповіддю на останнє повідомлення' : ''}`
+    }
     default:
       return entry.action_type
   }
@@ -230,7 +234,7 @@ function activityActor(entry: ActivityRow): string {
 // Colour groups the action families so the timeline is scannable without
 // reading every line: green for progress, red for removals, amber for tasks.
 function activityTone(actionType: string): string {
-  if (actionType === 'stage_changed' || actionType === 'tag_added' || actionType === 'funnel_connected') return 'is-positive'
+  if (actionType === 'stage_changed' || actionType === 'tag_added' || actionType === 'funnel_connected' || actionType === 'ai_resumed_by_manager') return 'is-positive'
   if (
     actionType === 'tag_removed' ||
     actionType === 'funnel_stopped' ||
@@ -583,6 +587,10 @@ export default function Chats() {
   const messageListRef = useRef<HTMLDivElement>(null)
   const pendingUnreadRef = useRef(0)
   const pendingScrollRef = useRef(false)
+  // Set when the manager's own message was just sent: the next committed
+  // render (or the frame after, if Realtime already added the row) jumps to
+  // the bottom — regardless of any unread divider still in the list.
+  const scrollToBottomRef = useRef(false)
   const firstUnreadRef = useRef<HTMLDivElement>(null)
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null)
 
@@ -829,6 +837,12 @@ export default function Chats() {
   // scrollHeight is final. Lands on the first unread message when there is
   // one, otherwise at the bottom.
   useLayoutEffect(() => {
+    if (scrollToBottomRef.current) {
+      scrollToBottomRef.current = false
+      const list = messageListRef.current
+      if (list) list.scrollTop = list.scrollHeight
+      return
+    }
     if (!pendingScrollRef.current) return
     pendingScrollRef.current = false
 
@@ -1212,7 +1226,16 @@ export default function Chats() {
         // channel already refreshes the list preview either way. Deduped by id
         // because that same channel may deliver this row first.
         if (data.message && selectedIdRef.current === sentThreadId) {
+          scrollToBottomRef.current = true
           setMessages((prev) => (prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message as MessageRow]))
+          // If Realtime delivered the row first, the update above is a no-op
+          // and no render follows — scroll on the next frame instead.
+          requestAnimationFrame(() => {
+            if (!scrollToBottomRef.current) return
+            scrollToBottomRef.current = false
+            const list = messageListRef.current
+            if (list) list.scrollTop = list.scrollHeight
+          })
         }
         // The thread-switch effect already reset the draft text; don't wipe
         // whatever is in the box for the thread that's open now.

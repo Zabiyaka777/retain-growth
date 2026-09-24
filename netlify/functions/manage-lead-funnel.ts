@@ -65,13 +65,36 @@ async function describeState(
 }
 
 /**
+ * Hands a just-moved/attached state to funnel-advance-background so the node
+ * runs now instead of on the next cron pass (up to a minute later) — same
+ * call telegram-webhook.ts makes after an enrollment ("Advance immediately
+ * rather than waiting"). Safe alongside the cron: funnel-advance goes through
+ * claim_specific_funnel_state, which leases the row atomically, so whichever
+ * of the two gets there first runs the node and the other finds nothing.
+ * Failure is only logged — the state is already active and due, so the cron
+ * still picks it up.
+ */
+async function advanceNow(stateId: string) {
+  const siteUrl = process.env.URL;
+  if (!siteUrl) return;
+  try {
+    await fetch(`${siteUrl}/.netlify/functions/funnel-advance-background`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ stateId }),
+    });
+  } catch (err) {
+    console.error("manage-lead-funnel: funnel-advance invoke failed", err);
+  }
+}
+
+/**
  * Manual control over where a lead sits in a funnel — the operator's escape
  * hatch when a lead is stuck on a node waiting for a button that will never
  * be tapped.
  *
- * Deliberately fires no side effects of its own: it moves the marker and
- * lets the normal cron/callback path execute the node, so a "move" can never
- * double-send a message the way an inline advance would.
+ * It only moves the marker; the node itself is executed by the normal
+ * funnel-advance path (see advanceNow), never inline here.
  */
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -200,9 +223,9 @@ export const handler: Handler = async (event) => {
       return jsonResponse(404, { error: "Вузол не знайдено в цій воронці" });
     }
 
-    // waiting_until = now() hands the state straight back to the normal
-    // claim query; the node's own effects then run on the next cron pass,
-    // exactly as they would have if the lead had arrived here on their own.
+    // waiting_until = now() makes the state due for the normal claim query;
+    // advanceNow below then runs the node right away, exactly as it would
+    // have if the lead had arrived here on their own.
     const { data: moved, error: updateError } = await supabase
       .from("funnel_states")
       .update({ funnel_node_id: nodeId, status: "active", waiting_until: new Date().toISOString() })
@@ -217,6 +240,7 @@ export const handler: Handler = async (event) => {
 
     const movedState = moved?.[0] ?? null;
     if (movedState) {
+      await advanceNow(movedState.id as string);
       const info = await describeState(supabase, movedState.thread_id as string, state.funnel_id as string, nodeId);
       if (info.leadId) {
         await logLeadActivity(supabase, {
@@ -297,6 +321,8 @@ export const handler: Handler = async (event) => {
     console.error("manage-lead-funnel: attach failed", upsertError);
     return jsonResponse(500, { error: "Не вдалося підключити до воронки" });
   }
+
+  await advanceNow(state.id as string);
 
   const info = await describeState(supabase, threadId, funnelId, nodeId);
   if (info.leadId) {
