@@ -155,6 +155,10 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
   // manual reply won the thread) — shown as a badge next to the lead's own
   // status, never mixed into the active/ai_active list or its pickers.
   const [stoppedFunnelStates, setStoppedFunnelStates] = useState<FunnelStateRef[]>([])
+  // 'completed' rows: the walk reached a node with no way out. Without these
+  // a lead who went through a whole branch looked like one never enrolled —
+  // and got re-attached "because the block is empty". Shown muted, read-only.
+  const [completedFunnelStates, setCompletedFunnelStates] = useState<FunnelStateRef[]>([])
   const [funnels, setFunnels] = useState<FunnelRef[]>([])
   const [funnelNodes, setFunnelNodes] = useState<FunnelNodeRef[]>([])
   // Which row is mid-request — a state.id, or 'attach' for the "add funnel"
@@ -217,6 +221,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
         allDefsRes,
         funnelStateRes,
         stoppedFunnelStateRes,
+        completedFunnelStateRes,
         funnelsRes,
         funnelNodesRes,
       ] = await Promise.all([
@@ -265,6 +270,17 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
               .eq('status', 'stopped')
               .order('created_at', { ascending: true })
           : Promise.resolve({ data: null, error: null }),
+        // And 'completed' — the lead reached the end of a branch. Its own
+        // muted list, so a finished funnel is visible rather than looking
+        // like the lead was never in it.
+        threadId
+          ? supabase
+              .from('funnel_states')
+              .select('id, funnel_id, funnel_node_id, status')
+              .eq('thread_id', threadId)
+              .eq('status', 'completed')
+              .order('created_at', { ascending: true })
+          : Promise.resolve({ data: null, error: null }),
         supabase.from('funnels').select('id, name').order('name'),
         supabase.from('funnel_nodes').select('id, funnel_id, type, config'),
       ])
@@ -292,6 +308,9 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
       }
       if (!stoppedFunnelStateRes.error) {
         setStoppedFunnelStates((stoppedFunnelStateRes.data as FunnelStateRef[] | null) ?? [])
+      }
+      if (!completedFunnelStateRes.error) {
+        setCompletedFunnelStates((completedFunnelStateRes.data as FunnelStateRef[] | null) ?? [])
       }
       if (!allTagsRes.error && allTagsRes.data) setAllTags(allTagsRes.data as TagRef[])
       if (!allDefsRes.error && allDefsRes.data) setAllVariableDefs(allDefsRes.data as VariableDefRef[])
@@ -364,7 +383,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
   }, [leadId, threadId])
 
   // One funnel_states row as it stands now → where it belongs in this card:
-  // the active/ai_active list, the stopped badge, or nowhere (completed).
+  // the active/ai_active list, the stopped badge, or the completed list.
   // Shared by Realtime and by this component's own actions, so a row can
   // never sit in both lists (e.g. a stopped row re-attached from here).
   const applyFunnelStateRow = useCallback((row: FunnelStateRef) => {
@@ -380,6 +399,10 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
     setStoppedFunnelStates((prev) => {
       const without = prev.filter((s) => s.id !== row.id)
       return row.status === 'stopped' ? [...without, row] : without.length === prev.length ? prev : without
+    })
+    setCompletedFunnelStates((prev) => {
+      const without = prev.filter((s) => s.id !== row.id)
+      return row.status === 'completed' ? [...without, row] : without.length === prev.length ? prev : without
     })
     // The move picker follows the row's node — unless the manager has
     // already picked a different target there and hasn't applied it yet.
@@ -397,6 +420,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
   const removeFunnelStateRow = useCallback((id: string) => {
     setFunnelStates((prev) => (prev.some((s) => s.id === id) ? prev.filter((s) => s.id !== id) : prev))
     setStoppedFunnelStates((prev) => (prev.some((s) => s.id === id) ? prev.filter((s) => s.id !== id) : prev))
+    setCompletedFunnelStates((prev) => (prev.some((s) => s.id === id) ? prev.filter((s) => s.id !== id) : prev))
   }, [])
 
   // The funnel/node catalogs are loaded once with the card; a funnel or node
@@ -424,13 +448,15 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
       .from('funnel_states')
       .select('id, funnel_id, funnel_node_id, status')
       .eq('thread_id', threadId)
-      .in('status', ['active', 'ai_active', 'stopped'])
+      .in('status', ['active', 'ai_active', 'stopped', 'completed'])
       .order('created_at', { ascending: true })
     if (error || !data) return
     const rows = data as FunnelStateRef[]
-    setFunnelStates(rows.filter((r) => r.status !== 'stopped'))
+    const live = rows.filter((r) => r.status === 'active' || r.status === 'ai_active')
+    setFunnelStates(live)
     setStoppedFunnelStates(rows.filter((r) => r.status === 'stopped'))
-    setMoveNodeDrafts((prev) => Object.fromEntries(rows.filter((r) => r.status !== 'stopped').map((r) => [r.id, prev[r.id] ?? r.funnel_node_id ?? ''])))
+    setCompletedFunnelStates(rows.filter((r) => r.status === 'completed'))
+    setMoveNodeDrafts((prev) => Object.fromEntries(live.map((r) => [r.id, prev[r.id] ?? r.funnel_node_id ?? ''])))
   }, [threadId])
 
   // Keeps the "Воронка" block live without a refetch — the graph advancing
@@ -1249,7 +1275,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
         ) : (
           <>
             {funnelStates.length === 0 ? (
-              <p className="settings-row-hint">Не в жодній воронці.</p>
+              <p className="settings-row-hint">{completedFunnelStates.length > 0 ? 'Зараз не в активній воронці.' : 'Не в жодній воронці.'}</p>
             ) : (
               <div className="profile-funnel-list">
                 {funnelStates.map((row) => {
@@ -1308,9 +1334,25 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
             )}
 
             {funnelStates.length > 0 && (
-              <p className="settings-row-hint">
-                Переміщення виконується без негайної відправки — крок виконається наступним проходом планувальника.
-              </p>
+              <p className="settings-row-hint">Після перемикання крок вузла виконується одразу.</p>
+            )}
+
+            {completedFunnelStates.length > 0 && (
+              <div className="profile-funnel-done">
+                {completedFunnelStates.map((row) => {
+                  const funnelName = funnels.find((f) => f.id === row.funnel_id)?.name ?? 'Воронку видалено'
+                  const node = funnelNodes.find((n) => n.id === row.funnel_node_id)
+                  return (
+                    <div className="profile-funnel-done-item" key={row.id}>
+                      <IconCheckCircle size={13} />
+                      <span>
+                        Воронку завершено: {funnelName}
+                        {node ? ` → ${nodeLabel(node)}` : ''}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             )}
 
             {showAttachForm ? (
@@ -1335,6 +1377,11 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
                   ))}
                 </select>
 
+                {attachFunnelDraft && completedFunnelStates.some((r) => r.funnel_id === attachFunnelDraft) && (
+                  <p className="settings-row-hint" style={{ margin: 0 }}>
+                    Лід уже пройшов цю воронку до кінця — підключення запустить її заново з обраного вузла.
+                  </p>
+                )}
                 {attachFunnelDraft && (
                   <div className="profile-stage-row">
                     <select className="input" value={attachNodeDraft} onChange={(e) => setAttachNodeDraft(e.target.value)}>
