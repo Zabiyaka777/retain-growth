@@ -705,6 +705,246 @@
   @media (prefers-reduced-motion: reduce) {
     .dm-row, .dm-msg, .dm-note, .dm-typing, .dm-head, .dm-cursor, .dm-app, .dm-conv { animation: none !important; transition: none !important; }
   }
+
+  /* =====================================================================
+     NARRATIVE SCROLL — one lead's way through the product, five scenes:
+     landing builder → funnel → AI chat → analytics → retention, handed on
+     by .relay lines whose glow follows the scroll. Only the scene that is on
+     screen runs (see the director in the script); everything off screen is
+     frozen, so heavy effects never stack up across blocks.
+     ===================================================================== */
+  .story { position: relative; padding-block: clamp(40px, 5.5vw, 64px) clamp(8px, 1.5vw, 16px); }
+  .story-head { max-width: 760px; margin: 0 auto clamp(28px, 3.6vw, 40px); text-align: center; }
+  .story-head h3 { font-size: clamp(23px, 2.9vw, 36px); line-height: 1.18; margin: 20px 0 16px; }
+  .story-head .body-text { max-width: 62ch; margin-inline: auto; }
+  .story-points { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 10px; }
+  .story-points li { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px 7px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); font-size: 13px; color: var(--ink-2); line-height: 1.3; }
+  .story-points svg { width: 13px; height: 13px; flex: none; color: var(--amber); }
+  .story-scene { position: relative; margin-inline: auto; isolation: isolate; }
+  .story-scene.is-paused, .story-scene.is-paused * { animation-play-state: paused !important; }
+
+  /* ports: where a relay plugs into a scene */
+  .st-port { position: absolute; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; z-index: 4; pointer-events: none;
+    background: #0b0d12; border: 1.5px solid rgba(255,255,255,0.18); transition: border-color 400ms, box-shadow 400ms, background 400ms; }
+  .st-port.in { top: -7px; } .st-port.out { bottom: -7px; }
+  .st-port.live { border-color: var(--port, var(--amber)); background: var(--port, var(--amber)); box-shadow: 0 0 0 5px color-mix(in srgb, var(--port, var(--amber)) 22%, transparent), 0 0 18px var(--port, var(--amber)); }
+
+  /* ---------- relays: scroll-driven hand-off between scenes ---------- */
+  .relay { position: relative; height: clamp(120px, 16vw, 180px); max-width: 240px; margin: 0 auto; pointer-events: none; --p: 0; }
+  .relay svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .relay path { fill: none; vector-effect: non-scaling-stroke; }
+  .relay-base { stroke: rgba(255,255,255,0.09); stroke-width: 2; stroke-dasharray: 3 7; }
+  .relay-lit { stroke: var(--rc); stroke-width: 2.5; stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--p)); opacity: 0; transition: opacity 400ms; filter: drop-shadow(0 0 6px var(--rc)); }
+  .relay.armed .relay-lit { opacity: 1; }
+  .relay-pkt { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity 300ms; will-change: transform; }
+  .relay.armed .relay-pkt { opacity: 1; }
+  .relay[data-relay="wire"] { --rc: #ffc061; }
+  .relay[data-relay="wire"] .relay-pkt { width: 10px; height: 26px; margin: -13px 0 0 -5px; border-radius: 6px; background: linear-gradient(180deg, transparent, #fff 45%, #ffc061); box-shadow: 0 0 16px 4px rgba(255,192,97,0.65); }
+  .relay[data-relay="lead"] { --rc: #ff6b2c; }
+  .relay[data-relay="lead"] .relay-pkt { width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #ff8a4c 45%, #ff6b2c); box-shadow: 0 0 0 5px rgba(255,107,44,0.2), 0 0 20px rgba(255,107,44,0.9); }
+  .relay[data-relay="money"] { --rc: #4ade9a; }
+  .relay[data-relay="money"] .relay-pkt { width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; display: grid; place-items: center; font: 600 14px/1 var(--font-sans); color: #052a18; background: radial-gradient(circle at 35% 30%, #d6ffea, #4ade9a 55%, #1f9d62); box-shadow: 0 0 22px rgba(74,222,154,0.8); }
+  .relay[data-relay="money"] .relay-pkt::after { content: "₴"; }
+  .relay[data-relay="loop"] { --rc: #a79bf5; }
+  .relay[data-relay="loop"] .relay-pkt { width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #c9c0ff 45%, #7c6ef0); box-shadow: 0 0 18px rgba(167,155,245,0.9); }
+
+  /* shared pointer that "clicks" through a scene */
+  .st-cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; z-index: 9; pointer-events: none; opacity: 0; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6)); transition: transform 650ms var(--ease), opacity 250ms; }
+  .st-cursor.on { opacity: 1; }
+  .st-cursor.click { animation: dmClick 260ms var(--ease-out); }
+
+  /* ---------- 1. landing builder ---------- */
+  .st-lb { --lbc: #ff6b2c; max-width: 860px; display: grid; grid-template-columns: 280px 1fr; gap: clamp(20px, 3vw, 40px); align-items: center; padding: clamp(18px, 2.4vw, 28px); border-radius: 30px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)); box-shadow: 0 50px 100px -50px rgba(0,0,0,0.9); }
+  .lb-phone { justify-self: center; width: 250px; height: 470px; padding: 9px; border-radius: 38px; background: #0b0c10; box-shadow: 0 0 0 1.5px #2a2e36, 0 0 0 5px #111318, 0 30px 70px -30px rgba(0,0,0,0.9); }
+  .lb-screen { position: relative; height: 100%; border-radius: 30px; overflow: hidden; background: #f6f5f2; color: #0c0f14; }
+  .lb-skel { position: absolute; inset: 0; padding: 42px 18px; display: flex; flex-direction: column; gap: 12px; transition: opacity 500ms; }
+  .lb-skel i { display: block; height: 12px; border-radius: 6px; background: #e3e1dc; } .lb-skel i:first-child { height: 120px; border-radius: 16px; } .lb-skel i:nth-child(2) { width: 80%; } .lb-skel i:nth-child(4) { width: 60%; }
+  .lb-skel b { margin-top: auto; height: 40px; border-radius: 12px; background: #e3e1dc; }
+  .lb-page { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: 0; transform: translateY(14px); transition: opacity 600ms var(--ease), transform 600ms var(--ease); }
+  .st-lb.tpl .lb-skel { opacity: 0; } .st-lb.tpl .lb-page { opacity: 1; transform: none; }
+  .lb-hero { position: relative; padding: 46px 16px 18px; min-height: 196px; display: flex; flex-direction: column; justify-content: flex-end; gap: 7px; color: #fff; background: radial-gradient(120% 90% at 80% 0%, color-mix(in srgb, var(--lbc) 70%, #fff), var(--lbc) 45%, color-mix(in srgb, var(--lbc) 55%, #000)); transition: background 600ms; }
+  .lb-chip { align-self: flex-start; font: 600 9.5px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,0.22); }
+  .lb-hero h4 { font: 600 19px/1.15 var(--font-display); letter-spacing: -0.02em; color: #fff; min-height: 1.15em; }
+  .lb-hero p { font-size: 11.5px; opacity: .9; }
+  .lb-list { list-style: none; margin: 0; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 9px; }
+  .lb-list li { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 500; }
+  .lb-list li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--lbc); transition: background 600ms; flex: none; }
+  .lb-cta { margin: auto 14px 18px; padding: 12px; border-radius: 13px; text-align: center; font: 600 12.5px/1.2 var(--font-sans); color: #fff; background: var(--lbc); box-shadow: 0 12px 24px -12px var(--lbc); transition: background 600ms, box-shadow 600ms; min-height: 1.2em; }
+  .lb-panel { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 22px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+  .lb-row { display: flex; flex-direction: column; gap: 8px; }
+  .lb-row label { font: 600 10.5px/1 var(--font-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .lb-tpls { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lb-tpls span { padding: 7px 11px; border-radius: 10px; font-size: 12.5px; color: var(--ink-2); border: 1px solid var(--line); background: rgba(255,255,255,0.03); transition: all 250ms; }
+  .lb-tpls span.on { color: var(--ink); border-color: rgba(255,192,97,0.5); background: rgba(255,192,97,0.12); }
+  .lb-tpls span.press, .lb-sw i.press, .lb-save.press { transform: scale(0.94); }
+  .lb-sw { display: flex; gap: 9px; }
+  .lb-sw i { width: 24px; height: 24px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px rgba(255,255,255,0.06); transition: box-shadow 250ms, transform 160ms; }
+  .lb-sw i.on { box-shadow: 0 0 0 2px #0b0c10, 0 0 0 4px #fff; }
+  .lb-input { position: relative; display: flex; align-items: center; min-height: 38px; padding: 9px 12px; border-radius: 11px; border: 1px solid var(--line-2); background: rgba(0,0,0,0.25); font-size: 13px; color: var(--ink); transition: border-color 250ms, box-shadow 250ms; }
+  .lb-input.focus { border-color: rgba(255,192,97,0.6); box-shadow: 0 0 0 3px rgba(255,192,97,0.12); }
+  .lb-input i { width: 1.5px; height: 15px; margin-left: 1px; background: var(--amber); opacity: 0; }
+  .lb-input.focus i { animation: stBlink 1s steps(1) infinite; }
+  @keyframes stBlink { 50% { opacity: 1; } }
+  .lb-save { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; font: 600 13px/1 var(--font-sans); color: var(--on-orange); background: linear-gradient(180deg, var(--amber), var(--orange)); box-shadow: 0 10px 24px -12px var(--orange-glow); transition: transform 160ms, background 300ms, color 300ms; }
+  .lb-save.saving::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(23,7,0,0.25); border-top-color: var(--on-orange); animation: lpSpinL .7s linear infinite; }
+  @keyframes lpSpinL { to { transform: rotate(360deg); } }
+  .lb-save.saved { color: #052a18; background: linear-gradient(180deg, #7ff0bf, var(--green)); }
+  .lb-url { min-height: 18px; font-size: 12px; color: var(--green); opacity: 0; transform: translateY(4px); transition: opacity 400ms, transform 400ms; }
+  .lb-url.on { opacity: 1; transform: none; }
+  #lb-plug { --port: #ffc061; }
+
+  /* ---------- 2. funnel builder — a blueprint, deliberately not the site's look ---------- */
+  .st-fb { max-width: 900px; border-radius: 14px; border: 1px solid rgba(94,234,212,0.28); background: #061219; color: #cfefff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; box-shadow: 0 0 0 6px rgba(94,234,212,0.04), 0 50px 100px -50px rgba(0,0,0,0.9); }
+  .fb-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(94,234,212,0.18); font-size: 11.5px; letter-spacing: .04em; }
+  .fb-title { color: #7fe3d3; } .fb-title::before { content: "▸ "; opacity: .6; }
+  .fb-save { padding: 6px 12px; border: 1px solid rgba(94,234,212,0.5); border-radius: 6px; color: #5eead4; text-transform: uppercase; font-size: 10.5px; transition: all 200ms; }
+  .fb-save.press { transform: scale(0.94); } .fb-save.saved { color: #061219; background: #5eead4; }
+  .fb-body { display: grid; grid-template-columns: 150px 1fr; min-height: 380px; }
+  .fb-palette { display: flex; flex-direction: column; gap: 8px; padding: 14px 12px; border-right: 1px dashed rgba(94,234,212,0.18); font-size: 10.5px; }
+  .fb-palette .h { color: rgba(207,239,255,0.45); text-transform: uppercase; letter-spacing: .12em; margin-bottom: 2px; }
+  .fb-pal { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid rgba(207,239,255,0.14); border-radius: 6px; color: #cfefff; transition: transform 160ms, background 200ms; }
+  .fb-pal i { width: 8px; height: 8px; border-radius: 2px; background: var(--k); box-shadow: 0 0 8px var(--k); }
+  .fb-pal.press { transform: scale(0.94); background: rgba(94,234,212,0.1); }
+  .fb-canvas { position: relative; min-height: 380px; overflow: hidden;
+    background-image: linear-gradient(rgba(94,234,212,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(94,234,212,0.07) 1px, transparent 1px), linear-gradient(rgba(94,234,212,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(94,234,212,0.035) 1px, transparent 1px);
+    background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px; }
+  .fb-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .fb-edges path { fill: none; stroke: #5eead4; stroke-width: 1.6; stroke-dasharray: var(--len); stroke-dashoffset: var(--len); transition: stroke-dashoffset 700ms var(--ease); filter: drop-shadow(0 0 4px rgba(94,234,212,0.6)); }
+  .fb-edges path.on { stroke-dashoffset: 0; }
+  .fb-edges path.run { stroke: #ffc061; filter: drop-shadow(0 0 6px rgba(255,192,97,0.9)); }
+  .fb-nodes { position: absolute; inset: 0; }
+  .fb-node { position: absolute; left: var(--x); top: var(--y); width: 168px; margin: -30px 0 0 -84px; padding: 9px 10px 10px 12px; border-radius: 8px; border: 1px solid rgba(207,239,255,0.22); border-left: 3px solid var(--k); background: rgba(6,18,25,0.92); font-size: 10.5px; line-height: 1.35; opacity: 0; transform: translateY(-10px) scale(0.9); transition: opacity 350ms var(--ease), transform 450ms var(--ease-out), box-shadow 300ms, border-color 300ms; }
+  .fb-node.in { opacity: 1; transform: none; }
+  .fb-node small { display: block; color: var(--k); letter-spacing: .1em; font-size: 9px; margin-bottom: 3px; }
+  .fb-node .fb-btn { display: inline-block; margin-top: 6px; padding: 3px 7px; border-radius: 4px; border: 1px solid rgba(255,107,44,0.5); color: #ffb28a; transition: background 200ms, color 200ms; }
+  .fb-node .fb-btn.hit { background: #ff6b2c; color: #170700; }
+  .fb-node.hot { box-shadow: 0 0 0 1px var(--k), 0 0 24px -2px var(--k); }
+  .fb-lead { position: absolute; left: 0; top: 0; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; z-index: 3; opacity: 0; background: radial-gradient(circle at 35% 30%, #fff, #ff8a4c 45%, #ff6b2c); box-shadow: 0 0 0 5px rgba(255,107,44,0.2), 0 0 18px rgba(255,107,44,0.95); transition: transform 700ms cubic-bezier(.65,0,.35,1), opacity 300ms; }
+  .fb-lead.on { opacity: 1; }
+  .fb-node[data-k="entry"] { --x: 16%; --y: 22%; } .fb-node[data-k="msg"] { --x: 40%; --y: 68%; }
+  .fb-node[data-k="ai"] { --x: 64%; --y: 26%; } .fb-node[data-k="conv"] { --x: 84%; --y: 72%; }
+  #fb-port, #fb-out { --port: #5eead4; }
+
+  /* ---------- 3. chat: success burst at the end of the story ---------- */
+  .dm-win { position: absolute; left: 50%; top: 46%; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 22px 14px; border-radius: 20px; text-align: center; color: #052a18;
+    background: radial-gradient(120% 120% at 50% 0%, #d8ffec, #4ade9a 60%, #22a869); box-shadow: 0 0 0 8px rgba(74,222,154,0.16), 0 30px 60px -20px rgba(74,222,154,0.7);
+    transform: translate(-50%, -50%) scale(0.6); opacity: 0; transition: transform 520ms cubic-bezier(.34,1.56,.64,1), opacity 300ms; pointer-events: none; }
+  .dm-win.on { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  .dm-win b { font: 600 28px/1 var(--font-display); letter-spacing: -0.03em; }
+  .dm-win span { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; }
+  .dm-win.fly { transform: translate(-50%, 260%) scale(0.35); opacity: 0; transition: transform 900ms cubic-bezier(.55,0,.8,.4), opacity 900ms ease-in; }
+  .dm-confetti { position: absolute; left: 50%; top: 46%; z-index: 4; width: 0; height: 0; pointer-events: none; }
+  .dm-confetti i { position: absolute; left: 0; top: 0; width: 7px; height: 11px; border-radius: 2px; background: var(--c); opacity: 0; animation: dmConf 1300ms cubic-bezier(.2,.7,.3,1) forwards; animation-delay: var(--dl); }
+  @keyframes dmConf { 0% { opacity: 1; transform: translate(0,0) rotate(0); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--r)); } }
+  .dm-stage .st-port { --port: #4ade9a; }
+  .dm-stage .st-port.in { --port: #ff6b2c; }
+
+  /* ---------- 4. analytics ---------- */
+  .st-an { max-width: 880px; padding: clamp(16px, 2.2vw, 24px); border-radius: 26px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)); box-shadow: 0 50px 100px -50px rgba(0,0,0,0.9); display: flex; flex-direction: column; gap: 14px; }
+  .an-connect { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--line); background: rgba(255,255,255,0.025); }
+  .an-end { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .an-end b { display: block; font-size: 13px; font-weight: 600; } .an-end span { font-size: 11px; color: var(--ink-3); }
+  .an-end span.ok { color: var(--green); }
+  .an-logo { width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; font: 600 12px/1 var(--font-sans); }
+  .an-logo.meta { color: #fff; background: linear-gradient(145deg, #1877f2, #0a58c8); } .an-logo.meta svg { width: 20px; height: 20px; }
+  .an-logo.rg { color: var(--on-orange); background: linear-gradient(145deg, var(--amber), var(--orange)); }
+  .an-link { position: relative; height: 2px; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  .an-link i { position: absolute; inset: 0; background: linear-gradient(90deg, #1877f2, var(--amber), var(--green)); transform: scaleX(0); transform-origin: left; transition: transform 900ms var(--ease); }
+  .an-link.on i { transform: none; }
+  .an-link.flow::after { content: ""; position: absolute; top: -2px; left: -30%; width: 30%; height: 6px; background: linear-gradient(90deg, transparent, #fff, transparent); animation: anFlow 1s linear infinite; }
+  @keyframes anFlow { to { left: 100%; } }
+  .an-btn { padding: 8px 14px; border-radius: 999px; font: 600 12px/1 var(--font-sans); color: #fff; background: #1877f2; transition: transform 160ms, opacity 300ms; }
+  .an-btn.press { transform: scale(0.92); } .an-btn.gone { opacity: 0; }
+  .an-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; transition: opacity 500ms; }
+  .an-kpi { position: relative; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); display: flex; flex-direction: column; gap: 4px; transition: box-shadow 400ms, border-color 400ms; }
+  .an-kpi span { font-size: 11px; color: var(--ink-3); }
+  .an-kpi b { font: 500 clamp(18px, 2.4vw, 26px)/1.1 var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .an-kpi em { position: absolute; right: 12px; top: 11px; font-size: 10.5px; font-weight: 600; color: var(--green); opacity: 0; transition: opacity 400ms; }
+  .an-kpi em.on { opacity: 1; }
+  .an-kpi.flash { border-color: rgba(74,222,154,0.55); box-shadow: 0 0 0 3px rgba(74,222,154,0.12), 0 0 30px -6px rgba(74,222,154,0.6); }
+  .an-charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+  .an-chart { padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255,255,255,0.025); display: flex; flex-direction: column; gap: 8px; }
+  .an-chart > span { font-size: 11px; color: var(--ink-3); }
+  .an-line { width: 100%; height: 120px; overflow: visible; }
+  .an-bars { display: flex; align-items: flex-end; gap: 7px; height: 120px; }
+  .an-bars i { flex: 1; height: var(--h, 0%); border-radius: 5px 5px 2px 2px; background: linear-gradient(180deg, var(--amber), rgba(255,107,44,0.35)); transition: height 700ms var(--ease); }
+  .an-bars i.new { background: linear-gradient(180deg, #b6ffd9, var(--green)); box-shadow: 0 0 16px rgba(74,222,154,0.55); }
+  .st-an.dim .an-kpis, .st-an.dim .an-charts { opacity: .35; }
+  .st-an.reading .an-kpis, .st-an.reading .an-charts { animation: anRead 700ms ease-in-out 2; }
+  @keyframes anRead { 50% { opacity: .6; } }
+  .an-coin { position: absolute; left: 50%; top: 0; z-index: 5; padding: 8px 14px; border-radius: 999px; font: 600 14px/1 var(--font-sans); color: #052a18; background: radial-gradient(circle at 35% 30%, #d6ffea, #4ade9a 55%, #1f9d62); box-shadow: 0 0 26px rgba(74,222,154,0.8); opacity: 0; transform: translate(-50%, -40px) scale(0.7); pointer-events: none; }
+  .an-coin.drop { animation: anDrop 1100ms cubic-bezier(.3,1.3,.5,1) forwards; }
+  @keyframes anDrop { 0% { opacity: 0; transform: translate(-50%, -40px) scale(0.7); } 25% { opacity: 1; } 70% { opacity: 1; transform: translate(var(--tx), var(--ty)) scale(1); } 100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.4); } }
+  .st-an .st-port.in { --port: #4ade9a; } .st-an .st-port.out { --port: #a79bf5; }
+
+  /* ---------- 5. retention — the customer as a loop, not a line ---------- */
+  .st-rt { max-width: 760px; aspect-ratio: 640 / 400; border-radius: 30px; border: 1px solid rgba(167,155,245,0.2);
+    background: radial-gradient(60% 70% at 50% 50%, rgba(167,155,245,0.12), transparent 70%), linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.005)); }
+  .rt-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* the SVG stretches with the box (preserveAspectRatio="none") so the ellipse
+     always passes through the stations, which are placed in % of that box */
+  .rt-track { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 2; stroke-dasharray: 2 8; vector-effect: non-scaling-stroke; }
+  .rt-ring { fill: none; stroke: url(#rtGrad); stroke-width: 3.5; stroke-linecap: round; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-dashoffset: 1; filter: drop-shadow(0 0 6px rgba(167,155,245,0.5)); transition: stroke-dashoffset 900ms var(--ease); }
+  .rt-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+  .rt-day { font: 500 clamp(22px, 3.4vw, 36px)/1 var(--font-display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .rt-ltv { display: inline-flex; align-items: baseline; gap: 8px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+  .rt-ltv em { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; color: var(--ink-3); }
+  .rt-ltv b { font: 500 16px/1 var(--font-display); font-variant-numeric: tabular-nums; transition: color 300ms; }
+  .rt-ltv.up b { color: var(--green); }
+  .rt-st { position: absolute; left: var(--x); top: var(--y); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; z-index: 2; --sc: #8a93a3; }
+  .rt-st > b { font: 600 11.5px/1 var(--font-sans); color: var(--ink-3); white-space: nowrap; transition: color 300ms; }
+  .rt-ico { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); background: #0b0c10; border: 1.5px solid rgba(255,255,255,0.14); transition: all 400ms var(--ease); }
+  .rt-ico svg { width: 21px; height: 21px; }
+  .rt-st.lit .rt-ico { color: #0b0c10; background: var(--sc); border-color: var(--sc); box-shadow: 0 0 0 6px color-mix(in srgb, var(--sc) 20%, transparent), 0 0 26px var(--sc); }
+  .rt-st.lit > b { color: var(--ink); }
+  .rt-st[data-st="0"] { --sc: #c6ccd6; } .rt-st[data-st="1"] { --sc: #ffc061; } .rt-st[data-st="2"] { --sc: #4ade9a; } .rt-st[data-st="3"] { --sc: #a79bf5; }
+  .rt-st[data-st="0"] > b { order: -1; }
+  .rt-st.ring .rt-ico { animation: rtRing 700ms ease-in-out 2; }
+  @keyframes rtRing { 20% { transform: rotate(-16deg); } 40% { transform: rotate(14deg); } 60% { transform: rotate(-9deg); } 80% { transform: rotate(5deg); } }
+  .rt-st.spin .rt-ico svg { animation: rtSpin 900ms var(--ease); }
+  @keyframes rtSpin { to { transform: rotate(360deg); } }
+  .rt-msg { position: absolute; right: 60px; top: 50%; width: 200px; padding: 9px 12px; border-radius: 14px 14px 4px 14px; font-size: 11.5px; line-height: 1.4; color: #170700; background: linear-gradient(160deg, #ffd9a0, #ffc061); box-shadow: 0 14px 30px -14px rgba(255,192,97,0.8); opacity: 0; transform: translate(8px, -50%) scale(0.9); transform-origin: right center; transition: opacity 350ms, transform 450ms cubic-bezier(.34,1.56,.64,1); }
+  .rt-msg.on { opacity: 1; transform: translate(0, -50%); }
+  .rt-coin { position: absolute; top: -12px; left: 50%; font: 600 12px/1 var(--font-sans); font-style: normal; color: #052a18; padding: 5px 9px; border-radius: 999px; white-space: nowrap; background: var(--sc); box-shadow: 0 0 18px var(--sc); opacity: 0; transform: translate(-50%, 6px); }
+  .rt-coin.pop { animation: rtCoin 1400ms var(--ease-out) forwards; }
+  @keyframes rtCoin { 0% { opacity: 0; transform: translate(-50%, 6px); } 25% { opacity: 1; transform: translate(-50%, -18px); } 75% { opacity: 1; transform: translate(-50%, -24px); } 100% { opacity: 0; transform: translate(-50%, -34px); } }
+  .rt-client { position: absolute; left: 0; top: 0; z-index: 3; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; border: 2px dashed #c6ccd6; background: transparent; transition: background 400ms, border-color 400ms, box-shadow 400ms; will-change: transform; }
+  .rt-client.bought { border: 2px solid #fff; background: radial-gradient(circle at 35% 30%, #fff, #4ade9a 55%, #1f9d62); box-shadow: 0 0 18px rgba(74,222,154,0.9); }
+  .rt-client.loyal { background: radial-gradient(circle at 35% 30%, #fff, #c9c0ff 45%, #7c6ef0); box-shadow: 0 0 22px rgba(167,155,245,0.95); }
+  .st-rt .st-port.in { --port: #a79bf5; }
+
+  /* ---------- small screens ---------- */
+  @media (max-width: 760px) {
+    .st-lb { grid-template-columns: 1fr; justify-items: center; }
+    .lb-panel { width: 100%; padding: 16px; gap: 13px; }
+    .lb-phone { width: 230px; height: 430px; }
+    .fb-body { grid-template-columns: 1fr; }
+    .fb-palette { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px dashed rgba(94,234,212,0.18); }
+    .fb-palette .h { width: 100%; }
+    .fb-canvas { min-height: 460px; }
+    .fb-node { width: 150px; margin-left: -75px; }
+    .fb-node[data-k="entry"] { --x: 32%; --y: 12%; } .fb-node[data-k="msg"] { --x: 66%; --y: 38%; }
+    .fb-node[data-k="ai"] { --x: 34%; --y: 64%; } .fb-node[data-k="conv"] { --x: 66%; --y: 89%; }
+    .an-connect { grid-template-columns: 1fr; text-align: left; }
+    .an-link { height: 2px; }
+    .an-kpis { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .an-kpi { padding: 10px; } .an-kpi em { display: none; }
+    .an-charts { grid-template-columns: 1fr; }
+    .st-rt { aspect-ratio: 640 / 520; }
+    .rt-ico { width: 38px; height: 38px; } .rt-ico svg { width: 18px; height: 18px; }
+    .rt-msg { right: 50%; top: auto; bottom: calc(100% + 8px); width: 176px; transform: translateY(8px) scale(0.9); transform-origin: bottom right; border-radius: 14px 14px 4px 14px; }
+    .rt-msg.on { transform: none; }
+    /* side stations: label beside the icon, pointing inwards, so it stays on screen */
+    .rt-st[data-st="1"] { flex-direction: row-reverse; } .rt-st[data-st="3"] { flex-direction: row; }
+    .rt-st[data-st="1"], .rt-st[data-st="3"] { gap: 6px; }
+    .rt-st[data-st="1"] > b, .rt-st[data-st="3"] > b { font-size: 10.5px; }
+    .rt-st[data-st="1"] { transform: translate(calc(-100% + 19px), -50%); } .rt-st[data-st="3"] { transform: translate(-19px, -50%); }
+    .rt-center { gap: 6px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .relay-pkt { display: none; }
+    .story-scene *, .relay * { transition: none !important; animation: none !important; }
+  }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     .reveal { transition: none; opacity: 1; transform: none; filter: none; }
@@ -806,44 +1046,6 @@
 </section>
 
 <!-- ============ I: INTEREST — pains ============ -->
-<!-- ============ LIVE DEMO: one lead, whole cycle (decorative, looping) ============ -->
-<section class="wrap demo-sec chapter" id="demo">
-  <div class="section-head reveal">
-    <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4v-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span data-i18n="demo.eyebrow">Живе демо</span></span>
-    <h2 data-i18n="demo.h2">20 секунд з життя одного ліда</h2>
-    <p class="lead-text" data-i18n="demo.p">Лід прийшов → AI підхопив → менеджер втрутився → AI повернувся, памʼятаючи все сказане → конверсія. Жодного ручного копіювання контексту.</p>
-  </div>
-  <!-- Mock data only, no backend. The stage is decorative: screen readers get
-       the one-line summary in aria-label instead of 20 seconds of motion. -->
-  <div class="dm-stage reveal" id="dm-stage" role="img" aria-label="Анімована демонстрація: лід, AI, менеджер і конверсія в одному чаті">
-    <div class="dm-app" id="dm-app" aria-hidden="true">
-      <div class="dm-pane dm-list">
-        <div class="dm-list-head"><span data-i18n="demo.chats">Чати</span><span class="dm-live"><i></i><span data-i18n="demo.live">онлайн</span></span></div>
-        <div class="dm-rows" id="dm-rows"></div>
-      </div>
-      <div class="dm-pane dm-conv">
-        <div class="dm-empty" id="dm-empty"><span class="dm-empty-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4v-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span data-i18n="demo.empty">Оберіть тред</span></div>
-        <div class="dm-head" id="dm-head">
-          <span class="dm-ava" id="dm-head-ava"></span>
-          <div class="dm-head-id"><b id="dm-head-name"></b><span>Telegram</span></div>
-          <span class="dm-badge" id="dm-badge" data-i18n="demo.badge">AI зупинено</span>
-          <span class="dm-resume" id="dm-resume" data-i18n="demo.resume">Увімкнути AI</span>
-        </div>
-        <div class="dm-feed" id="dm-feed"></div>
-        <div class="dm-composer"><span data-i18n="demo.placeholder">Написати відповідь…</span><i></i></div>
-        <div class="dm-dialog" id="dm-dialog">
-          <div class="dm-dialog-card">
-            <b data-i18n="demo.dlg.title">Увімкнути AI</b>
-            <p data-i18n="demo.dlg.q">АІ має відповісти на останнє повідомлення ліда?</p>
-            <div class="dm-dialog-acts"><span data-i18n="demo.dlg.cancel">Скасувати</span><span data-i18n="demo.dlg.no">Ні</span><span class="yes" id="dm-yes" data-i18n="demo.dlg.yes">Так</span></div>
-          </div>
-        </div>
-      </div>
-      <svg class="dm-cursor" id="dm-cursor" viewBox="0 0 24 24"><path d="M5 3l14 6.5-6.2 1.8L10.6 18 5 3Z" fill="#fff" stroke="#050608" stroke-width="1.4" stroke-linejoin="round"/></svg>
-    </div>
-  </div>
-</section>
-
 <section class="wrap pain-section chapter">
   <div class="section-head reveal">
     <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.5v3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></span><span data-i18n="pain.eyebrow">Що зазвичай зʼїдає прибуток</span></span>
@@ -871,104 +1073,191 @@
   </div>
 </section>
 
-<!-- ============ D: DESIRE — funnel builder ============ -->
-<section class="wrap feature-sec chapter">
-  <div class="feature">
-    <div class="feature-copy reveal">
-      <span class="kicker" style="--c:var(--condition)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16l-6 8v6l-4-2v-4L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="f1.tag">КОНСТРУКТОР ВОРОНОК</span></span>
-      <h3 data-i18n="f1.h">Візуальна воронка — тягнеш вузли, а не пишеш ТЗ програмісту</h3>
-      <p class="body-text" data-i18n="f1.p">Повідомлення, кнопки, умови за тегами, затримки, AI-вузли й точка конверсії — на одному полотні. Кожен колір вузла означає свою логіку, тож воронку читаєш з першого погляду.</p>
-      <ul class="feature-list">
+<!-- ============ STORY 1/5 — landing page builder (new) ============
+     The narrative scroll: one lead's way through the product, one scene per
+     block, handed from block to block by the .relay lines between them. -->
+<section class="wrap story" id="story" data-scene="landing">
+  <div class="story-head reveal">
+    <span class="kicker" style="--c:var(--gold)"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" rx="2.5" stroke="currentColor" stroke-width="1.7"/><path d="M8 8h8M8 12h5M8 16h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span data-i18n="lb.tag">КОНСТРУКТОР ЛЕНДІНГІВ</span></span>
+    <h3 data-i18n="lb.h">Сторінка під рекламу за 2 хвилини — без дизайнера й розробника</h3>
+    <p class="body-text" data-i18n="lb.p">Обираєте шаблон, міняєте текст і колір прямо на макеті — і публікуєте. Кнопка на сторінці одразу веде ліда в месенджер, а клік не губиться по дорозі.</p>
+    <ul class="story-points">
+        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="lb.li1">Шаблони під курс, вебінар, товар і вакансію</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="lb.li2">Кнопка веде в Telegram, WhatsApp чи Messenger — з тим самим кліком</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="lb.li3">Піксель і CAPI вшиті: перегляди й ліди рахуються з першого дня</span></li>
+    </ul>
+  </div>
+  <div class="story-scene st-lb reveal" id="sc-landing" aria-hidden="true">
+    <div class="lb-phone"><div class="lb-screen" id="lb-screen">
+      <div class="lb-skel"><i></i><i></i><i></i><i></i><b></b></div>
+      <div class="lb-page">
+        <div class="lb-hero"><span class="lb-chip" id="lb-chip"></span><h4 id="lb-h"></h4><p id="lb-sub"></p></div>
+        <ul class="lb-list" id="lb-list"></ul>
+        <span class="lb-cta" id="lb-cta"></span>
+      </div>
+    </div></div>
+    <div class="lb-panel">
+      <div class="lb-row"><label data-i18n="lb.ui.tpl">Шаблон</label><div class="lb-tpls" id="lb-tpls"></div></div>
+      <div class="lb-row"><label data-i18n="lb.ui.color">Колір</label><div class="lb-sw" id="lb-sw"><i style="--c:#ff6b2c"></i><i style="--c:#4da3ff"></i><i style="--c:#4ade9a"></i><i style="--c:#a79bf5"></i><i style="--c:#ffc061"></i></div></div>
+      <div class="lb-row"><label data-i18n="lb.ui.head">Заголовок</label><div class="lb-input" id="lb-in-h"><span></span><i></i></div></div>
+      <div class="lb-row"><label data-i18n="lb.ui.btn">Кнопка</label><div class="lb-input" id="lb-in-b"><span></span><i></i></div></div>
+      <div class="lb-save" id="lb-save"><span></span></div>
+      <div class="lb-url" id="lb-url"></div>
+    </div>
+    <span class="st-port out" id="lb-plug"></span>
+    <svg class="st-cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 6.5-6.2 1.8L10.6 18 5 3Z" fill="#fff" stroke="#050608" stroke-width="1.4" stroke-linejoin="round"/></svg>
+  </div>
+</section>
+<div class="relay" data-relay="wire" aria-hidden="true">
+  <svg viewBox="0 0 100 200" preserveAspectRatio="none"><path class="relay-base" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/><path class="relay-lit" pathLength="1" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/></svg>
+  <span class="relay-pkt"></span>
+</div>
+
+<!-- ============ STORY 2/5 — funnel builder (blueprint look, on purpose off-brand) ============ -->
+<section class="wrap story" data-scene="funnel">
+  <div class="story-head reveal">
+    <span class="kicker" style="--c:var(--condition)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16l-6 8v6l-4-2v-4L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="f1.tag">КОНСТРУКТОР ВОРОНОК</span></span>
+    <h3 data-i18n="f1.h">Візуальна воронка — тягнеш вузли, а не пишеш ТЗ програмісту</h3>
+    <p class="body-text" data-i18n="f1.p">Повідомлення, кнопки, умови за тегами, затримки, AI-вузли й точка конверсії — на одному полотні. Кожен колір вузла означає свою логіку, тож воронку читаєш з першого погляду.</p>
+    <ul class="story-points">
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f1.li1">Гілки за відповіддю ліда — без ручного сортування чатів</span></li>
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f1.li2">Затримки й нагадування, якщо лід замовк</span></li>
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f1.li3">Точка конверсії шле подію в CAPI автоматично</span></li>
-      </ul>
-    </div>
-    <div class="node mock reveal" style="--c:var(--condition)">
-      <span class="mock-glow"></span>
-      <div class="mock-head"><span class="lights"><i></i><i></i><i></i></span></div>
-      <div class="fgraph">
-        <div class="fnode" style="--nc:var(--gold)"><span class="dot"></span><span data-i18n="f1.mock.n1">Вхід за посиланням</span></div>
-        <div class="fwire-v"></div>
-        <div class="fnode"><span class="dot"></span><span data-i18n="f1.mock.n2">Повідомлення + 2 кнопки</span></div>
-        <div class="fwire-v" style="--wd:.5s"></div>
-        <div class="fbranch">
-          <div class="fnode" style="--nc:var(--condition)"><span class="dot"></span><span data-i18n="f1.mock.n3">Тег: гарячий</span></div>
-          <div class="fnode" style="--nc:var(--delay)"><span class="dot"></span><span data-i18n="f1.mock.n4">Чекати 24г</span></div>
-        </div>
-        <div class="fwire-v" style="--wd:1s"></div>
-        <div class="fnode" style="--nc:var(--ai)"><span class="dot"></span><span data-i18n="f1.mock.n5">AI-агент кваліфікує</span></div>
-        <div class="fwire-v" style="--wd:1.5s"></div>
-        <div class="fnode" style="--nc:var(--conversion)"><span class="dot"></span><span data-i18n="f1.mock.n6">Конверсія → CAPI</span></div>
+    </ul>
+  </div>
+  <div class="story-scene st-fb reveal" id="sc-funnel" aria-hidden="true">
+    <span class="st-port in" id="fb-port"></span>
+    <div class="fb-bar"><span class="fb-title" id="fb-title"></span><span class="fb-save" id="fb-save"></span></div>
+    <div class="fb-body">
+      <div class="fb-palette" id="fb-palette"></div>
+      <div class="fb-canvas" id="fb-canvas">
+        <svg class="fb-edges" id="fb-edges"></svg>
+        <div class="fb-nodes" id="fb-nodes"></div>
+        <span class="fb-lead" id="fb-lead"></span>
       </div>
     </div>
+    <span class="st-port out" id="fb-out"></span>
+    <svg class="st-cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 6.5-6.2 1.8L10.6 18 5 3Z" fill="#fff" stroke="#050608" stroke-width="1.4" stroke-linejoin="round"/></svg>
   </div>
 </section>
+<div class="relay" data-relay="lead" aria-hidden="true">
+  <svg viewBox="0 0 100 200" preserveAspectRatio="none"><path class="relay-base" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/><path class="relay-lit" pathLength="1" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/></svg>
+  <span class="relay-pkt"></span>
+</div>
 
-<!-- ============ D: DESIRE — AI agent ============ -->
-<section class="wrap feature-sec">
-  <div class="feature rev">
-    <div class="feature-copy reveal">
-      <span class="kicker" style="--c:var(--blue)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2v3M12 19v3M4.2 4.2l2 2M17.8 17.8l2 2M2 12h3M19 12h3M4.2 19.8l2-2M17.8 6.2l2-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/></svg><span data-i18n="f2.tag">AI-АГЕНТ ПРОДАЖІВ</span></span>
-      <h3 data-i18n="f2.h">AI не спамить скриптом — він продає діалогом</h3>
-      <p class="body-text" data-i18n="f2.p">Відповідає на питання про ціну й умови, кваліфікує ліда і сам передає розмову менеджеру рівно в той момент, коли лід готовий говорити з людиною.</p>
-      <ul class="feature-list">
+<!-- ============ STORY 3/5 — AI sales agent: the live chat ============ -->
+<section class="wrap story" data-scene="chat">
+  <div class="story-head reveal">
+    <span class="kicker" style="--c:var(--blue)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2v3M12 19v3M4.2 4.2l2 2M17.8 17.8l2 2M2 12h3M19 12h3M4.2 19.8l2-2M17.8 6.2l2-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/></svg><span data-i18n="f2.tag">AI-АГЕНТ ПРОДАЖІВ</span></span>
+    <h3 data-i18n="f2.h">AI не спамить скриптом — він продає діалогом</h3>
+    <p class="body-text" data-i18n="f2.p">Відповідає на питання про ціну й умови, кваліфікує ліда і сам передає розмову менеджеру рівно в той момент, коли лід готовий говорити з людиною.</p>
+    <ul class="story-points">
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f2.li1">Розуміє контекст усієї переписки, не лише останнє повідомлення</span></li>
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f2.li2">Автоматично зупиняється, щойно менеджер відповів вручну</span></li>
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f2.li3">Помічає власні збої і сигналізує в адмінку, а не мовчить</span></li>
-      </ul>
-    </div>
-    <div class="node mock reveal" style="--c:var(--blue)">
-      <span class="mock-glow"></span>
-      <div class="mock-head"><span class="lights"><i></i><i></i><i></i></span><span class="chip" style="background:var(--blue);color:var(--blue)"></span><span class="label" data-i18n="f2.mock.head">AI · відповідає зараз</span></div>
-      <div class="chat-bubble in" data-i18n="f2.mock.c1">Хочу консультацію, але не певен, чи мені підходить</div>
-      <div class="typing-row"><span></span><span></span><span></span></div>
-      <div class="chat-bubble out" data-i18n="f2.mock.c2">Розкажіть коротко про задачу — підберу формат і, якщо треба, одразу зʼєднаю з менеджером.</div>
-      <div class="chat-buttons">
-        <span class="chat-btn" data-i18n="f2.mock.b1">✅ З менеджером</span>
-        <span class="chat-btn" data-i18n="f2.mock.b2">Спершу тарифи</span>
+    </ul>
+  </div>
+  <div class="story-scene dm-stage reveal" id="dm-stage" role="img" aria-label="">
+    <span class="st-port in"></span>
+    <div class="dm-app" id="dm-app" aria-hidden="true">
+      <div class="dm-pane dm-list">
+        <div class="dm-list-head"><span data-i18n="demo.chats">Чати</span><span class="dm-live"><i></i><span data-i18n="demo.live">онлайн</span></span></div>
+        <div class="dm-rows" id="dm-rows"></div>
       </div>
-      <div class="capi-strip" style="--c:var(--blue)">
-        <span class="ping"></span><span data-i18n="f2.mock.tag">Передано менеджеру миттєво — без черги</span>
+      <div class="dm-pane dm-conv">
+        <div class="dm-empty" id="dm-empty"><span class="dm-empty-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4v-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span data-i18n="demo.empty">Оберіть тред</span></div>
+        <div class="dm-head" id="dm-head">
+          <span class="dm-ava" id="dm-head-ava"></span>
+          <div class="dm-head-id"><b id="dm-head-name"></b><span>Telegram</span></div>
+          <span class="dm-badge" id="dm-badge" data-i18n="demo.badge">AI зупинено</span>
+          <span class="dm-resume" id="dm-resume" data-i18n="demo.resume">Увімкнути AI</span>
+        </div>
+        <div class="dm-feed" id="dm-feed"></div>
+        <div class="dm-composer"><span data-i18n="demo.placeholder">Написати відповідь…</span><i></i></div>
+        <div class="dm-dialog" id="dm-dialog">
+          <div class="dm-dialog-card">
+            <b data-i18n="demo.dlg.title">Увімкнути AI</b>
+            <p data-i18n="demo.dlg.q">АІ має відповісти на останнє повідомлення ліда?</p>
+            <div class="dm-dialog-acts"><span data-i18n="demo.dlg.cancel">Скасувати</span><span data-i18n="demo.dlg.no">Ні</span><span class="yes" id="dm-yes" data-i18n="demo.dlg.yes">Так</span></div>
+          </div>
+        </div>
       </div>
+      <svg class="dm-cursor" id="dm-cursor" viewBox="0 0 24 24"><path d="M5 3l14 6.5-6.2 1.8L10.6 18 5 3Z" fill="#fff" stroke="#050608" stroke-width="1.4" stroke-linejoin="round"/></svg>
     </div>
+    <span class="st-port out"></span>
   </div>
 </section>
+<div class="relay" data-relay="money" aria-hidden="true">
+  <svg viewBox="0 0 100 200" preserveAspectRatio="none"><path class="relay-base" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/><path class="relay-lit" pathLength="1" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/></svg>
+  <span class="relay-pkt"></span>
+</div>
 
-<!-- ============ D: DESIRE — Аналітична воронка (flagship, on par with AI) ============ -->
-<section class="wrap feature-sec">
-  <div class="feature">
-    <div class="feature-copy reveal">
-      <span class="kicker"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.tag">АНАЛІТИЧНА ВОРОНКА</span></span>
-      <h3 data-i18n="f5.h">Друга половина системи, не менш важлива за AI: наскрізна аналітика руху ліда</h3>
-      <p class="body-text" data-i18n="f5.p">AI сам визначає, на якому етапі воронки зараз клієнт — від першого кліку по рекламі до оплати — і система в потрібну мить шле сигнал конверсії в Meta CAPI. Жодного ручного відмічання стадій, жодних "здогадок" в Ads Manager.</p>
-      <ul class="feature-list">
+<!-- ============ STORY 4/5 — analytics ============ -->
+<section class="wrap story" data-scene="analytics">
+  <div class="story-head reveal">
+    <span class="kicker" style="--c:var(--orange)"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.tag">АНАЛІТИЧНА ВОРОНКА</span></span>
+    <h3 data-i18n="f5.h">Друга половина системи, не менш важлива за AI: наскрізна аналітика руху ліда</h3>
+    <p class="body-text" data-i18n="f5.p">AI сам визначає, на якому етапі воронки зараз клієнт — від першого кліку по рекламі до оплати — і система в потрібну мить шле сигнал конверсії в Meta CAPI. Жодного ручного відмічання стадій, жодних "здогадок" в Ads Manager.</p>
+    <ul class="story-points">
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.li1">Наскрізний рух ліда через усі канали в один звіт</span></li>
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.li2">AI сам класифікує етап — не потрібен ручний тег</span></li>
         <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.li3">CAPI-подія летить у Meta в момент реальної дії, не пізніше</span></li>
-      </ul>
+    </ul>
+  </div>
+  <div class="story-scene st-an reveal" id="sc-analytics" aria-hidden="true">
+    <span class="st-port in"></span>
+    <div class="an-connect">
+      <div class="an-end"><span class="an-logo meta"><svg viewBox="0 0 24 24" fill="none"><path d="M3 15.5c0-4.5 2.2-8 4.8-8 2.2 0 3.5 2.4 4.9 5 1.5 2.7 2.8 5 4.6 5 1.4 0 2.7-1.2 2.7-3.8 0-3.4-1.6-6.2-3.6-6.2-1.5 0-2.7 1.4-3.9 3.3M3 15.5C3 17.4 3.9 18 4.9 18c1.5 0 2.6-1.4 4.3-4.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><div><b>Meta Ads</b><span id="an-state"></span></div></div>
+      <div class="an-link" id="an-link"><i></i></div>
+      <div class="an-end"><span class="an-logo rg">RG</span><div><b>Retain Growth</b><span data-i18n="an.ui.dst">аналітика</span></div></div>
+      <span class="an-btn" id="an-btn"></span>
     </div>
-    <div class="node mock reveal">
-      <span class="mock-glow"></span>
-      <div class="mock-head"><span class="lights"><i></i><i></i><i></i></span><span class="chip" style="background:var(--orange);color:var(--orange)"></span><span class="label" data-i18n="f5.mock.head">Рух ліда · зараз</span></div>
-      <div class="stage-tracker">
-        <div class="seg"><i></i></div><div class="seg"><i></i></div><div class="seg"><i></i></div><div class="seg"><i></i></div>
-      </div>
-      <div class="stage-labels">
-        <span data-i18n="f5.mock.s0">Клік</span><span data-i18n="f5.mock.s1">Діалог</span><span data-i18n="f5.mock.s2">Кваліфікація</span><span data-i18n="f5.mock.s3">Оплата</span>
-      </div>
-      <div class="stat-grid">
-        <div class="stat-tile"><b class="num">₴184 300</b><span data-i18n="f5.mock.m1">Revenue за 30 днів</span></div>
-        <div class="stat-tile"><b class="num">6.8%</b><span data-i18n="f5.mock.m2">Клік → оплата</span></div>
-      </div>
-      <div class="stat-tile" style="margin-bottom:10px">
-        <span data-i18n="f5.mock.m3">Конверсії по днях · приклад</span>
-        <div class="bars">
-          <i style="--h:34%;--i:0"></i><i style="--h:52%;--i:1"></i><i style="--h:41%;--i:2"></i><i style="--h:68%;--i:3"></i><i style="--h:59%;--i:4"></i><i style="--h:83%;--i:5"></i><i style="--h:71%;--i:6"></i>
-        </div>
-      </div>
-      <div class="capi-strip"><span class="ping"></span><span data-i18n="f5.mock.capi">Purchase · pixel 11148… · доставлено за 340мс</span></div>
+    <div class="an-kpis">
+      <div class="an-kpi"><span data-i18n="an.ui.k1">Конверсії</span><b id="an-k1">0</b><em id="an-d1"></em></div>
+      <div class="an-kpi"><span data-i18n="an.ui.k2">Продажі</span><b id="an-k2">0</b><em id="an-d2"></em></div>
+      <div class="an-kpi rev"><span data-i18n="an.ui.k3">Дохід</span><b id="an-k3">₴0</b><em id="an-d3"></em></div>
     </div>
+    <div class="an-charts">
+      <div class="an-chart"><span data-i18n="an.ui.c1">Дохід · 30 днів</span>
+        <svg viewBox="0 0 300 110" preserveAspectRatio="none" class="an-line"><defs><linearGradient id="anArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6b2c" stop-opacity=".35"/><stop offset="1" stop-color="#ff6b2c" stop-opacity="0"/></linearGradient></defs><path id="an-area" fill="url(#anArea)"/><path id="an-path" fill="none" stroke="#ff8a4c" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/><circle id="an-dot" r="3.5" fill="#fff"/></svg>
+      </div>
+      <div class="an-chart"><span data-i18n="an.ui.c2">Продажі по днях</span><div class="an-bars" id="an-bars"></div></div>
+    </div>
+    <div class="an-coin" id="an-coin"></div>
+    <span class="st-port out"></span>
+    <svg class="st-cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 6.5-6.2 1.8L10.6 18 5 3Z" fill="#fff" stroke="#050608" stroke-width="1.4" stroke-linejoin="round"/></svg>
+  </div>
+</section>
+<div class="relay" data-relay="loop" aria-hidden="true">
+  <svg viewBox="0 0 100 200" preserveAspectRatio="none"><path class="relay-base" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/><path class="relay-lit" pathLength="1" d="M50 0 C50 55 26 70 38 100 S 50 150 50 200"/></svg>
+  <span class="relay-pkt"></span>
+</div>
+
+<!-- ============ STORY 5/5 — retention (new) ============ -->
+<section class="wrap story" data-scene="retention">
+  <div class="story-head reveal">
+    <span class="kicker" style="--c:var(--delay)"><svg viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 0 0-14.3-4.9M4 13a8 8 0 0 0 14.3 4.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 3v4h4M19 21v-4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="rt.tag">RETENTION</span></span>
+    <h3 data-i18n="rt.h">Продаж — не кінець воронки. Система сама повертає клієнта</h3>
+    <p class="body-text" data-i18n="rt.p">Не купив — отримає нагадування в потрібну мить. Купив — з часом отримає привід повернутися. Ви бачите весь цикл, а не лише перший чек.</p>
+    <ul class="story-points">
+        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="rt.li1">Авто-нагадування, якщо лід замовк</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="rt.li2">Повторні продажі сценарієм, а не вручну</span></li>
+        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="rt.li3">LTV клієнта — у тій самій аналітиці</span></li>
+    </ul>
+  </div>
+  <div class="story-scene st-rt reveal" id="sc-retention" aria-hidden="true">
+    <span class="st-port in"></span>
+    <svg class="rt-svg" viewBox="0 0 640 400" preserveAspectRatio="none">
+      <defs><linearGradient id="rtGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a93a3"/><stop offset=".35" stop-color="#ffc061"/><stop offset=".6" stop-color="#4ade9a"/><stop offset="1" stop-color="#a79bf5"/></linearGradient></defs>
+      <ellipse class="rt-track" cx="320" cy="200" rx="250" ry="145"/>
+      <path class="rt-ring" id="rt-ring" pathLength="1" d="M320 55 A250 145 0 1 1 319.9 55"/>
+    </svg>
+    <div class="rt-center"><span class="rt-day" id="rt-day"></span><span class="rt-ltv"><em>LTV</em><b id="rt-ltv">₴0</b></span></div>
+    <div class="rt-st" data-st="0" style="--x:50%;--y:13.75%"><span class="rt-ico"><svg viewBox="0 0 24 24" fill="none"><circle cx="10" cy="8" r="3.6" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c.8-3.4 3.4-5.2 6.5-5.2 1.3 0 2.5.3 3.5.9M18 14v6M15 17h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><b></b></div>
+    <div class="rt-st" data-st="1" style="--x:89%;--y:50%"><span class="rt-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span><b></b><div class="rt-msg" id="rt-msg"></div></div>
+    <div class="rt-st" data-st="2" style="--x:50%;--y:86.25%"><span class="rt-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="19.5" r="1.4" fill="currentColor"/><circle cx="17" cy="19.5" r="1.4" fill="currentColor"/></svg></span><b></b><em class="rt-coin" id="rt-coin1"></em></div>
+    <div class="rt-st" data-st="3" style="--x:11%;--y:50%"><span class="rt-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M20 11a8 8 0 0 0-14.3-4.9M4 13a8 8 0 0 0 14.3 4.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 3v4h4M19 21v-4h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b></b><em class="rt-coin" id="rt-coin2"></em></div>
+    <span class="rt-client" id="rt-client"></span>
   </div>
 </section>
 
@@ -1129,9 +1418,28 @@
     ],
     "hero.cta1": ["Почати тріал 14 днів", "Start the 14-day trial"],
     "hero.cta2": ["Подивитись демо", "Watch the demo"],
-    "demo.eyebrow": ["Живе демо", "Live demo"],
-    "demo.h2": ["20 секунд з життя одного ліда", "20 seconds in the life of one lead"],
-    "demo.p": ["Лід прийшов → AI підхопив → менеджер втрутився → AI повернувся, памʼятаючи все сказане → конверсія. Жодного ручного копіювання контексту.", "A lead arrives → AI picks it up → a manager steps in → AI comes back remembering everything said → conversion. No context copied by hand."],
+    "lb.tag": ["КОНСТРУКТОР ЛЕНДІНГІВ", "LANDING PAGE BUILDER"],
+    "lb.h": ["Сторінка під рекламу за 2 хвилини — без дизайнера й розробника", "An ad landing page in 2 minutes — no designer, no developer"],
+    "lb.p": ["Обираєте шаблон, міняєте текст і колір прямо на макеті — і публікуєте. Кнопка на сторінці одразу веде ліда в месенджер, а клік не губиться по дорозі.", "Pick a template, change the text and colour right on the mock-up — and publish. The button takes the lead straight into a messenger, and the click isn't lost on the way."],
+    "lb.li1": ["Шаблони під курс, вебінар, товар і вакансію", "Templates for courses, webinars, products and job offers"],
+    "lb.li2": ["Кнопка веде в Telegram, WhatsApp чи Messenger — з тим самим кліком", "The button opens Telegram, WhatsApp or Messenger — with the same click"],
+    "lb.li3": ["Піксель і CAPI вшиті: перегляди й ліди рахуються з першого дня", "Pixel and CAPI built in: views and leads counted from day one"],
+    "lb.ui.tpl": ["Шаблон", "Template"],
+    "lb.ui.color": ["Колір", "Colour"],
+    "lb.ui.head": ["Заголовок", "Headline"],
+    "lb.ui.btn": ["Кнопка", "Button"],
+    "an.ui.dst": ["аналітика", "analytics"],
+    "an.ui.k1": ["Конверсії", "Conversions"],
+    "an.ui.k2": ["Продажі", "Sales"],
+    "an.ui.k3": ["Дохід", "Revenue"],
+    "an.ui.c1": ["Дохід · 30 днів", "Revenue · 30 days"],
+    "an.ui.c2": ["Продажі по днях", "Sales by day"],
+    "rt.tag": ["RETENTION", "RETENTION"],
+    "rt.h": ["Продаж — не кінець воронки. Система сама повертає клієнта", "A sale isn't the end of the funnel. The system brings the customer back on its own"],
+    "rt.p": ["Не купив — отримає нагадування в потрібну мить. Купив — з часом отримає привід повернутися. Ви бачите весь цикл, а не лише перший чек.", "Didn't buy — gets a reminder at the right moment. Bought — in time gets a reason to come back. You see the whole cycle, not just the first receipt."],
+    "rt.li1": ["Авто-нагадування, якщо лід замовк", "Auto-reminders when a lead goes quiet"],
+    "rt.li2": ["Повторні продажі сценарієм, а не вручну", "Repeat sales by scenario, not by hand"],
+    "rt.li3": ["LTV клієнта — у тій самій аналітиці", "Customer LTV in the same analytics"],
     "demo.chats": ["Чати", "Chats"],
     "demo.live": ["онлайн", "live"],
     "demo.empty": ["Оберіть тред", "Pick a thread"],
@@ -1167,36 +1475,18 @@
     "f1.li1": ["Гілки за відповіддю ліда — без ручного сортування чатів", "Branches by the lead's own answer — no manual chat sorting"],
     "f1.li2": ["Затримки й нагадування, якщо лід замовк", "Delays and nudges when a lead goes quiet"],
     "f1.li3": ["Точка конверсії шле подію в CAPI автоматично", "The conversion node fires a CAPI event automatically"],
-    "f1.mock.n1": ["Вхід за посиланням", "Entry via link"],
-    "f1.mock.n2": ["Повідомлення + 2 кнопки", "Message + 2 buttons"],
-    "f1.mock.n3": ["Тег: гарячий", "Tag: hot"],
-    "f1.mock.n4": ["Чекати 24г", "Wait 24h"],
-    "f1.mock.n5": ["AI-агент кваліфікує", "AI agent qualifies"],
-    "f1.mock.n6": ["Конверсія → CAPI", "Conversion → CAPI"],
     "f2.tag": ["AI-АГЕНТ ПРОДАЖІВ", "AI SALES AGENT"],
     "f2.h": ["AI не спамить скриптом — він продає діалогом", "The AI doesn't spam a script — it sells through conversation"],
     "f2.p": ["Відповідає на питання про ціну й умови, кваліфікує ліда і сам передає розмову менеджеру рівно в той момент, коли лід готовий говорити з людиною.", "Answers pricing and terms, qualifies the lead, and hands the conversation to a manager the moment the lead is ready for a human."],
     "f2.li1": ["Розуміє контекст усієї переписки, не лише останнє повідомлення", "Understands the whole thread, not just the last message"],
     "f2.li2": ["Автоматично зупиняється, щойно менеджер відповів вручну", "Steps back the instant a manager replies manually"],
     "f2.li3": ["Помічає власні збої і сигналізує в адмінку, а не мовчить", "Flags its own failures in the admin panel instead of going silent"],
-    "f2.mock.head": ["AI · відповідає зараз", "AI · replying now"],
-    "f2.mock.c1": ["Хочу консультацію, але не певен, чи мені підходить", "I want a consult but I'm not sure it's for me"],
-    "f2.mock.c2": ["Розкажіть коротко про задачу — підберу формат і, якщо треба, одразу зʼєднаю з менеджером.", "Tell me briefly what you need — I'll suggest a format, or connect you with a manager right away."],
-    "f2.mock.b1": ["✅ З менеджером", "✅ Talk to a manager"],
-    "f2.mock.b2": ["Спершу тарифи", "Show pricing first"],
-    "f2.mock.tag": ["Передано менеджеру миттєво — без черги", "Handed to a manager instantly — no queue"],
     "f5.tag": ["АНАЛІТИЧНА ВОРОНКА", "ANALYTICS FUNNEL"],
     "f5.h": ["Друга половина системи, не менш важлива за AI: наскрізна аналітика руху ліда", "The other half of the system, every bit as important as AI: end-to-end lead-movement analytics"],
     "f5.p": ["AI сам визначає, на якому етапі воронки зараз клієнт — від першого кліку по рекламі до оплати — і система в потрібну мить шле сигнал конверсії в Meta CAPI. Жодного ручного відмічання стадій, жодних «здогадок» в Ads Manager.", "The AI itself determines what funnel stage the customer is on — from the first ad click to payment — and the system fires a conversion signal to Meta CAPI at the exact moment. No manual stage-tagging, no guessing in Ads Manager."],
     "f5.li1": ["Наскрізний рух ліда через усі канали в один звіт", "The lead's whole cross-channel movement in one report"],
     "f5.li2": ["AI сам класифікує етап — не потрібен ручний тег", "The AI classifies the stage itself — no manual tagging"],
     "f5.li3": ["CAPI-подія летить у Meta в момент реальної дії, не пізніше", "The CAPI event fires the moment the action happens, never later"],
-    "f5.mock.head": ["Рух ліда · зараз", "Lead movement · live"],
-    "f5.mock.s0": ["Клік", "Click"], "f5.mock.s1": ["Діалог", "Dialogue"], "f5.mock.s2": ["Кваліфікація", "Qualified"], "f5.mock.s3": ["Оплата", "Payment"],
-    "f5.mock.m1": ["Revenue за 30 днів", "Revenue, last 30 days"],
-    "f5.mock.m2": ["Клік → оплата", "Click → payment"],
-    "f5.mock.m3": ["Конверсії по днях · приклад", "Conversions by day · example"],
-    "f5.mock.capi": ["Purchase · pixel 11148… · доставлено за 340мс", "Purchase · pixel 11148… · delivered in 340ms"],
     "f3.tag": ["ЄДИНИЙ INBOX · CRM", "UNIFIED INBOX · CRM"],
     "f3.h": ["Один inbox для всіх каналів. Один pipeline для всіх лідів", "One inbox for every channel. One pipeline for every lead"],
     "f3.p": ["Telegram, WhatsApp, Messenger та Instagram зʼїжджаються в один список чатів зі статусами, тегами й історією воронки — CRM в одній вкладці, а не в трьох різних застосунках.", "Telegram, WhatsApp, Messenger and Instagram land in one chat list with statuses, tags and funnel history — CRM in one tab, not spread across three apps."],
@@ -1451,11 +1741,71 @@
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleWires);
 
 
-  /* ---------------- live demo: one lead, whole cycle ----------------
-     A looping, self-playing scene of the real Chats screen. Everything is
-     mocked right here — no requests. Runs only while the block is on screen
-     (and the tab is visible), restarts on a language switch, and collapses to
-     a static final frame for prefers-reduced-motion. */
+  /* ---------------- narrative scroll ----------------
+     One lead's way through the product, block by block: landing builder →
+     funnel → AI chat → analytics → retention. Each block is a scene on its own
+     clock (Timeline) that only runs while that block is the one on screen;
+     .relay lines between blocks glow with the scroll and carry the "baton"
+     (signal, lead, money, returning customer) from one scene to the next.
+     Everything is mocked here — no requests. */
+  var REDUCED = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function easeOut(p) { return 1 - Math.pow(1 - p, 3); }
+  function money(n) { return "₴" + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  function $(id) { return document.getElementById(id); }
+  function once(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+  // A scene's own clock: steps fire when its time reaches them, tweens run on
+  // the same time, and pause() simply stops the clock — so a scene scrolled
+  // away mid-way resumes exactly where it was. setTimeout rather than rAF on
+  // purpose: timing must not depend on frames being painted.
+  function Timeline() { this.reset(); }
+  Timeline.prototype.reset = function () { this.pause(); this.steps = []; this.tweens = []; this.t = 0; this.i = 0; this.sorted = false; };
+  Timeline.prototype.at = function (ms, fn) { this.steps.push({ at: ms, fn: fn }); this.sorted = false; };
+  Timeline.prototype.tween = function (dur, fn) { this.tweens.push({ s: this.t, d: dur, fn: fn }); fn(0); };
+  Timeline.prototype.tick = function (dt) {
+    this.t += dt;
+    if (!this.sorted) { this.steps.sort(function (x, y) { return x.at - y.at; }); this.sorted = true; }
+    while (this.i < this.steps.length && this.steps[this.i].at <= this.t) this.steps[this.i++].fn();
+    var t = this.t;
+    this.tweens = this.tweens.filter(function (w) { var p = clamp((t - w.s) / w.d, 0, 1); w.fn(easeOut(p)); return p < 1; });
+    return this.i >= this.steps.length && this.tweens.length === 0;
+  };
+  Timeline.prototype.play = function (onDone) {
+    if (this.timer) return;
+    var self = this, last = Date.now();
+    (function loop() {
+      var now = Date.now(), dt = Math.min(now - last, 1000); last = now;
+      if (self.tick(dt)) { self.timer = null; if (onDone) onDone(); return; }
+      self.timer = setTimeout(loop, 33);
+    })();
+  };
+  Timeline.prototype.pause = function () { if (this.timer) clearTimeout(this.timer); this.timer = null; };
+  // Everything at once — the still final frame for reduced motion.
+  // Tweens started by a step need further ticks to reach their end, hence the loop.
+  Timeline.prototype.flush = function () { for (var k = 0; k < 40 && !this.tick(1e6); k++) {} };
+
+  function Cursor(root, sel) {
+    var c = root.querySelector(sel || ".st-cursor");
+    return {
+      to: function (el, dx, dy) {
+        if (!el || !c) return;
+        var a = root.getBoundingClientRect(), b = el.getBoundingClientRect();
+        var x = b.left - a.left + (dx != null ? dx : Math.min(b.width * 0.6, 60)), y = b.top - a.top + (dy != null ? dy : b.height * 0.55);
+        c.classList.add("on");
+        c.style.transform = "translate(" + x + "px," + y + "px)";
+      },
+      click: function (el) {
+        if (c) once(c, "click");
+        if (el) { el.classList.add("press"); setTimeout(function () { el.classList.remove("press"); }, 200); }
+      },
+      hide: function () { if (c) c.classList.remove("on", "click"); },
+      reset: function () { if (c) { c.classList.remove("on", "click"); c.style.transform = "translate(55%, 105%)"; } }
+    };
+  }
+
+  /* ---------- scene texts ---------- */
   var DEMO = {
     ua: {
       aria: "Анімована демонстрація: лід приходить з реклами, AI відповідає, менеджер втручається, AI повертається з контекстом і переводить ліда на етап продажу",
@@ -1476,7 +1826,9 @@
       lead3: "Так, бронюйте!",
       stage: "Перемкнено на етап: Продаж",
       capi: "Конверсія → Meta CAPI",
-      pill: "Продаж"
+      pill: "Продаж",
+      win: "+₴4 800",
+      winSub: "Оплату отримано"
     },
     en: {
       aria: "Animated demo: a lead arrives from an ad, AI answers, a manager steps in, AI comes back with full context and moves the lead to the Sale stage",
@@ -1497,51 +1849,184 @@
       lead3: "Yes, book it!",
       stage: "Moved to stage: Sale",
       capi: "Conversion → Meta CAPI",
-      pill: "Sale"
+      pill: "Sale",
+      win: "+₴4 800",
+      winSub: "Payment received"
     }
   };
+  var TX = {
+    ua: {
+      lb: { tpls: ["Порожній", "Курс англійської", "Вебінар"],
+        page: { chip: "Онлайн-курс", h: "Англійська для роботи", sub: "Живі уроки двічі на тиждень", list: ["Групи до 6 людей", "Пробний урок безкоштовно", "Сертифікат після курсу"], cta: "Написати в Telegram" },
+        newH: "Speak English за 12 тижнів", newCta: "Записатись на пробний", save: "Зберегти", saving: "Зберігаємо…", saved: "✓ Опубліковано", url: "↗ retain-growth.ai/lp/english" },
+      fb: { title: "journey_map / english_course", save: "Зберегти", saved: "✓ Збережено", palette: "Вузли",
+        kinds: { entry: ["ENTRY", "Точка входу", "Клік з реклами"], msg: ["MESSAGE", "Повідомлення", "Пропозиція курсу"], ai: ["AI", "AI-агент", "Кваліфікує ліда"], conv: ["CONVERSION", "Конверсія", "Оплата → CAPI"] },
+        btn: "Так, розкажіть більше" },
+      an: { off: "Не підключено", connecting: "Підключаємо…", on: "Підключено · act_1114…", connect: "Підключити", deltas: ["+18%", "+12%", "+24%"], coin: "+₴4 800" },
+      rt: { st: ["Підписався", "Нагадування", "Купив", "Повернувся"], day: "День ", msg: "Олено, місце в групі ще чекає 🙂 −10% до пʼятниці", c1: "₴4 800", c2: "+₴2 400" }
+    },
+    en: {
+      lb: { tpls: ["Blank", "English course", "Webinar"],
+        page: { chip: "Online course", h: "English for work", sub: "Live lessons twice a week", list: ["Groups of up to 6", "Free trial lesson", "Certificate on completion"], cta: "Message on Telegram" },
+        newH: "Speak English in 12 weeks", newCta: "Book a trial lesson", save: "Save", saving: "Saving…", saved: "✓ Published", url: "↗ retain-growth.ai/lp/english" },
+      fb: { title: "journey_map / english_course", save: "Save", saved: "✓ Saved", palette: "Nodes",
+        kinds: { entry: ["ENTRY", "Entry point", "Ad click"], msg: ["MESSAGE", "Message", "Course offer"], ai: ["AI", "AI agent", "Qualifies the lead"], conv: ["CONVERSION", "Conversion", "Payment → CAPI"] },
+        btn: "Yes, tell me more" },
+      an: { off: "Not connected", connecting: "Connecting…", on: "Connected · act_1114…", connect: "Connect", deltas: ["+18%", "+12%", "+24%"], coin: "+₴4 800" },
+      rt: { st: ["Subscribed", "Reminder", "Bought", "Came back"], day: "Day ", msg: "Olena, your seat is still waiting 🙂 −10% till Friday", c1: "₴4 800", c2: "+₴2 400" }
+    }
+  };
+  function tx() { return TX[lang] || TX.ua; }
   var DM_CHECK = '<svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var DM_BOLT = '<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
 
-  var demo = (function () {
-    var stage = document.getElementById("dm-stage");
-    var app = document.getElementById("dm-app");
-    if (!stage || !app) return { restart: function () {} };
-    var rowsEl = document.getElementById("dm-rows");
-    var conv = app.querySelector(".dm-conv");
-    var feed = document.getElementById("dm-feed");
-    var head = { ava: document.getElementById("dm-head-ava"), name: document.getElementById("dm-head-name") };
-    var badge = document.getElementById("dm-badge");
-    var resume = document.getElementById("dm-resume");
-    var dialog = document.getElementById("dm-dialog");
-    var yesBtn = document.getElementById("dm-yes");
-    var cursor = document.getElementById("dm-cursor");
-    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var timers = [];
-    var running = false;
-    var inView = false;
-    var inner, rows, T;
+  /* ---------- 1. landing builder ---------- */
+  function landingScene(root) {
+    var cur = Cursor(root);
+    var el = { tpls: $("lb-tpls"), sw: $("lb-sw"), inH: $("lb-in-h"), inB: $("lb-in-b"), save: $("lb-save"), url: $("lb-url"), chip: $("lb-chip"), h: $("lb-h"), sub: $("lb-sub"), list: $("lb-list"), cta: $("lb-cta"), plug: $("lb-plug") };
+    function setup() {
+      var T = tx().lb;
+      root.classList.remove("tpl");
+      root.style.setProperty("--lbc", "#ff6b2c");
+      el.tpls.innerHTML = T.tpls.map(function (n, i) { return '<span' + (i === 0 ? ' class="on"' : "") + '>' + esc(n) + '</span>'; }).join("");
+      Array.prototype.forEach.call(el.sw.children, function (s, i) { s.classList.toggle("on", i === 0); });
+      el.chip.textContent = T.page.chip; el.h.textContent = T.page.h; el.sub.textContent = T.page.sub; el.cta.textContent = T.page.cta;
+      el.list.innerHTML = T.page.list.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("");
+      el.inH.firstChild.textContent = T.page.h; el.inB.firstChild.textContent = T.page.cta;
+      el.inH.classList.remove("focus"); el.inB.classList.remove("focus");
+      el.save.className = "lb-save"; el.save.firstChild.textContent = T.save;
+      el.url.classList.remove("on"); el.url.textContent = "";
+      el.plug.classList.remove("live");
+      cur.reset();
+    }
+    function typeInto(tl, t0, input, preview, text) {
+      tl.at(t0, function () { input.firstChild.textContent = ""; preview.textContent = ""; });
+      for (var k = 1; k <= text.length; k++) (function (k) {
+        tl.at(t0 + k * 55, function () { input.firstChild.textContent = text.slice(0, k); preview.textContent = text.slice(0, k); });
+      })(k);
+      return t0 + text.length * 55;
+    }
+    function steps(tl) {
+      var T = tx().lb, t;
+      tl.at(400, function () { cur.to(el.tpls.children[1]); });
+      tl.at(1100, function () { cur.click(el.tpls.children[1]); el.tpls.children[0].classList.remove("on"); el.tpls.children[1].classList.add("on"); root.classList.add("tpl"); });
+      tl.at(2300, function () { cur.to(el.sw.children[1], 12, 12); });
+      tl.at(2900, function () { cur.click(el.sw.children[1]); el.sw.children[0].classList.remove("on"); el.sw.children[1].classList.add("on"); root.style.setProperty("--lbc", "#4da3ff"); });
+      tl.at(3800, function () { cur.to(el.inH); });
+      tl.at(4400, function () { cur.click(); el.inH.classList.add("focus"); cur.hide(); });
+      t = typeInto(tl, 4600, el.inH, el.h, T.newH);
+      tl.at(t + 350, function () { el.inH.classList.remove("focus"); cur.to(el.inB); });
+      tl.at(t + 950, function () { cur.click(); el.inB.classList.add("focus"); cur.hide(); });
+      t = typeInto(tl, t + 1150, el.inB, el.cta, T.newCta);
+      tl.at(t + 350, function () { el.inB.classList.remove("focus"); cur.to(el.save); });
+      tl.at(t + 950, function () { cur.click(el.save); el.save.classList.add("saving"); el.save.firstChild.textContent = T.saving; });
+      tl.at(t + 1800, function () { el.save.className = "lb-save saved"; el.save.firstChild.textContent = T.saved; el.url.textContent = T.url; el.url.classList.add("on"); cur.hide(); });
+      tl.at(t + 2300, function () { el.plug.classList.add("live"); });
+    }
+    return { setup: setup, steps: steps };
+  }
 
-    function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-    function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
-    function stop() { timers.forEach(clearTimeout); timers = []; running = false; }
+  /* ---------- 2. funnel builder ---------- */
+  var FB_KINDS = [["entry", "#ffc061"], ["msg", "#ff6b2c"], ["ai", "#4da3ff"], ["conv", "#4ade9a"]];
+  function funnelScene(root) {
+    var cur = Cursor(root);
+    var el = { title: $("fb-title"), save: $("fb-save"), pal: $("fb-palette"), canvas: $("fb-canvas"), edges: $("fb-edges"), nodes: $("fb-nodes"), lead: $("fb-lead"), port: $("fb-port"), out: $("fb-out") };
+    function center(n) {
+      var c = el.canvas.getBoundingClientRect(), b = n.getBoundingClientRect();
+      return { x: b.left - c.left + b.width / 2, y: b.top - c.top + b.height / 2 };
+    }
+    function node(k) { return el.nodes.querySelector('[data-k="' + k + '"]'); }
+    function edge(a, b) {
+      var p = center(node(a)), q = center(node(b)), mx = (p.x + q.x) / 2;
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", "M" + p.x + " " + p.y + " C" + mx + " " + p.y + " " + mx + " " + q.y + " " + q.x + " " + q.y);
+      el.edges.appendChild(path);
+      var len = path.getTotalLength();
+      path.style.setProperty("--len", len);
+      path.getBoundingClientRect();
+      path.classList.add("on");
+    }
+    function leadTo(k, instant) {
+      var c = center(node(k));
+      if (instant) el.lead.style.transition = "none";
+      el.lead.style.transform = "translate(" + c.x + "px," + c.y + "px)";
+      if (instant) { el.lead.getBoundingClientRect(); el.lead.style.transition = ""; }
+    }
+    function setup() {
+      var T = tx().fb;
+      el.title.textContent = T.title;
+      el.save.className = "fb-save"; el.save.textContent = T.save;
+      el.pal.innerHTML = '<span class="h">' + esc(T.palette) + '</span>' + FB_KINDS.map(function (k) {
+        return '<span class="fb-pal" style="--k:' + k[1] + '"><i></i>' + esc(T.kinds[k[0]][1]) + '</span>';
+      }).join("");
+      el.nodes.innerHTML = FB_KINDS.map(function (k) {
+        var K = T.kinds[k[0]];
+        return '<div class="fb-node" data-k="' + k[0] + '" style="--k:' + k[1] + '"><small>' + esc(K[0]) + '</small>' + esc(K[2]) +
+          (k[0] === "msg" ? '<br><span class="fb-btn">' + esc(T.btn) + '</span>' : "") + '</div>';
+      }).join("");
+      el.edges.innerHTML = "";
+      el.lead.className = "fb-lead";
+      el.port.classList.remove("live"); el.out.classList.remove("live");
+      cur.reset();
+    }
+    function steps(tl) {
+      var T = tx().fb;
+      tl.at(300, function () { el.port.classList.add("live"); });
+      FB_KINDS.forEach(function (k, i) {
+        var base = 700 + i * 1500;
+        tl.at(base, function () { cur.to(el.pal.children[i + 1]); });
+        tl.at(base + 500, function () { cur.click(el.pal.children[i + 1]); });
+        tl.at(base + 560, function () { cur.to(node(k[0]), 60, 18); });
+        tl.at(base + 1150, function () { node(k[0]).classList.add("in"); if (i > 0) edge(FB_KINDS[i - 1][0], k[0]); });
+      });
+      tl.at(6700, function () { cur.to(el.save, 20, 10); });
+      tl.at(7300, function () { cur.click(el.save); el.save.classList.add("saved"); el.save.textContent = T.saved; });
+      tl.at(7700, function () { cur.hide(); });
+      // the saved funnel runs its first lead: entry → message → AI
+      tl.at(8000, function () { leadTo("entry", true); el.lead.classList.add("on"); node("entry").classList.add("hot"); });
+      tl.at(8400, function () { node("entry").classList.remove("hot"); el.edges.children[0] && el.edges.children[0].classList.add("run"); leadTo("msg"); });
+      tl.at(9150, function () { node("msg").classList.add("hot"); var b = node("msg").querySelector(".fb-btn"); if (b) b.classList.add("hit"); });
+      tl.at(9700, function () { node("msg").classList.remove("hot"); el.edges.children[1] && el.edges.children[1].classList.add("run"); leadTo("ai"); });
+      tl.at(10450, function () { node("ai").classList.add("hot"); });
+      // …and from the AI node it drops out of the canvas, down into the chat
+      tl.at(11300, function () {
+        var c = el.canvas.getBoundingClientRect(), cx = c.width / 2;
+        el.lead.style.transform = "translate(" + cx + "px," + (c.height + 30) + "px)";
+      });
+      tl.at(12000, function () { el.lead.classList.remove("on"); el.out.classList.add("live"); });
+    }
+    return { setup: setup, steps: steps, relayout: function () {
+      // edges are drawn from live node positions; redraw after a resize
+      var drawn = el.edges.children.length;
+      el.edges.innerHTML = "";
+      for (var i = 1; i <= drawn; i++) edge(FB_KINDS[i - 1][0], FB_KINDS[i][0]);
+    } };
+  }
 
-    function reset() {
+  /* ---------- 3. AI chat (the live-demo hook) ---------- */
+  function chatScene(stage) {
+    var app = $("dm-app");
+    var rowsEl = $("dm-rows"), conv = app.querySelector(".dm-conv"), feed = $("dm-feed");
+    var head = { ava: $("dm-head-ava"), name: $("dm-head-name") };
+    var badge = $("dm-badge"), resume = $("dm-resume"), dialog = $("dm-dialog"), yesBtn = $("dm-yes");
+    var ports = stage.querySelectorAll(".st-port");
+    var cur = Cursor(app, ".dm-cursor");
+    var win = document.createElement("div"); win.className = "dm-win"; conv.appendChild(win);
+    var conf = document.createElement("div"); conf.className = "dm-confetti"; conv.appendChild(conf);
+    var inner, rows, T, tlRef;
+
+    function setup() {
       T = DEMO[lang] || DEMO.ua;
       stage.setAttribute("aria-label", T.aria);
-      rowsEl.innerHTML = "";
-      rows = [];
-      feed.innerHTML = '<div class="dm-feed-inner"></div>';
-      inner = feed.firstChild;
-      conv.classList.remove("open");
-      app.classList.remove("conv-open", "fade");
-      badge.classList.remove("on");
-      resume.classList.remove("on", "press");
-      dialog.classList.remove("on");
-      cursor.classList.remove("on", "click");
-      cursor.style.transform = "translate(60%, 110%)";
+      rowsEl.innerHTML = ""; rows = [];
+      feed.innerHTML = '<div class="dm-feed-inner"></div>'; inner = feed.firstChild;
+      conv.classList.remove("open"); app.classList.remove("conv-open", "fade");
+      badge.classList.remove("on"); resume.classList.remove("on", "press"); dialog.classList.remove("on");
+      win.className = "dm-win"; win.innerHTML = "<b>" + esc(T.win) + "</b><span>" + esc(T.winSub) + "</span>";
+      conf.innerHTML = "";
+      ports[0].classList.remove("live"); ports[1].classList.remove("live");
+      cur.reset();
     }
-
     function addRow(i) {
       var l = T.leads[i];
       var r = document.createElement("div");
@@ -1549,153 +2034,300 @@
       r.innerHTML = '<span class="dm-ava" style="--g:' + l.g + '">' + esc(l.i) + '</span>' +
         '<span class="dm-row-body"><span class="dm-row-top"><b>' + esc(l.n) + '</b><time>' + esc(l.t) + '</time></span>' +
         '<span class="dm-row-prev">' + esc(l.p) + '</span></span>' + (l.u ? '<span class="dm-row-unread">' + l.u + '</span>' : "");
-      rowsEl.appendChild(r);
-      rows.push(r);
-      requestAnimationFrame(function () { requestAnimationFrame(function () { r.classList.add("in"); }); });
-      // Domino: the new row nudges the ones above it, nearest first.
-      for (var j = i - 1; j >= 0; j--) {
-        (function (row, k) {
-          at(160 + k * 95, function () {
-            row.classList.remove("bump"); void row.offsetWidth; row.classList.add("bump");
-          });
-        })(rows[j], i - 1 - j);
-      }
+      rowsEl.appendChild(r); rows.push(r);
+      r.getBoundingClientRect(); r.classList.add("in");
+      // domino: the new row nudges the ones above it, nearest first
+      for (var j = i - 1; j >= 0; j--) (function (row, k) {
+        tlRef.at(tlRef.t + 160 + k * 95, function () { once(row, "bump"); });
+      })(rows[j], i - 1 - j);
     }
-
-    // Keep the newest message in view: the feed is a fixed window, the inner
-    // column slides up (transform — no layout thrash, no scroll events).
     function fit() {
       var over = inner.scrollHeight - feed.clientHeight + 24;
       inner.style.transform = over > 0 ? "translateY(" + -over + "px)" : "none";
     }
-    function push(node, preview) {
-      inner.appendChild(node);
-      fit();
-      if (preview && rows[0]) rows[0].querySelector(".dm-row-prev").textContent = preview;
-      return node;
-    }
+    function push(node, preview) { inner.appendChild(node); fit(); if (preview && rows[0]) rows[0].querySelector(".dm-row-prev").textContent = preview; return node; }
     function bubble(kind, text, extra) {
-      var d = document.createElement("div");
-      d.className = "dm-msg " + kind;
+      var d = document.createElement("div"); d.className = "dm-msg " + kind;
       d.innerHTML = (extra && extra.who ? '<span class="who">' + esc(extra.who) + '</span>' : "") + esc(text) + (extra && extra.btns ? extra.btns : "");
       return push(d, text);
     }
     function typing() { var d = document.createElement("div"); d.className = "dm-typing"; d.innerHTML = "<i></i><i></i><i></i>"; return push(d); }
-    function note(text, good, ico) { var d = document.createElement("div"); d.className = "dm-note" + (good ? " good" : ""); d.innerHTML = (ico || "") + '<span>' + esc(text) + '</span>'; return push(d); }
-
-    function pointAt(el) {
-      if (!el) return;
-      var a = app.getBoundingClientRect(), b = el.getBoundingClientRect();
-      var x = b.left - a.left + Math.min(b.width * 0.6, 60), y = b.top - a.top + b.height * 0.55;
-      cursor.classList.add("on");
-      cursor.style.transform = "translate(" + x + "px," + y + "px)";
-    }
-    function click(el) {
-      cursor.classList.remove("click"); void cursor.offsetWidth; cursor.classList.add("click");
-      if (el) { el.classList.add("press"); at(220, function () { el.classList.remove("press"); }); }
-    }
-
+    function untype() { var t = inner.querySelector(".dm-typing"); if (t) t.remove(); }
+    function note(text, good, ico) { var d = document.createElement("div"); d.className = "dm-note" + (good ? " good" : ""); d.innerHTML = (ico || "") + "<span>" + esc(text) + "</span>"; return push(d); }
     function openThread() {
       var l = T.leads[0];
       rows[0].classList.add("active");
-      head.ava.textContent = l.i;
-      head.ava.style.setProperty("--g", l.g);
-      head.name.textContent = l.n;
-      conv.classList.add("open");
-      app.classList.add("conv-open");
+      head.ava.textContent = l.i; head.ava.style.setProperty("--g", l.g); head.name.textContent = l.n;
+      conv.classList.add("open"); app.classList.add("conv-open");
     }
     function botButtons() { return '<div class="dm-btns"><span class="dm-btn" data-yes>' + esc(T.yes) + '</span><span class="dm-btn">' + esc(T.no) + '</span></div>'; }
-
-    function run() {
-      stop();
-      reset();
-      running = true;
-      // 1–2. empty frame, then the leads arrive one by one
-      for (var i = 0; i < T.leads.length; i++) (function (k) { at(300 + k * 360, function () { addRow(k); }); })(i);
-      // 3. pointer opens the first thread
-      at(2100, function () { pointAt(rows[0]); });
-      at(2850, function () { click(rows[0]); openThread(); });
-      at(3200, function () { cursor.classList.remove("on"); });
-      // 4. funnel message with buttons
-      at(3400, function () { bubble("out sys", T.bot, { btns: botButtons() }); });
-      // 5. the lead taps "yes" — shown as the tap, then their reply
-      at(4500, function () { pointAt(inner.querySelector("[data-yes]")); });
-      at(5200, function () { var y = inner.querySelector("[data-yes]"); click(y); if (y) y.classList.add("chosen"); });
-      at(5550, function () { cursor.classList.remove("on"); bubble("in", T.yes); });
-      // 6. AI picks it up
-      at(6200, function () { typing(); });
-      at(7400, function () { var t = inner.querySelector(".dm-typing"); if (t) t.remove(); bubble("out ai", T.ai1); });
-      // 7. a manager steps in — AI pauses itself
-      at(8900, function () { bubble("out mgr", T.mgr1, { who: T.mgrName }); badge.classList.add("on"); });
-      at(9500, function () { resume.classList.add("on"); });
-      // 8. the lead answers the manager
-      at(10300, function () { bubble("in", T.lead2); });
-      // 9. hand back to AI → "yes, answer the last message"
-      at(11200, function () { pointAt(resume); });
-      at(11900, function () { click(resume); dialog.classList.add("on"); });
-      at(12600, function () { pointAt(yesBtn); });
-      at(13300, function () { click(yesBtn); });
-      at(13550, function () { dialog.classList.remove("on"); badge.classList.remove("on"); resume.classList.remove("on"); cursor.classList.remove("on"); });
-      at(13900, function () { typing(); });
-      at(15200, function () { var t = inner.querySelector(".dm-typing"); if (t) t.remove(); bubble("out ai", T.ai2); });
-      at(16300, function () { bubble("in", T.lead3); });
-      // 10. AI closes the branch → next stage + conversion
-      at(17100, function () {
+    function confetti() {
+      var colors = ["#4ade9a", "#ffc061", "#ff6b2c", "#4da3ff", "#fff", "#a79bf5"], html = "";
+      for (var i = 0; i < 26; i++) {
+        var a = (i / 26) * Math.PI * 2 + Math.random() * 0.3, r = 90 + Math.random() * 110;
+        html += '<i style="--c:' + colors[i % colors.length] + ';--dx:' + Math.round(Math.cos(a) * r) + 'px;--dy:' + Math.round(Math.sin(a) * r * 0.8 + 40) + 'px;--r:' + Math.round(Math.random() * 540 - 270) + 'deg;--dl:' + Math.round(Math.random() * 120) + 'ms"></i>';
+      }
+      conf.innerHTML = html;
+    }
+    function steps(tl) {
+      tlRef = tl;
+      tl.at(0, function () { ports[0].classList.add("live"); });
+      for (var i = 0; i < T.leads.length; i++) (function (k) { tl.at(300 + k * 360, function () { addRow(k); }); })(i);
+      tl.at(2100, function () { cur.to(rows[0]); });
+      tl.at(2850, function () { cur.click(rows[0]); openThread(); });
+      tl.at(3200, function () { cur.hide(); });
+      tl.at(3400, function () { bubble("out sys", T.bot, { btns: botButtons() }); });
+      tl.at(4500, function () { cur.to(inner.querySelector("[data-yes]")); });
+      tl.at(5200, function () { var y = inner.querySelector("[data-yes]"); cur.click(y); if (y) y.classList.add("chosen"); });
+      tl.at(5550, function () { cur.hide(); bubble("in", T.yes); });
+      tl.at(6200, function () { typing(); });
+      tl.at(7400, function () { untype(); bubble("out ai", T.ai1); });
+      tl.at(8900, function () { bubble("out mgr", T.mgr1, { who: T.mgrName }); badge.classList.add("on"); });
+      tl.at(9500, function () { resume.classList.add("on"); });
+      tl.at(10300, function () { bubble("in", T.lead2); });
+      tl.at(11200, function () { cur.to(resume); });
+      tl.at(11900, function () { cur.click(resume); dialog.classList.add("on"); });
+      tl.at(12600, function () { cur.to(yesBtn); });
+      tl.at(13300, function () { cur.click(yesBtn); });
+      tl.at(13550, function () { dialog.classList.remove("on"); badge.classList.remove("on"); resume.classList.remove("on"); cur.hide(); });
+      tl.at(13900, function () { typing(); });
+      tl.at(15200, function () { untype(); bubble("out ai", T.ai2); });
+      tl.at(16300, function () { bubble("in", T.lead3); });
+      tl.at(17100, function () {
         note(T.stage, true, DM_CHECK);
-        // Takes the timestamp's place on the right: beside the name it
-        // squeezed the name down to a couple of letters.
         var time = rows[0] && rows[0].querySelector(".dm-row-top time");
         if (time) time.outerHTML = '<span class="dm-stagepill">' + DM_CHECK.replace("<svg", '<svg width="9" height="9"') + esc(T.pill) + '</span>';
       });
-      at(17700, function () { note(T.capi, false, DM_BOLT); });
-      // 11. hold, fade, loop
-      at(19500, function () { app.classList.add("fade"); });
-      at(20200, function () { if (inView && !document.hidden) run(); else { stop(); reset(); } });
+      tl.at(17700, function () { note(T.capi, false, DM_BOLT); });
+      // the sale itself — and it doesn't stay here: it flies on to analytics
+      tl.at(18300, function () { win.classList.add("on"); confetti(); });
+      tl.at(20000, function () { win.classList.add("fly"); });
+      tl.at(20600, function () { ports[1].classList.add("live"); });
     }
+    return { setup: setup, steps: steps };
+  }
 
-    // Reduced motion: the finished story as one still frame, no loop.
-    function still() {
-      stop();
-      reset();
-      T.leads.forEach(function (_, k) { addRow(k); });
-      rows.forEach(function (r) { r.classList.add("in"); });
-      openThread();
-      bubble("out sys", T.bot, { btns: botButtons() });
-      bubble("in", T.yes);
-      bubble("out ai", T.ai1);
-      bubble("out mgr", T.mgr1, { who: T.mgrName });
-      bubble("in", T.lead2);
-      bubble("out ai", T.ai2);
-      bubble("in", T.lead3);
-      note(T.stage, true, DM_CHECK);
-      note(T.capi, false, DM_BOLT);
+  /* ---------- 4. analytics ---------- */
+  var AN_SERIES = [14, 19, 17, 24, 29, 27, 34, 40, 38, 47, 55, 63];
+  var AN_BARS = [34, 48, 41, 58, 52, 70, 64];
+  function analyticsScene(root) {
+    var cur = Cursor(root);
+    var el = { state: $("an-state"), link: $("an-link"), btn: $("an-btn"), k: [$("an-k1"), $("an-k2"), $("an-k3")], d: [$("an-d1"), $("an-d2"), $("an-d3")], path: $("an-path"), area: $("an-area"), dot: $("an-dot"), bars: $("an-bars"), coin: $("an-coin") };
+    var ports = root.querySelectorAll(".st-port");
+    var series;
+    function draw(frac) {
+      // the line grows left to right up to `frac` of the series
+      var n = series.length, max = 80, W = 300, H = 110, pts = [];
+      var upto = frac * (n - 1);
+      for (var i = 0; i <= Math.floor(upto); i++) pts.push([i / (n - 1) * W, H - 8 - series[i] / max * (H - 16)]);
+      var f = upto - Math.floor(upto);
+      if (f > 0 && Math.floor(upto) < n - 1) {
+        var a = series[Math.floor(upto)], b = series[Math.floor(upto) + 1];
+        pts.push([upto / (n - 1) * W, H - 8 - (a + (b - a) * f) / max * (H - 16)]);
+      }
+      if (pts.length < 2) pts = [[0, H - 8], [0.1, H - 8]];
+      var d = "M" + pts.map(function (p) { return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" L");
+      el.path.setAttribute("d", d);
+      el.area.setAttribute("d", d + " L" + pts[pts.length - 1][0].toFixed(1) + " " + H + " L0 " + H + " Z");
+      var last = pts[pts.length - 1];
+      el.dot.setAttribute("cx", last[0]); el.dot.setAttribute("cy", last[1]);
     }
+    function setK(v) { el.k[0].textContent = Math.round(v[0]); el.k[1].textContent = Math.round(v[1]); el.k[2].textContent = money(v[2]); }
+    function setup() {
+      var T = tx().an;
+      series = AN_SERIES.slice();
+      root.classList.add("dim"); root.classList.remove("reading");
+      el.state.textContent = T.off; el.state.className = "";
+      el.link.className = "an-link"; el.btn.className = "an-btn"; el.btn.textContent = T.connect;
+      setK([0, 0, 0]);
+      el.d.forEach(function (d, i) { d.textContent = T.deltas[i]; d.classList.remove("on"); });
+      el.k[2].parentNode.classList.remove("flash");
+      el.bars.innerHTML = AN_BARS.map(function () { return "<i></i>"; }).join("");
+      el.coin.className = "an-coin"; el.coin.textContent = T.coin;
+      draw(0);
+      ports[0].classList.remove("live"); ports[1].classList.remove("live");
+      cur.reset();
+    }
+    function steps(tl) {
+      var T = tx().an;
+      tl.at(0, function () { ports[0].classList.add("live"); });
+      tl.at(400, function () { cur.to(el.btn); });
+      tl.at(1000, function () { cur.click(el.btn); el.state.textContent = T.connecting; el.link.classList.add("flow"); });
+      tl.at(1350, function () { cur.hide(); el.btn.classList.add("gone"); });
+      tl.at(1900, function () { el.link.classList.add("on"); });
+      tl.at(2400, function () { el.link.classList.remove("flow"); el.state.textContent = "✓ " + T.on; el.state.className = "ok"; root.classList.remove("dim"); root.classList.add("reading"); });
+      tl.at(3000, function () {
+        tl.tween(1800, function (p) { setK([312 * p, 86 * p, 184300 * p]); draw(p); });
+        Array.prototype.forEach.call(el.bars.children, function (b, i) { tl.at(tl.t + i * 140, function () { b.style.setProperty("--h", AN_BARS[i] + "%"); }); });
+      });
+      tl.at(4900, function () { el.d.forEach(function (d) { d.classList.add("on"); }); });
+      // the sale from the chat lands in the numbers
+      tl.at(5300, function () {
+        var r = root.getBoundingClientRect(), k = el.k[2].parentNode.getBoundingClientRect();
+        el.coin.style.setProperty("--tx", "calc(-50% + " + Math.round(k.left + k.width / 2 - (r.left + r.width / 2)) + "px)");
+        el.coin.style.setProperty("--ty", Math.round(k.top - r.top + k.height / 2) + "px");
+        once(el.coin, "drop");
+      });
+      tl.at(6100, function () {
+        el.k[2].parentNode.classList.add("flash");
+        tl.tween(700, function (p) { setK([312 + p, 86 + p, 184300 + 4800 * p]); });
+        series.push(72); draw(1);
+        var last = el.bars.lastElementChild; last.classList.add("new"); last.style.setProperty("--h", "88%");
+      });
+      tl.at(7300, function () { el.k[2].parentNode.classList.remove("flash"); ports[1].classList.add("live"); });
+    }
+    return { setup: setup, steps: steps };
+  }
 
-    function sync() {
-      if (reduced) { still(); return; }
-      if (inView && !document.hidden) { if (!running) run(); }
-      else { stop(); reset(); }
+  /* ---------- 5. retention ---------- */
+  function retentionScene(root) {
+    var el = { st: root.querySelectorAll(".rt-st"), ring: $("rt-ring"), day: $("rt-day"), ltv: $("rt-ltv"), msg: $("rt-msg"), c1: $("rt-coin1"), c2: $("rt-coin2"), client: $("rt-client") };
+    var port = root.querySelector(".st-port");
+    var theta = -90;
+    // the track is the SVG ellipse (cx 320, cy 200, rx 250, ry 145 in a 640×400 box)
+    function place(deg) {
+      theta = deg;
+      var r = root.getBoundingClientRect(), a = deg * Math.PI / 180;
+      var x = (320 + 250 * Math.cos(a)) / 640 * r.width, y = (200 + 145 * Math.sin(a)) / 400 * r.height;
+      el.client.style.transform = "translate(" + x + "px," + y + "px)";
+      el.ring.style.strokeDashoffset = String(1 - clamp((deg + 90) / 360, 0, 1));
     }
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(function (es) { inView = es[0].isIntersecting; sync(); }, { threshold: 0.3 }).observe(stage);
-    } else { inView = true; }
-    document.addEventListener("visibilitychange", sync);
-    window.addEventListener("resize", function () { if (inner) fit(); });
-    reset();
-    if (reduced) still();
+    function setDay(n) { el.day.textContent = tx().rt.day + Math.round(n); }
+    function travel(tl, from, to, dur, d0, d1) { tl.tween(dur, function (p) { place(from + (to - from) * p); if (d1 != null) setDay(d0 + (d1 - d0) * p); }); }
+    function setup() {
+      var T = tx().rt;
+      Array.prototype.forEach.call(el.st, function (s, i) { s.classList.remove("lit", "ring", "spin"); s.querySelector("b").textContent = T.st[i]; });
+      el.msg.textContent = T.msg; el.msg.classList.remove("on");
+      el.c1.textContent = T.c1; el.c2.textContent = T.c2; el.c1.className = "rt-coin"; el.c2.className = "rt-coin";
+      el.client.className = "rt-client";
+      el.ltv.textContent = money(0); el.ltv.parentNode.classList.remove("up");
+      el.ring.style.transition = "none"; place(-90); el.ring.getBoundingClientRect(); el.ring.style.transition = "";
+      setDay(1);
+      port.classList.remove("live");
+    }
+    function steps(tl) {
+      tl.at(0, function () { port.classList.add("live"); el.st[0].classList.add("lit"); });
+      // subscribed, didn't buy → a reminder goes out
+      tl.at(1000, function () { travel(tl, -90, 0, 1400, 1, 3); });
+      tl.at(2400, function () { el.st[1].classList.add("lit", "ring"); });
+      tl.at(2800, function () { el.msg.classList.add("on"); });
+      // → bought
+      tl.at(4200, function () { el.msg.classList.remove("on"); travel(tl, 0, 90, 1200, 3, 4); });
+      tl.at(5400, function () {
+        el.st[2].classList.add("lit"); el.client.classList.add("bought"); once(el.c1, "pop");
+        tl.tween(800, function (p) { el.ltv.textContent = money(4800 * p); });
+      });
+      // → time passes → came back for more
+      tl.at(6400, function () { travel(tl, 90, 180, 1800, 4, 38); });
+      tl.at(8200, function () {
+        el.st[3].classList.add("lit", "spin"); el.client.classList.add("loyal"); once(el.c2, "pop"); el.ltv.parentNode.classList.add("up");
+        tl.tween(800, function (p) { el.ltv.textContent = money(4800 + 2400 * p); });
+      });
+      // the loop closes: this customer is back at the start of a new cycle
+      tl.at(9200, function () { travel(tl, 180, 270, 1100); });
+    }
+    return { setup: setup, steps: steps, relayout: function () { place(theta); } };
+  }
+
+  /* ---------- director: one scene plays at a time ---------- */
+  var story = (function () {
+    var list = [];
+    function add(name, root, factory) {
+      if (!root) return;
+      var def = factory(root);
+      var sc = { name: name, root: root, def: def, tl: new Timeline(), state: "idle", leftAt: 0, vis: 0 };
+      sc.relay = (function () { var n = root.closest("section").nextElementSibling; return n && n.classList.contains("relay") ? n : null; })();
+      def.setup();
+      list.push(sc);
+    }
+    add("landing", $("sc-landing"), landingScene);
+    add("funnel", $("sc-funnel"), funnelScene);
+    add("chat", $("dm-stage"), chatScene);
+    add("analytics", $("sc-analytics"), analyticsScene);
+    add("retention", $("sc-retention"), retentionScene);
+    if (!list.length) return { relang: function () {} };
+
+    function done(sc) { sc.state = "done"; if (sc.relay) sc.relay.classList.add("armed"); }
+    function start(sc) {
+      sc.tl.reset(); sc.def.setup(); sc.def.steps(sc.tl);
+      if (sc.relay) sc.relay.classList.remove("armed");
+      sc.root.classList.remove("is-paused");
+      if (REDUCED) { sc.tl.flush(); done(sc); return; }
+      sc.state = "playing";
+      sc.tl.play(function () { done(sc); });
+    }
+    function pause(sc) { if (sc.state === "playing") { sc.tl.pause(); sc.state = "paused"; sc.root.classList.add("is-paused"); } }
+    function resume(sc) { if (sc.state === "paused") { sc.state = "playing"; sc.root.classList.remove("is-paused"); sc.tl.play(function () { done(sc); }); } }
+
+    var active = null;
+    function choose() {
+      var best = null;
+      list.forEach(function (sc) { if (sc.vis >= 0.55 && (!best || sc.vis > best.vis)) best = sc; });
+      if (document.hidden) best = null;
+      if (best === active) return;
+      if (active) { pause(active); if (active.state === "done") active.leftAt = Date.now(); }
+      active = best;
+      if (!active) return;
+      if (active.state === "idle") start(active);
+      else if (active.state === "paused") resume(active);
+      // a finished scene holds its last frame; it replays only after being
+      // away for a while, not on every quick scroll back and forth
+      else if (active.state === "done" && active.leftAt && Date.now() - active.leftAt > 8000) start(active);
+    }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        var sc = list.filter(function (x) { return x.root === e.target; })[0];
+        if (sc) sc.vis = e.isIntersecting ? e.intersectionRect.height / Math.min(e.boundingClientRect.height, window.innerHeight) : 0;
+      });
+      choose();
+    }, { threshold: [0, 0.2, 0.4, 0.55, 0.7, 0.85, 1] });
+    list.forEach(function (sc) { io.observe(sc.root); });
+    document.addEventListener("visibilitychange", choose);
+
+    /* relays: glow and "baton" follow the scroll, only while on screen */
+    var relays = Array.prototype.map.call(document.querySelectorAll(".relay"), function (r) {
+      var path = r.querySelector(".relay-lit");
+      return { el: r, path: path, len: path.getTotalLength(), pkt: r.querySelector(".relay-pkt"), next: (function () { var s = r.nextElementSibling; return s && s.querySelector(".st-port.in"); })(), seen: false };
+    });
+    var rio = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { relays.forEach(function (r) { if (r.el === e.target) r.seen = e.isIntersecting; }); });
+      frame();
+    }, { rootMargin: "80px 0px" });
+    relays.forEach(function (r) { rio.observe(r.el); });
+    var pending = false;
+    function frame() {
+      pending = false;
+      var vh = window.innerHeight;
+      relays.forEach(function (r) {
+        if (!r.seen && !REDUCED) return;
+        var b = r.el.getBoundingClientRect();
+        var p = REDUCED ? 1 : clamp((vh * 0.62 - b.top) / b.height, 0, 1);
+        r.el.style.setProperty("--p", p.toFixed(3));
+        var pt = r.path.getPointAtLength(p * r.len);
+        r.pkt.style.transform = "translate(" + (pt.x / 100 * b.width).toFixed(1) + "px," + (pt.y / 200 * b.height).toFixed(1) + "px)";
+        if (r.next && r.el.classList.contains("armed") && p > 0.97) r.next.classList.add("live");
+      });
+    }
+    function schedule() { if (!pending) { pending = true; requestAnimationFrame(frame); } }
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", function () {
+      schedule();
+      list.forEach(function (sc) { if (sc.def.relayout && sc.state !== "idle") sc.def.relayout(); });
+    });
+    frame();
 
     return {
-      // Language switch: start the story over in the new language.
-      restart: function () { stop(); if (reduced) still(); else { reset(); if (inView && !document.hidden) run(); } }
+      // Language switch: every scene starts over in the new language.
+      relang: function () {
+        list.forEach(function (sc) { sc.tl.reset(); sc.def.setup(); sc.state = "idle"; sc.leftAt = 0; if (sc.relay) sc.relay.classList.remove("armed"); });
+        var a = active; active = null; if (a) choose(); else choose();
+      }
     };
   })();
 
-  // "Подивитись демо" in the hero had no destination — it now scrolls here.
+  // "Подивитись демо" in the hero → the start of the story.
   document.querySelectorAll('[data-i18n="hero.cta2"]').forEach(function (b) {
-    b.addEventListener("click", function () {
-      var d = document.getElementById("demo");
-      if (d) d.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    b.addEventListener("click", function () { var d = $("story"); if (d) d.scrollIntoView({ behavior: "smooth", block: "start" }); });
   });
 
   function renderData() {
@@ -1706,7 +2338,7 @@
     renderTTV();
     renderCmp();
     renderFaq();
-    if (typeof demo !== "undefined") demo.restart();
+    if (typeof story !== "undefined") story.relang();
   }
 
   applyLang();
