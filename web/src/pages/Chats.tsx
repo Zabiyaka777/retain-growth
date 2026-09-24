@@ -259,6 +259,8 @@ interface MessageRow {
   sender?: string | null
   /** Manager who typed it (null for lead/system/AI messages). */
   sent_by?: string | null
+  /** That manager's display name, stamped server-side at send time. */
+  sender_name?: string | null
   /** Telegram's message_id — present only on messages sent after editing shipped. */
   external_id?: string | null
   edited_at?: string | null
@@ -1032,7 +1034,7 @@ export default function Chats() {
 
     supabase
       .from('messages')
-      .select('id, body, direction, created_at, meta, transcript, sender, sent_by, external_id, edited_at')
+      .select('id, body, direction, created_at, meta, transcript, sender, sent_by, sender_name, external_id, edited_at')
       .eq('thread_id', selectedId)
       .order('created_at', { ascending: false })
       .limit(MESSAGES_PAGE_SIZE)
@@ -1074,7 +1076,7 @@ export default function Chats() {
 
     const { data, error } = await supabase
       .from('messages')
-      .select('id, body, direction, created_at, meta, transcript, sender, sent_by, external_id, edited_at')
+      .select('id, body, direction, created_at, meta, transcript, sender, sent_by, sender_name, external_id, edited_at')
       .eq('thread_id', selectedId)
       .lt('created_at', messagesCursor)
       .order('created_at', { ascending: false })
@@ -1173,7 +1175,7 @@ export default function Chats() {
       } else {
         // Patched by id, so it lands correctly even if the manager switched
         // threads meanwhile (the row simply isn't in the list then).
-        setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, body: text, edited_at: data.message?.edited_at ?? new Date().toISOString() } : m)))
+        setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, body: text, edited_at: data.message?.edited_at ?? new Date().toISOString(), sender_name: data.message?.sender_name ?? m.sender_name } : m)))
         setEditingId(null)
       }
     } catch {
@@ -1690,6 +1692,12 @@ export default function Chats() {
                               <div
                                 className={`message-bubble ${message.direction}${message.sender === 'ai' ? ' is-ai' : ''}`}
                               >
+                                {/* Who among the managers answered — several can
+                                    share one inbox. Manager replies only: AI and
+                                    funnel messages already read as such by style. */}
+                                {message.direction === 'outbound' && message.sender === 'agent' && message.sender_name && (
+                                  <span className="msg-sender">{message.sender_name}</span>
+                                )}
                                 {(meta?.attachments ?? []).map((att, i) => (
                                   <AttachmentView key={`${att.url}-${i}`} attachment={att} onZoom={setZoomedImage} />
                                 ))}

@@ -410,6 +410,11 @@ export async function advanceFromAiNode(
       supabase,
       { id: state.id, thread_id: threadId, org_id: orgId, funnel_id: state.funnel_id, funnel_node_id: nextNodeId },
       null,
+      null,
+      null,
+      // The exit edge just moved the lead onto nextNodeId — a delay there
+      // must be waited, not skipped.
+      { freshPlacement: true },
     );
   } catch (err) {
     // Already persisted as active-and-due above, so the cron retries it.

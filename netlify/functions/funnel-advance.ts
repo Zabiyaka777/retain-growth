@@ -33,6 +33,10 @@ export const handler: Handler = async (event) => {
   let chosenButtonId: string | undefined;
   let callbackMessageId: number | null = null;
   let enrollment: EnrollmentContext | undefined;
+  // See ProcessOptions.freshPlacement — set by callers that just wrote
+  // funnel_node_id themselves (manage-lead-funnel.ts, telegram-webhook.ts's
+  // enrollment), never by a button tap.
+  let freshPlacement = false;
   try {
     const body = JSON.parse(event.body || "{}");
     stateId = typeof body.stateId === "string" ? body.stateId : undefined;
@@ -40,6 +44,7 @@ export const handler: Handler = async (event) => {
     // Telegram's id for the tapped message, so the keyboard can be cleared
     // afterwards when the node asks for it.
     callbackMessageId = typeof body.callbackMessageId === "number" ? body.callbackMessageId : null;
+    freshPlacement = body.freshPlacement === true;
     // Only telegram-webhook.ts's lead-gen-link enrollment sends this — a thin
     // marker (which link/click caused this state), not Meta CAPI data itself.
     // processGraphState looks up everything else it needs from it.
@@ -98,7 +103,7 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    await processGraphState(supabase, state, chosenButtonId ?? null, enrollment ?? null, callbackMessageId);
+    await processGraphState(supabase, state, chosenButtonId ?? null, enrollment ?? null, callbackMessageId, { freshPlacement });
   } catch (err) {
     console.error("funnel-advance: unhandled error processing state", state.id, err);
   }

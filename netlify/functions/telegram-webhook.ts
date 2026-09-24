@@ -743,6 +743,9 @@ export const handler: Handler = async (event) => {
               body: JSON.stringify({
                 stateId: state.id,
                 enrollment: { linkId: leadGenLink.id, clickId: matchedClickId },
+                // Just enrolled onto the link's entry node — which may be a
+                // delay (lead_gen_links.entry_node_id can be any node).
+                freshPlacement: true,
               }),
             });
           } catch (err) {

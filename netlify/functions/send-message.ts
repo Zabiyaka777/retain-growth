@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { pauseAiForManualSend } from "./_shared/pause-ai";
+import { displayName } from "./_shared/activity-log";
 import { markBotBlocked } from "./_shared/bot-block";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
@@ -163,7 +164,14 @@ export const handler: Handler = async (event) => {
       const res = await fetch(`${siteUrl}/.netlify/functions/whatsapp-send`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-internal-secret": serviceRoleKey },
-        body: JSON.stringify({ threadId, text, attachments, sender: "agent", sentBy: userData.user.id }),
+        body: JSON.stringify({
+          threadId,
+          text,
+          attachments,
+          sender: "agent",
+          sentBy: userData.user.id,
+          senderName: displayName(userData.user.email),
+        }),
       });
       const data = (await res.json().catch(() => null)) as
         | { ok?: boolean; error?: string; message?: unknown }
@@ -258,11 +266,14 @@ export const handler: Handler = async (event) => {
       body: text ?? "",
       sender: "agent",
       sent_by: userData.user.id,
+      // Which manager — shown on the bubble in Chats, where several managers
+      // can share one inbox. Same derivation as the activity log's actor_name.
+      sender_name: displayName(userData.user.email),
       meta: attachment ? { attachments: [attachment] } : null,
       // Telegram's id for this message — what edit-message.ts needs later.
       external_id: sendData.result?.message_id != null ? String(sendData.result.message_id) : null,
     })
-    .select("id, body, direction, created_at, meta, sender, sent_by, external_id, edited_at")
+    .select("id, body, direction, created_at, meta, sender, sent_by, sender_name, external_id, edited_at")
     .single();
 
   if (insertError || !message) {

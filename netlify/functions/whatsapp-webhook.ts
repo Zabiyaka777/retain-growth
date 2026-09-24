@@ -437,6 +437,9 @@ export const handler: Handler = async (event) => {
               body: JSON.stringify({
                 stateId: state.id,
                 enrollment: { linkId: leadGenLink.id, clickId: matchedClickId },
+                // Same as telegram-webhook.ts: just placed on the link's
+                // entry node, which may be a delay.
+                freshPlacement: true,
               }),
             });
           } catch (err) {

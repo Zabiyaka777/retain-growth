@@ -257,6 +257,15 @@ export interface EnrollmentContext {
   clickId: string | null;
 }
 
+export interface ProcessOptions {
+  // The caller has *just* written funnel_node_id (manual move/attach, a
+  // lead-gen enrollment, an AI node's exit) and invokes the walk straight
+  // away. The start node then counts as a fresh arrival — a delay parks
+  // instead of being treated as already waited out. The cron never sets it:
+  // a state it claims has been sitting on its node until waiting_until.
+  freshPlacement?: boolean;
+}
+
 interface EntryConfig {
   track_as_conversion?: boolean;
 }
@@ -528,6 +537,7 @@ export async function processGraphState(
   // callback_query, so nothing has to be stored at send time to support
   // clearing the keyboard afterwards.
   callbackMessageId: number | null = null,
+  options: ProcessOptions = {},
 ) {
   if (!state.funnel_node_id) {
     console.error("funnel-graph: state has no funnel_node_id", state.id);
@@ -773,15 +783,21 @@ export async function processGraphState(
     // this state up again — from here on, telegram-webhook.ts routes each
     // inbound message to ai-respond.ts instead of the graph advancing on its
     // own. Exit edges come later, together with tool-calling.
-    // Unconditional single-exit pause. Two ways to reach a delay node:
-    //   - as the walk's very first node, which only happens when the cron
-    //     claimed this state — and it only claims states whose waiting_until
-    //     is already due, so the wait is served: walk on.
-    //   - by stepping into it mid-walk: a fresh arrival, so park.
+    // Unconditional single-exit pause. Ways to reach a delay node:
+    //   - stepping into it mid-walk (or via a button's edge): a fresh
+    //     arrival, so park.
+    //   - it's the node the walk starts on. Whether the wait is already
+    //     served can't be read off the walk itself — the cron claiming a due
+    //     state and a caller that just placed the lead here look identical
+    //     at this point (first advance, same node), which is exactly how a
+    //     manual move onto a delay used to skip it. So the caller says so:
+    //     options.freshPlacement → park; otherwise (the cron, which only
+    //     claims states whose waiting_until is due) → served, walk on.
     // Parking reuses the existing waiting_until mechanism (status stays
     // 'active'); no new scheduling machinery.
     if (type === "delay") {
-      const arrivedFresh = !(advances === 1 && nodeId === state.funnel_node_id);
+      const isStartNode = advances === 1 && nodeId === state.funnel_node_id;
+      const arrivedFresh = !isStartNode || options.freshPlacement === true;
 
       if (arrivedFresh) {
         const until = computeDelayUntil((node.config ?? {}) as DelayConfig);

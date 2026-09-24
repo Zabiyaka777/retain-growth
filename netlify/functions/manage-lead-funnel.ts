@@ -81,7 +81,9 @@ async function advanceNow(stateId: string) {
     await fetch(`${siteUrl}/.netlify/functions/funnel-advance-background`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ stateId }),
+      // The lead was placed on this node a moment ago — a delay here must
+      // start counting now, not be treated as already waited out.
+      body: JSON.stringify({ stateId, freshPlacement: true }),
     });
   } catch (err) {
     console.error("manage-lead-funnel: funnel-advance invoke failed", err);

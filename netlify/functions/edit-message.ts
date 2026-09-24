@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { markBotBlocked } from "./_shared/bot-block";
+import { displayName } from "./_shared/activity-log";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -170,10 +171,12 @@ export const handler: Handler = async (event) => {
 
   const { data: updated, error: updateError } = await supabase
     .from("messages")
-    .update({ body: text, edited_at: new Date().toISOString() })
+    // Only the author can edit (checked above), so this re-stamps the same
+    // name — and fills it in on messages sent before sender_name existed.
+    .update({ body: text, edited_at: new Date().toISOString(), sender_name: displayName(userData.user.email) })
     .eq("id", messageId)
     .eq("org_id", orgId)
-    .select("id, body, direction, created_at, meta, transcript, sender, sent_by, external_id, edited_at")
+    .select("id, body, direction, created_at, meta, transcript, sender, sent_by, sender_name, external_id, edited_at")
     .single();
 
   if (updateError || !updated) {

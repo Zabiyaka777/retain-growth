@@ -51,6 +51,8 @@ interface SendBody {
   sender?: "system" | "agent";
   /** Only set for an agent reply, so Chats can attribute it. */
   sentBy?: string | null;
+  /** The manager's display name (send-message.ts derives it from their email). */
+  senderName?: string | null;
   attachments?: Attachment[];
 }
 
@@ -190,9 +192,10 @@ export const handler: Handler = async (event) => {
       body: text,
       sender: body.sender ?? "system",
       sent_by: body.sentBy ?? null,
+      sender_name: body.sender === "agent" && typeof body.senderName === "string" ? body.senderName.slice(0, 80) : null,
       meta: attachment ? { attachments: [attachment] } : null,
     })
-    .select("id, body, direction, created_at, meta, sender")
+    .select("id, body, direction, created_at, meta, sender, sent_by, sender_name")
     .single();
 
   if (insertError) {

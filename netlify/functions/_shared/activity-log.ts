@@ -19,11 +19,12 @@ export interface ActivityEntry {
 }
 
 /**
- * "olena@company.com" -> "olena". profiles carries no name column and
- * auth.users isn't readable from the browser, so the label is resolved here,
- * at write time, and stored with the entry.
+ * "olena@company.com" -> "Olena". profiles carries no name column and
+ * auth.users isn't readable from the browser, so the label is resolved at
+ * write time and stored with the row — here for activity entries, and by
+ * send-message.ts / whatsapp-send.ts / edit-message.ts for messages.sender_name.
  */
-function displayName(email: string | null | undefined): string | null {
+export function displayName(email: string | null | undefined): string | null {
   if (!email) return null;
   const local = email.split("@")[0]?.trim();
   if (!local) return null;
