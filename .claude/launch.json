@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "web", "run", "dev"],
       "autoPort": true
+    },
+    {
+      "name": "retain-growth-landing",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4400", "--bind", "127.0.0.1", "--directory", "landing"],
+      "port": 4400
     }
   ]
 }

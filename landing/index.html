@@ -559,6 +559,152 @@
   footer .logo-mark { width: 24px; height: 24px; border-radius: 7px; }
   @media (max-width: 720px) { footer { flex-direction: column; text-align: center; } }
 
+
+  /* =========================================================
+     LIVE DEMO — a scaled-down copy of the real Chats screen
+     (glass panes, coral manager, blue AI). Only the two panes
+     carry backdrop-filter; bubbles move with opacity/transform.
+     ========================================================= */
+  .demo-sec .section-head { margin-bottom: clamp(32px, 4.5vw, 52px); }
+  .dm-stage { position: relative; max-width: 820px; margin: 0 auto; isolation: isolate; }
+  .dm-stage::before {
+    content: ""; position: absolute; inset: -8% -6%; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(40% 46% at 14% 20%, rgba(255,107,44,0.22), transparent 70%),
+      radial-gradient(36% 42% at 88% 16%, rgba(77,163,255,0.18), transparent 70%),
+      radial-gradient(44% 50% at 70% 100%, rgba(167,155,245,0.14), transparent 72%);
+  }
+  .dm-app {
+    position: relative; display: grid; grid-template-columns: 250px 1fr; gap: 10px; height: 520px;
+    padding: 10px; border-radius: 30px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    box-shadow: 0 50px 100px -50px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.05);
+    transition: opacity 600ms var(--ease-out);
+    overflow: hidden;
+  }
+  .dm-app.fade { opacity: 0; }
+  .dm-pane {
+    position: relative; min-width: 0; min-height: 0; border-radius: 22px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 40%), rgba(20,21,26,0.55);
+    -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* thread list */
+  .dm-list-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 8px; font: 600 13px/1 var(--font-sans); color: var(--ink); }
+  .dm-live { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; font-size: 11px; color: var(--ink-3); }
+  .dm-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dm-rows { display: flex; flex-direction: column; gap: 3px; padding: 4px 8px 8px; }
+  .dm-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 15px; border: 1px solid transparent;
+    opacity: 0; transform: translateY(18px);
+    transition: opacity 420ms var(--ease), transform 520ms var(--ease), background 300ms, border-color 300ms, box-shadow 300ms;
+  }
+  .dm-row.in { opacity: 1; transform: none; }
+  .dm-row.bump { animation: dmBump 360ms var(--ease-out); }
+  @keyframes dmBump { 0% { transform: none; } 45% { transform: translateY(-5px); } 100% { transform: none; } }
+  .dm-row.active {
+    background: linear-gradient(135deg, rgba(255,107,44,0.22), rgba(255,107,44,0.07));
+    border-color: rgba(255,107,44,0.32); box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 10px 24px -16px rgba(255,107,44,0.7);
+  }
+  .dm-row.press { transform: scale(0.97); }
+  .dm-ava {
+    width: 34px; height: 34px; flex: none; border-radius: 50%; display: grid; place-items: center;
+    font: 600 12.5px/1 var(--font-sans); color: #fff; background: var(--g, linear-gradient(145deg, #ff9563, #ff6b2c));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .dm-row-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .dm-row-top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+  .dm-row-top b { min-width: 0; font: 600 12.5px/1.2 var(--font-sans); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dm-row-top time { font-size: 10.5px; color: var(--ink-3); flex: none; }
+  .dm-row-prev { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 300ms; }
+  .dm-row-unread { flex: none; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px; background: var(--orange); color: var(--on-orange); font: 600 10px/17px var(--font-sans); text-align: center; transition: opacity 300ms, transform 300ms; }
+  /* read once opened — and out of the layout, so the name gets that width */
+  .dm-row.active .dm-row-unread { display: none; }
+  .dm-stagepill { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; color: var(--green); background: rgba(74,222,154,0.12); border: 1px solid rgba(74,222,154,0.3); vertical-align: 1px; animation: dmPop 420ms var(--ease-out); }
+
+  /* conversation */
+  .dm-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--ink-3); font-size: 13px; transition: opacity 300ms; }
+  .dm-empty-ico { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--glass-2); }
+  .dm-empty-ico svg { width: 20px; height: 20px; }
+  .dm-conv.open .dm-empty { opacity: 0; }
+  .dm-head {
+    display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    opacity: 0; transform: translateY(-6px); transition: opacity 400ms var(--ease), transform 400ms var(--ease);
+  }
+  .dm-conv.open .dm-head { opacity: 1; transform: none; }
+  .dm-head-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .dm-head-id b { font: 600 13px/1.2 var(--font-sans); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dm-head-id span { font-size: 10.5px; color: var(--ink-3); }
+  .dm-badge, .dm-resume {
+    flex: none; font: 600 10.5px/1 var(--font-sans); padding: 5px 9px; border-radius: 999px;
+    opacity: 0; transform: scale(0.85); pointer-events: none; transition: opacity 320ms var(--ease), transform 320ms var(--ease), background 200ms;
+  }
+  .dm-badge { color: #fbbf24; background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.32); }
+  .dm-resume { color: var(--ink); background: rgba(255,255,255,0.07); border: 1px solid var(--line-2); }
+  .dm-badge.on, .dm-resume.on { opacity: 1; transform: none; }
+  .dm-resume.press { transform: scale(0.92); background: rgba(255,255,255,0.14); }
+
+  .dm-feed {
+    flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 7px; padding: 14px 14px 10px;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 100%); mask-image: linear-gradient(180deg, transparent 0, #000 22px, #000 100%);
+  }
+  .dm-feed-inner { display: flex; flex-direction: column; gap: 7px; margin-top: auto; transition: transform 500ms var(--ease); }
+  .dm-msg {
+    max-width: 82%; padding: 8px 12px; border-radius: 18px; font-size: 12.5px; line-height: 1.5; color: var(--ink);
+    animation: dmIn 380ms var(--ease) both;
+  }
+  @keyframes dmIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @keyframes dmPop { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: none; } }
+  .dm-msg.in { align-self: flex-start; transform-origin: bottom left; border-bottom-left-radius: 6px; background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.06)); border: 1px solid rgba(255,255,255,0.07); box-shadow: 0 8px 20px -16px rgba(0,0,0,0.8); }
+  .dm-msg.out { align-self: flex-end; transform-origin: bottom right; border-bottom-right-radius: 6px; color: #1c0f08; font-weight: 500; }
+  .dm-msg.sys, .dm-msg.mgr { background: linear-gradient(160deg, #ff9a6a, #ff7a45 60%, #f56d37); box-shadow: 0 10px 24px -16px rgba(255,107,44,0.8), inset 0 1px 0 rgba(255,255,255,0.22); }
+  .dm-msg.ai { color: #062333; background: linear-gradient(160deg, #7cd4fb, #4db8f5 60%, #2aa2e4); box-shadow: 0 10px 24px -16px rgba(77,163,255,0.75), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .dm-msg .who { display: block; font-size: 10px; font-weight: 600; opacity: 0.72; margin-bottom: 1px; }
+  .dm-btns { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+  .dm-btn { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,0.28); border: 1px solid rgba(255,255,255,0.35); color: #1c0f08; transition: transform 160ms, background 200ms, box-shadow 200ms; }
+  .dm-btn.press { transform: scale(0.93); background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.25); }
+  .dm-btn.chosen { background: rgba(255,255,255,0.9); border-color: #fff; }
+  .dm-typing { align-self: flex-start; display: inline-flex; gap: 4px; padding: 10px 12px; border-radius: 16px; border-bottom-left-radius: 6px; background: rgba(77,163,255,0.16); border: 1px solid rgba(77,163,255,0.3); animation: dmIn 300ms var(--ease) both; }
+  .dm-typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); animation: dmDot 1s infinite ease-in-out; }
+  .dm-typing i:nth-child(2) { animation-delay: 0.15s; } .dm-typing i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dmDot { 0%, 60%, 100% { opacity: 0.35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+  .dm-note { align-self: center; display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 10.5px; color: var(--ink-2); background: rgba(255,255,255,0.04); border: 1px solid var(--line); animation: dmIn 380ms var(--ease) both; }
+  .dm-note.good { color: var(--green); background: rgba(74,222,154,0.1); border-color: rgba(74,222,154,0.32); box-shadow: 0 0 24px -8px rgba(74,222,154,0.5); }
+  .dm-note svg { width: 12px; height: 12px; flex: none; }
+  .dm-composer { display: flex; align-items: center; justify-content: space-between; margin: 0 10px 10px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line-2); background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); font-size: 12px; color: var(--ink-3); }
+  .dm-composer i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(160deg, #ff9563, #ff6b2c); opacity: 0.8; }
+
+  /* resume dialog */
+  .dm-dialog { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(5,6,8,0.55); opacity: 0; pointer-events: none; transition: opacity 260ms var(--ease-out); z-index: 3; }
+  .dm-dialog.on { opacity: 1; }
+  .dm-dialog-card { width: min(300px, 100%); padding: 16px; border-radius: 18px; border: 1px solid var(--line-2); background: rgba(26,27,33,0.96); box-shadow: 0 30px 60px -30px rgba(0,0,0,0.9); transform: translateY(8px) scale(0.97); transition: transform 320ms var(--ease); }
+  .dm-dialog.on .dm-dialog-card { transform: none; }
+  .dm-dialog-card b { display: block; font: 500 14px/1.2 var(--font-display); color: var(--ink); }
+  .dm-dialog-card p { margin: 8px 0 12px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+  .dm-dialog-acts { display: flex; justify-content: flex-end; gap: 6px; }
+  .dm-dialog-acts span { font-size: 11px; font-weight: 600; padding: 6px 11px; border-radius: 999px; color: var(--ink-2); background: rgba(255,255,255,0.06); transition: transform 160ms; }
+  .dm-dialog-acts span.yes { color: var(--on-orange); background: var(--orange); }
+  .dm-dialog-acts span.yes.press { transform: scale(0.92); }
+
+  /* pointer that "clicks" through the scenario */
+  .dm-cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; z-index: 5; pointer-events: none; opacity: 0; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.6)); transition: transform 700ms var(--ease), opacity 300ms; }
+  .dm-cursor.on { opacity: 1; }
+  .dm-cursor.click { animation: dmClick 260ms var(--ease-out); }
+  @keyframes dmClick { 50% { scale: 0.82; } }
+
+  /* phones: one pane at a time, the conversation slides over the list */
+  @media (max-width: 640px) {
+    .dm-app { grid-template-columns: 1fr; height: 500px; padding: 8px; border-radius: 26px; }
+    .dm-conv { position: absolute; inset: 8px; transform: translateX(104%); transition: transform 520ms var(--ease); z-index: 2; }
+    .dm-app.conv-open .dm-conv { transform: none; }
+    .dm-msg { max-width: 88%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dm-row, .dm-msg, .dm-note, .dm-typing, .dm-head, .dm-cursor, .dm-app, .dm-conv { animation: none !important; transition: none !important; }
+  }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     .reveal { transition: none; opacity: 1; transform: none; filter: none; }
@@ -660,6 +806,44 @@
 </section>
 
 <!-- ============ I: INTEREST — pains ============ -->
+<!-- ============ LIVE DEMO: one lead, whole cycle (decorative, looping) ============ -->
+<section class="wrap demo-sec chapter" id="demo">
+  <div class="section-head reveal">
+    <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4v-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span data-i18n="demo.eyebrow">Живе демо</span></span>
+    <h2 data-i18n="demo.h2">20 секунд з життя одного ліда</h2>
+    <p class="lead-text" data-i18n="demo.p">Лід прийшов → AI підхопив → менеджер втрутився → AI повернувся, памʼятаючи все сказане → конверсія. Жодного ручного копіювання контексту.</p>
+  </div>
+  <!-- Mock data only, no backend. The stage is decorative: screen readers get
+       the one-line summary in aria-label instead of 20 seconds of motion. -->
+  <div class="dm-stage reveal" id="dm-stage" role="img" aria-label="Анімована демонстрація: лід, AI, менеджер і конверсія в одному чаті">
+    <div class="dm-app" id="dm-app" aria-hidden="true">
+      <div class="dm-pane dm-list">
+        <div class="dm-list-head"><span data-i18n="demo.chats">Чати</span><span class="dm-live"><i></i><span data-i18n="demo.live">онлайн</span></span></div>
+        <div class="dm-rows" id="dm-rows"></div>
+      </div>
+      <div class="dm-pane dm-conv">
+        <div class="dm-empty" id="dm-empty"><span class="dm-empty-ico"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4v-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><span data-i18n="demo.empty">Оберіть тред</span></div>
+        <div class="dm-head" id="dm-head">
+          <span class="dm-ava" id="dm-head-ava"></span>
+          <div class="dm-head-id"><b id="dm-head-name"></b><span>Telegram</span></div>
+          <span class="dm-badge" id="dm-badge" data-i18n="demo.badge">AI зупинено</span>
+          <span class="dm-resume" id="dm-resume" data-i18n="demo.resume">Увімкнути AI</span>
+        </div>
+        <div class="dm-feed" id="dm-feed"></div>
+        <div class="dm-composer"><span data-i18n="demo.placeholder">Написати відповідь…</span><i></i></div>
+        <div class="dm-dialog" id="dm-dialog">
+          <div class="dm-dialog-card">
+            <b data-i18n="demo.dlg.title">Увімкнути AI</b>
+            <p data-i18n="demo.dlg.q">АІ має відповісти на останнє повідомлення ліда?</p>
+            <div class="dm-dialog-acts"><span data-i18n="demo.dlg.cancel">Скасувати</span><span data-i18n="demo.dlg.no">Ні</span><span class="yes" id="dm-yes" data-i18n="demo.dlg.yes">Так</span></div>
+          </div>
+        </div>
+      </div>
+      <svg class="dm-cursor" id="dm-cursor" viewBox="0 0 24 24"><path d="M5 3l14 6.5-6.2 1.8L10.6 18 5 3Z" fill="#fff" stroke="#050608" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+</section>
+
 <section class="wrap pain-section chapter">
   <div class="section-head reveal">
     <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.5v3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></span><span data-i18n="pain.eyebrow">Що зазвичай зʼїдає прибуток</span></span>
@@ -945,6 +1129,20 @@
     ],
     "hero.cta1": ["Почати тріал 14 днів", "Start the 14-day trial"],
     "hero.cta2": ["Подивитись демо", "Watch the demo"],
+    "demo.eyebrow": ["Живе демо", "Live demo"],
+    "demo.h2": ["20 секунд з життя одного ліда", "20 seconds in the life of one lead"],
+    "demo.p": ["Лід прийшов → AI підхопив → менеджер втрутився → AI повернувся, памʼятаючи все сказане → конверсія. Жодного ручного копіювання контексту.", "A lead arrives → AI picks it up → a manager steps in → AI comes back remembering everything said → conversion. No context copied by hand."],
+    "demo.chats": ["Чати", "Chats"],
+    "demo.live": ["онлайн", "live"],
+    "demo.empty": ["Оберіть тред", "Pick a thread"],
+    "demo.badge": ["AI зупинено", "AI paused"],
+    "demo.resume": ["Увімкнути AI", "Resume AI"],
+    "demo.placeholder": ["Написати відповідь…", "Write a reply…"],
+    "demo.dlg.title": ["Увімкнути AI", "Resume AI"],
+    "demo.dlg.q": ["АІ має відповісти на останнє повідомлення ліда?", "Should AI answer the lead's last message?"],
+    "demo.dlg.cancel": ["Скасувати", "Cancel"],
+    "demo.dlg.no": ["Ні", "No"],
+    "demo.dlg.yes": ["Так", "Yes"],
     "hero.note": ["Без оплати. Скасування в один клік.", "No payment required. Cancel in one click."],
     "hero.stat1": ["відповідь ліду миттєво", "instant reply to every lead"],
     "hero.stat2": ["від тапу по кнопці до кроку далі", "from a button tap to the next step"],
@@ -1252,6 +1450,254 @@
   window.addEventListener("load", scheduleWires);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleWires);
 
+
+  /* ---------------- live demo: one lead, whole cycle ----------------
+     A looping, self-playing scene of the real Chats screen. Everything is
+     mocked right here — no requests. Runs only while the block is on screen
+     (and the tab is visible), restarts on a language switch, and collapses to
+     a static final frame for prefers-reduced-motion. */
+  var DEMO = {
+    ua: {
+      aria: "Анімована демонстрація: лід приходить з реклами, AI відповідає, менеджер втручається, AI повертається з контекстом і переводить ліда на етап продажу",
+      leads: [
+        { n: "Олена Коваль", i: "ОК", g: "linear-gradient(145deg,#ff9a6a,#e8552a)", p: "Бачила вашу рекламу 👋", t: "зараз", u: 1 },
+        { n: "Максим", i: "М", g: "linear-gradient(145deg,#7cd4fb,#2a86e4)", p: "А є знижка для студентів?", t: "2 хв" },
+        { n: "Ірина Бойко", i: "ІБ", g: "linear-gradient(145deg,#b9a8ff,#7456e6)", p: "Дякую, чекаю рахунок", t: "8 хв" },
+        { n: "@andrii_dev", i: "A", g: "linear-gradient(145deg,#6ee7b7,#18a36d)", p: "Коли старт групи?", t: "15 хв" },
+        { n: "Софія", i: "С", g: "linear-gradient(145deg,#ffd27a,#e89b21)", p: "Супер, записуюсь!", t: "1 год" }
+      ],
+      bot: "Вітаю, Олено! Підберемо курс англійської під вашу ціль. Розповісти, як проходять заняття?",
+      yes: "Так, розкажіть більше", no: "Поки ні",
+      ai1: "Залюбки! Щоб підібрати групу: який у вас зараз рівень — початковий, середній чи вищий? 🙂",
+      mgrName: "Марина",
+      mgr1: "Олено, це Марина, менеджерка 🙌 Цього тижня діє −20% на групи, що стартують 15-го.",
+      lead2: "Середній. А знижка діє і на вечірні групи?",
+      ai2: "Так, −20% від Марини діє і на вечірні 👍 Для середнього рівня — група B1, вт/чт о 19:00. Бронюю вам місце?",
+      lead3: "Так, бронюйте!",
+      stage: "Перемкнено на етап: Продаж",
+      capi: "Конверсія → Meta CAPI",
+      pill: "Продаж"
+    },
+    en: {
+      aria: "Animated demo: a lead arrives from an ad, AI answers, a manager steps in, AI comes back with full context and moves the lead to the Sale stage",
+      leads: [
+        { n: "Olena Koval", i: "OK", g: "linear-gradient(145deg,#ff9a6a,#e8552a)", p: "Saw your ad 👋", t: "now", u: 1 },
+        { n: "Max", i: "M", g: "linear-gradient(145deg,#7cd4fb,#2a86e4)", p: "Any student discount?", t: "2m" },
+        { n: "Iryna Boyko", i: "IB", g: "linear-gradient(145deg,#b9a8ff,#7456e6)", p: "Thanks, waiting for the invoice", t: "8m" },
+        { n: "@andrii_dev", i: "A", g: "linear-gradient(145deg,#6ee7b7,#18a36d)", p: "When does the group start?", t: "15m" },
+        { n: "Sofia", i: "S", g: "linear-gradient(145deg,#ffd27a,#e89b21)", p: "Great, sign me up!", t: "1h" }
+      ],
+      bot: "Hi Olena! Let's match an English course to your goal. Want to hear how the classes work?",
+      yes: "Yes, tell me more", no: "Not now",
+      ai1: "Happy to! To pick the right group: what's your level right now — beginner, intermediate or advanced? 🙂",
+      mgrName: "Maryna",
+      mgr1: "Olena, it's Maryna, your manager 🙌 This week there's −20% on groups starting on the 15th.",
+      lead2: "Intermediate. Does the discount cover evening groups too?",
+      ai2: "Yes, Maryna's −20% covers evening groups too 👍 For intermediate — group B1, Tue/Thu at 7pm. Shall I book you a seat?",
+      lead3: "Yes, book it!",
+      stage: "Moved to stage: Sale",
+      capi: "Conversion → Meta CAPI",
+      pill: "Sale"
+    }
+  };
+  var DM_CHECK = '<svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var DM_BOLT = '<svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+
+  var demo = (function () {
+    var stage = document.getElementById("dm-stage");
+    var app = document.getElementById("dm-app");
+    if (!stage || !app) return { restart: function () {} };
+    var rowsEl = document.getElementById("dm-rows");
+    var conv = app.querySelector(".dm-conv");
+    var feed = document.getElementById("dm-feed");
+    var head = { ava: document.getElementById("dm-head-ava"), name: document.getElementById("dm-head-name") };
+    var badge = document.getElementById("dm-badge");
+    var resume = document.getElementById("dm-resume");
+    var dialog = document.getElementById("dm-dialog");
+    var yesBtn = document.getElementById("dm-yes");
+    var cursor = document.getElementById("dm-cursor");
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var timers = [];
+    var running = false;
+    var inView = false;
+    var inner, rows, T;
+
+    function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+    function at(ms, fn) { timers.push(setTimeout(fn, ms)); }
+    function stop() { timers.forEach(clearTimeout); timers = []; running = false; }
+
+    function reset() {
+      T = DEMO[lang] || DEMO.ua;
+      stage.setAttribute("aria-label", T.aria);
+      rowsEl.innerHTML = "";
+      rows = [];
+      feed.innerHTML = '<div class="dm-feed-inner"></div>';
+      inner = feed.firstChild;
+      conv.classList.remove("open");
+      app.classList.remove("conv-open", "fade");
+      badge.classList.remove("on");
+      resume.classList.remove("on", "press");
+      dialog.classList.remove("on");
+      cursor.classList.remove("on", "click");
+      cursor.style.transform = "translate(60%, 110%)";
+    }
+
+    function addRow(i) {
+      var l = T.leads[i];
+      var r = document.createElement("div");
+      r.className = "dm-row";
+      r.innerHTML = '<span class="dm-ava" style="--g:' + l.g + '">' + esc(l.i) + '</span>' +
+        '<span class="dm-row-body"><span class="dm-row-top"><b>' + esc(l.n) + '</b><time>' + esc(l.t) + '</time></span>' +
+        '<span class="dm-row-prev">' + esc(l.p) + '</span></span>' + (l.u ? '<span class="dm-row-unread">' + l.u + '</span>' : "");
+      rowsEl.appendChild(r);
+      rows.push(r);
+      requestAnimationFrame(function () { requestAnimationFrame(function () { r.classList.add("in"); }); });
+      // Domino: the new row nudges the ones above it, nearest first.
+      for (var j = i - 1; j >= 0; j--) {
+        (function (row, k) {
+          at(160 + k * 95, function () {
+            row.classList.remove("bump"); void row.offsetWidth; row.classList.add("bump");
+          });
+        })(rows[j], i - 1 - j);
+      }
+    }
+
+    // Keep the newest message in view: the feed is a fixed window, the inner
+    // column slides up (transform — no layout thrash, no scroll events).
+    function fit() {
+      var over = inner.scrollHeight - feed.clientHeight + 24;
+      inner.style.transform = over > 0 ? "translateY(" + -over + "px)" : "none";
+    }
+    function push(node, preview) {
+      inner.appendChild(node);
+      fit();
+      if (preview && rows[0]) rows[0].querySelector(".dm-row-prev").textContent = preview;
+      return node;
+    }
+    function bubble(kind, text, extra) {
+      var d = document.createElement("div");
+      d.className = "dm-msg " + kind;
+      d.innerHTML = (extra && extra.who ? '<span class="who">' + esc(extra.who) + '</span>' : "") + esc(text) + (extra && extra.btns ? extra.btns : "");
+      return push(d, text);
+    }
+    function typing() { var d = document.createElement("div"); d.className = "dm-typing"; d.innerHTML = "<i></i><i></i><i></i>"; return push(d); }
+    function note(text, good, ico) { var d = document.createElement("div"); d.className = "dm-note" + (good ? " good" : ""); d.innerHTML = (ico || "") + '<span>' + esc(text) + '</span>'; return push(d); }
+
+    function pointAt(el) {
+      if (!el) return;
+      var a = app.getBoundingClientRect(), b = el.getBoundingClientRect();
+      var x = b.left - a.left + Math.min(b.width * 0.6, 60), y = b.top - a.top + b.height * 0.55;
+      cursor.classList.add("on");
+      cursor.style.transform = "translate(" + x + "px," + y + "px)";
+    }
+    function click(el) {
+      cursor.classList.remove("click"); void cursor.offsetWidth; cursor.classList.add("click");
+      if (el) { el.classList.add("press"); at(220, function () { el.classList.remove("press"); }); }
+    }
+
+    function openThread() {
+      var l = T.leads[0];
+      rows[0].classList.add("active");
+      head.ava.textContent = l.i;
+      head.ava.style.setProperty("--g", l.g);
+      head.name.textContent = l.n;
+      conv.classList.add("open");
+      app.classList.add("conv-open");
+    }
+    function botButtons() { return '<div class="dm-btns"><span class="dm-btn" data-yes>' + esc(T.yes) + '</span><span class="dm-btn">' + esc(T.no) + '</span></div>'; }
+
+    function run() {
+      stop();
+      reset();
+      running = true;
+      // 1–2. empty frame, then the leads arrive one by one
+      for (var i = 0; i < T.leads.length; i++) (function (k) { at(300 + k * 360, function () { addRow(k); }); })(i);
+      // 3. pointer opens the first thread
+      at(2100, function () { pointAt(rows[0]); });
+      at(2850, function () { click(rows[0]); openThread(); });
+      at(3200, function () { cursor.classList.remove("on"); });
+      // 4. funnel message with buttons
+      at(3400, function () { bubble("out sys", T.bot, { btns: botButtons() }); });
+      // 5. the lead taps "yes" — shown as the tap, then their reply
+      at(4500, function () { pointAt(inner.querySelector("[data-yes]")); });
+      at(5200, function () { var y = inner.querySelector("[data-yes]"); click(y); if (y) y.classList.add("chosen"); });
+      at(5550, function () { cursor.classList.remove("on"); bubble("in", T.yes); });
+      // 6. AI picks it up
+      at(6200, function () { typing(); });
+      at(7400, function () { var t = inner.querySelector(".dm-typing"); if (t) t.remove(); bubble("out ai", T.ai1); });
+      // 7. a manager steps in — AI pauses itself
+      at(8900, function () { bubble("out mgr", T.mgr1, { who: T.mgrName }); badge.classList.add("on"); });
+      at(9500, function () { resume.classList.add("on"); });
+      // 8. the lead answers the manager
+      at(10300, function () { bubble("in", T.lead2); });
+      // 9. hand back to AI → "yes, answer the last message"
+      at(11200, function () { pointAt(resume); });
+      at(11900, function () { click(resume); dialog.classList.add("on"); });
+      at(12600, function () { pointAt(yesBtn); });
+      at(13300, function () { click(yesBtn); });
+      at(13550, function () { dialog.classList.remove("on"); badge.classList.remove("on"); resume.classList.remove("on"); cursor.classList.remove("on"); });
+      at(13900, function () { typing(); });
+      at(15200, function () { var t = inner.querySelector(".dm-typing"); if (t) t.remove(); bubble("out ai", T.ai2); });
+      at(16300, function () { bubble("in", T.lead3); });
+      // 10. AI closes the branch → next stage + conversion
+      at(17100, function () {
+        note(T.stage, true, DM_CHECK);
+        // Takes the timestamp's place on the right: beside the name it
+        // squeezed the name down to a couple of letters.
+        var time = rows[0] && rows[0].querySelector(".dm-row-top time");
+        if (time) time.outerHTML = '<span class="dm-stagepill">' + DM_CHECK.replace("<svg", '<svg width="9" height="9"') + esc(T.pill) + '</span>';
+      });
+      at(17700, function () { note(T.capi, false, DM_BOLT); });
+      // 11. hold, fade, loop
+      at(19500, function () { app.classList.add("fade"); });
+      at(20200, function () { if (inView && !document.hidden) run(); else { stop(); reset(); } });
+    }
+
+    // Reduced motion: the finished story as one still frame, no loop.
+    function still() {
+      stop();
+      reset();
+      T.leads.forEach(function (_, k) { addRow(k); });
+      rows.forEach(function (r) { r.classList.add("in"); });
+      openThread();
+      bubble("out sys", T.bot, { btns: botButtons() });
+      bubble("in", T.yes);
+      bubble("out ai", T.ai1);
+      bubble("out mgr", T.mgr1, { who: T.mgrName });
+      bubble("in", T.lead2);
+      bubble("out ai", T.ai2);
+      bubble("in", T.lead3);
+      note(T.stage, true, DM_CHECK);
+      note(T.capi, false, DM_BOLT);
+    }
+
+    function sync() {
+      if (reduced) { still(); return; }
+      if (inView && !document.hidden) { if (!running) run(); }
+      else { stop(); reset(); }
+    }
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (es) { inView = es[0].isIntersecting; sync(); }, { threshold: 0.3 }).observe(stage);
+    } else { inView = true; }
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("resize", function () { if (inner) fit(); });
+    reset();
+    if (reduced) still();
+
+    return {
+      // Language switch: start the story over in the new language.
+      restart: function () { stop(); if (reduced) still(); else { reset(); if (inView && !document.hidden) run(); } }
+    };
+  })();
+
+  // "Подивитись демо" in the hero had no destination — it now scrolls here.
+  document.querySelectorAll('[data-i18n="hero.cta2"]').forEach(function (b) {
+    b.addEventListener("click", function () {
+      var d = document.getElementById("demo");
+      if (d) d.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
   function renderData() {
     renderChannels();
     renderPainPairs();
@@ -1260,6 +1706,7 @@
     renderTTV();
     renderCmp();
     renderFaq();
+    if (typeof demo !== "undefined") demo.restart();
   }
 
   applyLang();
