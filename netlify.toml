@@ -1,0 +1,64 @@
+[build]
+  command = "npm --prefix web install && npm --prefix web run build"
+  publish = "web/dist"
+  functions = "netlify/functions"
+
+# VITE_ vars are inlined into the frontend bundle at build time. Only public
+# values live here — the anon key and the VAPID *public* key are both meant
+# to be shipped to the browser; the VAPID private key never appears in this
+# file (it's in Vault, read server-side only — see send-push-notification.ts).
+[build.environment]
+  VITE_SUPABASE_URL = "https://jgtykwfwxotticfxvvwd.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpndHlrd2Z3eG90dGljZnh2dndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NjM3MTEsImV4cCI6MjEwMzIzOTcxMX0.ySl8qLRv632Go0q6BLTgZK43sycE9Tb8i-H2cI922Hw"
+  VITE_VAPID_PUBLIC_KEY = "BHhyAGk1cF6CSBHj-_twj7JInJ1DuPZoSJ-F3NIMgK3WXl503IKrXJXqlfnqjB59Jeo9GVbuleABHihznuqMNyY"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Every minute: advances active funnel_states whose waiting_until is due
+# (linear funnels.definition model).
+[functions."funnel-processor"]
+  schedule = "* * * * *"
+
+# Same, for graph-based funnel_states (funnel_node_id set). Button-click
+# advances happen via a direct call from telegram-webhook.ts instead of
+# waiting for this — this schedule only covers entry/action/no-button-message
+# nodes that don't need a callback_query to proceed.
+[functions."funnel-processor-v2"]
+  schedule = "* * * * *"
+
+# Once a day (not urgent like the per-minute processors above): stops
+# 'active' graph funnel_states whose waiting_until has been in the past for
+# more than 21 days — abandoned button-wait states that would otherwise sit
+# forever. Status-only change, never deletes anything.
+[functions."funnel-auto-stop"]
+  schedule = "0 3 * * *"
+
+# Once a day: flips any org still 'trial' past its trial_ends_at over to
+# 'free' and turns off whatever paid addons it had enabled.
+[functions."billing-trial-expire"]
+  schedule = "0 4 * * *"
+
+# Public lead-gen short links -> redirect.ts (must stay above the SPA catch-all).
+# For a redirect that targets a Function, Netlify invokes the function but
+# leaves event.path/queryStringParameters as the browser's ORIGINAL request
+# (placeholder/:splat substitution into "to" has no effect on what the
+# function actually sees) — so redirect.ts parses the token straight off the
+# original /r/:token path instead of relying on any substitution here.
+[[redirects]]
+  from = "/r/*"
+  to = "/.netlify/functions/redirect"
+  status = 200
+
+# React Router client-side routes (e.g. /login, /dashboard) must fall back to index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[dev]
+  command = "npm --prefix web run dev -- --port 5183 --strictPort"
+  targetPort = 5183
+  publish = "web/dist"
+  functions = "netlify/functions"
+  framework = "#custom"

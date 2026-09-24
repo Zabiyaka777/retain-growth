@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Такої сторінки немає · Retain Growth</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Unbounded:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; --bg:#050608; --ink:#f5f6f8; --muted:rgba(245,246,248,.62); --orange:#ff6b2c; --amber:#ffb070; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    min-height: 100dvh; display: grid; place-items: center; padding: 32px 20px;
+    background: var(--bg); color: var(--ink); text-align: center;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  .glow { position: fixed; z-index: 0; left: 50%; top: 42%; width: min(900px, 130vw); aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; pointer-events: none; background: radial-gradient(closest-side, rgba(255,107,44,.22), transparent 70%); }
+  .inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 18px; max-width: 30rem; }
+  .code { font-family: 'Unbounded', sans-serif; font-weight: 300; font-size: clamp(64px, 16vw, 104px); line-height: 1;
+    letter-spacing: -.05em; background: linear-gradient(120deg, var(--orange), var(--amber) 60%, #ffe1c4);
+    -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 34px rgba(255,107,44,.42)); }
+  h1 { font-family: 'Unbounded', sans-serif; font-weight: 400; font-size: clamp(21px, 4.4vw, 29px); letter-spacing: -.03em; line-height: 1.15; text-wrap: balance; }
+  p { color: var(--muted); font-size: 16px; line-height: 1.6; text-wrap: pretty; }
+  a.btn {
+    display: inline-flex; align-items: center; gap: 9px; min-height: 48px; padding: 0 24px; margin-top: 8px;
+    border-radius: 13px; font-weight: 600; font-size: 15px; text-decoration: none; color: #170700;
+    background: linear-gradient(180deg, #ff9355 0%, var(--orange) 55%, #f2551a 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 10px 32px -8px rgba(255,107,44,.55);
+    transition: transform .2s ease, box-shadow .3s ease;
+  }
+  a.btn:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 14px 40px -8px rgba(255,107,44,.75); }
+  a.btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  @media (prefers-reduced-motion: reduce) { a.btn { transition: none; } }
+</style>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+<main class="inner">
+  <span class="code">404</span>
+  <h1>Такої сторінки немає</h1>
+  <p>Схоже, в посиланні загубився символ. Перевірте адресу або поверніться на головну.</p>
+  <a class="btn" href="/">На головну <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+</main>
+</body>
+</html>

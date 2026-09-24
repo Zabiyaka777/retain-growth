@@ -1,0 +1,58 @@
+# Marketing landing — its own Netlify site (static, no build step).
+# The app (web/ + netlify/functions) is a separate site on app.retain-growth.ai
+# and is configured by the netlify.toml in the repo root, not this file.
+[build]
+  publish = "."
+  # Must point at a real but EMPTY directory. A non-existent path only makes the
+  # CLI warn and then fall back to the app's netlify/functions, which published
+  # all 60 app functions on this static site (verified: /.netlify/functions/
+  # redirect answered here). Resolved from the repo root, not from landing/.
+  functions = "no-functions"
+
+# Lead-gen short links were issued as https://retain-growth.ai/r/<token> while
+# the app still lived on the apex, and they are out in running ads. 302 (not
+# 301) so browsers never cache the hop and redirect.ts sees every click.
+# Netlify passes the query string (?ch=telegram…) through automatically.
+[[redirects]]
+  from = "/r/*"
+  to = "https://app.retain-growth.ai/r/:splat"
+  status = 302
+  force = true
+
+# Landing pages live on the app site. People will paste the apex host into a
+# browser out of habit, and that is exactly the link that used to dead-end on
+# Netlify's default 404 — 302 (not 301) so the hop is never cached if /lp ever
+# moves to this site. :splat keeps the slug, and Netlify passes ?org=/?click=
+# through automatically.
+[[redirects]]
+  from = "/lp/*"
+  to = "https://app.retain-growth.ai/lp/:splat"
+  status = 302
+  force = true
+
+# Bookmarked app routes from before the move.
+[[redirects]]
+  from = "/login"
+  to = "https://app.retain-growth.ai/login"
+  status = 301
+  force = true
+[[redirects]]
+  from = "/dashboard"
+  to = "https://app.retain-growth.ai/dashboard"
+  status = 301
+  force = true
+[[redirects]]
+  from = "/dashboard/*"
+  to = "https://app.retain-growth.ai/dashboard/:splat"
+  status = 301
+  force = true
+[[redirects]]
+  from = "/admin"
+  to = "https://app.retain-growth.ai/admin"
+  status = 301
+  force = true
+[[redirects]]
+  from = "/admin/*"
+  to = "https://app.retain-growth.ai/admin/:splat"
+  status = 301
+  force = true

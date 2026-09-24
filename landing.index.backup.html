@@ -1,0 +1,1081 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retain Growth</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Unbounded:wght@500;600;700;800&display=swap');
+
+  :root {
+    color-scheme: dark;
+
+    --bg: #05070b;
+    --ink: #f4f6fb;
+    --ink-soft: #b9c0d4;
+    --paper: #05070b;
+    --panel: rgba(255,255,255,0.05);
+    --panel-2: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.09);
+    --border-strong: rgba(255,255,255,0.16);
+
+    --coral: #ff6a35;
+    --coral-2: #ff9a5c;
+    --coral-deep: #ffa06a;
+    --coral-soft: linear-gradient(135deg, rgba(255,106,53,0.34), rgba(255,106,53,0.05));
+    --gold: #ffb020;
+    --gold-soft: linear-gradient(135deg, rgba(255,176,32,0.32), rgba(255,176,32,0.05));
+    --on-coral: #23090a;
+
+    --ai: #3aa8ff;
+    --ai-soft: linear-gradient(135deg, rgba(58,168,255,0.34), rgba(58,168,255,0.05));
+    --delay: #a78bfa;
+    --delay-soft: linear-gradient(135deg, rgba(167,139,250,0.32), rgba(167,139,250,0.05));
+    --condition: #2dd4bf;
+    --condition-soft: linear-gradient(135deg, rgba(45,212,191,0.32), rgba(45,212,191,0.05));
+    --conversion: #34d399;
+    --conversion-soft: linear-gradient(135deg, rgba(52,211,153,0.32), rgba(52,211,153,0.05));
+    --ember: #fb7185;
+    --ember-soft: linear-gradient(135deg, rgba(251,113,133,0.30), rgba(251,113,133,0.05));
+
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 22px;
+    --radius-xl: 28px;
+    --radius-full: 999px;
+
+    --shadow-sm: 0 2px 10px -2px rgba(0,0,0,0.5);
+    --shadow-md: 0 20px 46px -18px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    --shadow-lg: 0 34px 80px -22px rgba(0,0,0,0.65);
+
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-display: 'Unbounded', 'Inter', system-ui, sans-serif;
+
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 900px at 6% -8%, rgba(255,106,53,0.24), transparent 58%),
+      radial-gradient(1100px 900px at 102% 10%, rgba(58,168,255,0.20), transparent 55%),
+      radial-gradient(1000px 800px at 30% 60%, rgba(139,92,246,0.08), transparent 55%),
+      radial-gradient(900px 700px at 90% 100%, rgba(58,168,255,0.14), transparent 55%),
+      linear-gradient(180deg, #05070b 0%, #070a12 45%, #05070b 100%);
+    background-attachment: fixed, fixed, fixed, fixed, fixed;
+    background-repeat: no-repeat;
+    color: var(--ink);
+    padding-inline: max(20px, env(safe-area-inset-left, 0px));
+    overflow-x: hidden;
+  }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+  ::selection { background-color: rgba(255,106,53,0.38); color: #fff; }
+  :focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  a { color: inherit; text-decoration: none; }
+
+  h1, h2, h3, h4 {
+    margin: 0; font-family: var(--font-display); font-weight: 600;
+    letter-spacing: -0.01em; text-wrap: balance; color: var(--ink);
+  }
+  p { margin: 0; }
+  .num { font-variant-numeric: tabular-nums; }
+  .lead-text { font-family: var(--font-display); font-size: clamp(16.5px, 2vw, 19px); font-weight: 500; letter-spacing: -0.005em; color: rgba(244,246,251,0.86); line-height: 1.5; }
+  .body-text { font-size: 15.5px; font-weight: 500; color: var(--ink-soft); line-height: 1.65; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-display);
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--coral-deep);
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .eyebrow svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .eyebrow-chip {
+    display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+    border-radius: 8px; background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
+    border: 1px solid var(--border); flex-shrink: 0;
+  }
+  .eyebrow-chip svg { width: 14px; height: 14px; }
+
+  .spine {
+    position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%);
+    background: linear-gradient(180deg, transparent 0%, var(--border-strong) 4%, var(--border-strong) 96%, transparent 100%);
+    z-index: 0;
+  }
+  .spine::before {
+    content: ""; position: absolute; left: 50%; top: -40%; width: 3px; height: 55%; transform: translateX(-50%);
+    background: linear-gradient(180deg, transparent, var(--ai), var(--coral), var(--gold), transparent);
+    filter: blur(0.5px); animation: flow 7s linear infinite; opacity: 0.95;
+  }
+  @keyframes flow { 0% { top: -55%; } 100% { top: 105%; } }
+  @media (max-width: 720px) { .spine { left: 24px; } }
+
+  nav {
+    position: sticky; top: 0; z-index: 40; display: flex; align-items: center; justify-content: space-between;
+    padding-block: 16px;
+    padding-inline: max(20px, env(safe-area-inset-left, 0px));
+    margin-inline: calc(-1 * max(20px, env(safe-area-inset-left, 0px)));
+    background: linear-gradient(180deg, rgba(5,7,11,0.92), rgba(5,7,11,0.78) 70%, transparent);
+    backdrop-filter: blur(12px);
+  }
+  nav .wrap { max-width: none; }
+  .logo { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--ink); }
+  .logo-mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(135deg, var(--coral), var(--gold)); box-shadow: var(--shadow-sm); }
+  .logo-mark svg { width: 16px; height: 16px; }
+  .nav-right { display: flex; align-items: center; gap: 10px; }
+  .lang-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius-full); padding: 3px; background: var(--panel); backdrop-filter: blur(10px); gap: 2px; }
+  .lang-toggle button { font: inherit; font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: var(--radius-full); border: none; cursor: pointer; background: transparent; color: var(--ink-soft); transition: all var(--ease) 150ms; }
+  .lang-toggle button.active { background: linear-gradient(135deg, var(--coral), var(--gold)); color: var(--on-coral); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 700; font-size: 14.5px; cursor: pointer; padding: 13px 24px; border-radius: var(--radius-full); border: 1px solid transparent; transition: transform 160ms var(--ease-spring), box-shadow 200ms var(--ease); white-space: nowrap; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: linear-gradient(135deg, var(--coral), var(--gold)); color: var(--on-coral); box-shadow: 0 14px 34px -10px rgba(255,106,53,0.5); }
+  .btn-primary:hover { box-shadow: 0 20px 46px -10px rgba(255,106,53,0.6); }
+  .btn-ghost { background: var(--panel); backdrop-filter: blur(10px); border-color: var(--border-strong); color: var(--ink); }
+  .btn-ghost:hover { background: var(--panel-2); }
+  .btn-sm { padding: 9px 16px; font-size: 13px; }
+  .btn-note { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; margin-top: 10px; display: flex; align-items: center; gap: 6px; }
+
+  section { position: relative; z-index: 1; padding: 92px 20px; }
+  @media (max-width: 720px) { section { padding: 60px 16px 60px 54px; } }
+
+  .node { position: relative; background: linear-gradient(165deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02)); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
+  .node-tag { position: absolute; z-index: 2; top: -13px; left: 24px; font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; padding: 5px 13px; border-radius: var(--radius-full); border: 1px solid var(--border-strong); background: #0a0d15; }
+  .tag-entry { color: var(--coral-deep); }
+  .tag-ai { color: var(--ai); }
+  .tag-condition { color: var(--condition); }
+  .tag-delay { color: var(--delay); }
+  .tag-conversion { color: var(--conversion); }
+
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity 700ms var(--ease), transform 700ms var(--ease); }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+
+  /* ---------- channel row ---------- */
+  .channels { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 22px 0 30px; }
+  .chan { display: flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: var(--radius-full); background: var(--panel); border: 1px solid var(--border); font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+  .chan svg { width: 15px; height: 15px; }
+  .chan.soon { opacity: 0.55; border-style: dashed; }
+  .chan.soon .soon-badge { font-size: 9.5px; font-weight: 800; background: var(--panel-2); padding: 1px 6px; border-radius: 6px; margin-left: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* ---------- hero ---------- */
+  .hero { padding-top: 54px; padding-bottom: 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 56px; align-items: center; }
+  @media (max-width: 960px) { .hero-grid { grid-template-columns: 1fr; } }
+  .hero h1 { font-size: clamp(29px, 4.6vw, 48px); line-height: 1.1; margin: 16px 0 18px; }
+  .hero h1 em { font-style: normal; background: linear-gradient(135deg, var(--coral), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .lead-text { max-width: 54ch; margin-bottom: 26px; font-family: var(--font-sans); font-weight: 400; color: var(--coral-2); }
+  .hero .lead-text b { font-family: var(--font-display); font-weight: 700; color: #fff; }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hero-proof { display: flex; gap: 22px; flex-wrap: wrap; }
+  .hero-proof .stat { display: flex; align-items: center; gap: 10px; }
+  .hero-proof .stat-ico {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center;
+    background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)); border: 1px solid var(--border);
+  }
+  .hero-proof .stat-ico svg { width: 16px; height: 16px; }
+  .hero-proof .stat b, .hero-proof .stat .proof-num { display: block; font-family: var(--font-display); font-size: 20px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .hero-proof .proof-num .num, .hero-proof .proof-num .sep, .hero-proof .proof-num .unit-num { font-size: 1em; font-weight: inherit; }
+  .hero-proof .proof-num .unit { font-size: 0.55em; font-weight: 700; opacity: 0.7; margin-left: 1px; }
+  .hero-proof .stat span { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+
+  .graph-card { padding: 22px; }
+  .live-ticker { display: flex; align-items: center; gap: 9px; padding: 9px 14px; border-radius: var(--radius-full); background: var(--conversion-soft); color: var(--conversion); font-size: 12.5px; font-weight: 800; margin-bottom: 16px; width: fit-content; }
+  .live-ticker .pulse { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse-dot 1.6s ease infinite; }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .4; transform: scale(1.5);} }
+  .graph-row { display: flex; align-items: center; gap: 0; }
+  .graph-node { flex: 1; display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--panel-2); font-size: 13px; font-weight: 700; }
+  .graph-node .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .graph-wire { width: 26px; height: 2px; background: var(--border-strong); position: relative; flex-shrink: 0; }
+  .graph-wire::after { content: ""; position: absolute; left: -3px; top: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--coral); transform: translateY(-50%); animation: pulse-wire 2.2s var(--ease) infinite; }
+  @keyframes pulse-wire { 0% { left: -3px; opacity: 0; } 15% { opacity: 1; } 90% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
+  .graph-stack { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+  .badge { font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 6px; }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .typing-row { display: flex; align-items: center; gap: 6px; padding: 10px 13px; background: var(--panel-2); border-radius: 14px; width: fit-content; }
+  .typing-row span { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-soft); animation: typing-bounce 1.2s infinite ease-in-out; }
+  .typing-row span:nth-child(2) { animation-delay: 0.15s; } .typing-row span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typing-bounce { 0%,60%,100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-4px); opacity: 1; } }
+  .capi-strip { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-radius: var(--radius-sm); background: var(--conversion-soft); border: 1px solid rgba(22,163,74,0.22); font-size: 12.5px; font-weight: 700; color: var(--conversion); }
+  .capi-strip .ping { position: relative; width: 8px; height: 8px; }
+  .capi-strip .ping::before, .capi-strip .ping::after { content:""; position:absolute; inset:0; border-radius:50%; background: currentColor; }
+  .capi-strip .ping::before { animation: ping 1.8s cubic-bezier(0,0,0.2,1) infinite; }
+  @keyframes ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }
+
+  /* ---------- hero chat window (ENTRY mock) ---------- */
+  .graph-card { position: relative; }
+  .hero-visual { display: flex; flex-direction: column; gap: 26px; }
+  .graph-card::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: 0; padding: 1.5px;
+    background: linear-gradient(120deg, var(--coral), var(--ai), var(--gold), var(--coral));
+    background-size: 260% 260%; animation: sweep 8s ease infinite; opacity: 0.6;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+  }
+  @keyframes sweep { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+  .chatwin { position: relative; z-index: 1; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)); }
+  .chatwin-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .chatwin-avatar { position: relative; width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: linear-gradient(135deg, var(--coral), var(--gold)); box-shadow: 0 0 0 3px rgba(255,106,53,0.14); }
+  .chatwin-avatar svg { width: 18px; height: 18px; color: var(--on-coral); }
+  .chatwin-avatar .chan-badge { position: absolute; right: -2px; bottom: -2px; width: 16px; height: 16px; border-radius: 50%; background: #1c9de8; display: grid; place-items: center; border: 2px solid #0e1017; }
+  .chatwin-avatar .chan-badge svg { width: 9px; height: 9px; color: #fff; }
+  .chatwin-who { flex: 1; min-width: 0; }
+  .chatwin-who b { display: block; font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .chatwin-status { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--conversion); font-weight: 700; margin-top: 1px; }
+  .chatwin-status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse-dot 1.6s ease infinite; flex-shrink: 0; }
+  .chatwin-live { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; color: var(--conversion); background: var(--conversion-soft); padding: 6px 10px; border-radius: var(--radius-full); white-space: nowrap; flex-shrink: 0; }
+  .chatwin-live .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse-dot 1.6s ease infinite; }
+  .chatwin-body { padding: 16px 14px 15px; display: flex; flex-direction: column; gap: 10px; background: radial-gradient(560px 260px at 100% 0%, rgba(58,168,255,0.06), transparent 60%); }
+  .sys-note { align-self: center; display: flex; align-items: center; gap: 6px; font-size: 10.8px; font-weight: 700; color: var(--ink-soft); background: rgba(255,255,255,0.04); border: 1px dashed var(--border-strong); padding: 6px 12px; border-radius: var(--radius-full); text-align: center; }
+  .sys-note svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .sys-note.good { color: var(--conversion); background: var(--conversion-soft); border-style: solid; border-color: rgba(52,211,153,0.28); }
+  .chat-bubble .bubble-time { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; opacity: 0.55; margin-top: 3px; }
+  .chat-bubble.out .bubble-time { justify-content: flex-end; }
+  .chat-bubble .bubble-time svg { width: 12px; height: 12px; }
+
+  /* ---------- pain / solution ---------- */
+  .section-head { text-align: center; max-width: 740px; margin: 0 auto 52px; }
+  .section-head h2 { font-size: clamp(26px, 3.6vw, 40px); margin-top: 14px; }
+  .section-head .lead-text { margin-top: 14px; margin-inline: auto; }
+  .pain-section .lead-text { color: var(--coral-2); }
+
+  .pain-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 860px) { .pain-grid { grid-template-columns: 1fr; } }
+  .pain-card {
+    padding: 22px 24px; display: flex; flex-direction: column; gap: 14px;
+    background:
+      radial-gradient(140% 160% at 0% 0%, rgba(251,113,133,0.12), transparent 58%),
+      radial-gradient(140% 160% at 100% 100%, rgba(52,211,153,0.10), transparent 58%),
+      linear-gradient(165deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02));
+    border-color: rgba(255,106,53,0.22);
+    box-shadow: 0 0 0 1px rgba(255,106,53,0.10), 0 0 30px -14px rgba(255,106,53,0.4), var(--shadow-md);
+    transition: transform 240ms var(--ease-spring), box-shadow 240ms var(--ease), border-color 240ms var(--ease);
+  }
+  .pain-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(255,106,53,0.5);
+    box-shadow: 0 0 0 1px rgba(255,106,53,0.26), 0 26px 60px -16px rgba(255,106,53,0.55), 0 0 44px -6px rgba(255,106,53,0.5), var(--shadow-md);
+  }
+  .pain-row { display: flex; gap: 12px; align-items: flex-start; }
+  .pain-icon { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; }
+  .pain-icon.bad { background: linear-gradient(135deg, rgba(251,113,133,0.42), rgba(251,113,133,0.08)); color: var(--ember); box-shadow: 0 0 0 1px rgba(251,113,133,0.28) inset; }
+  .pain-icon.good { background: linear-gradient(135deg, rgba(52,211,153,0.42), rgba(52,211,153,0.08)); color: var(--conversion); box-shadow: 0 0 0 1px rgba(52,211,153,0.28) inset; }
+  .pain-text { font-size: 14.5px; font-weight: 600; color: rgba(244,246,251,0.8); padding-top: 4px; line-height: 1.5; }
+  .pain-text b { font-family: var(--font-display); font-weight: 700; color: #fff; }
+  .pain-text.good-text { color: rgba(244,246,251,0.94); }
+  .pain-divider { height: 1px; background: var(--border); margin: 0 2px; }
+
+  /* ---------- conclusion plate ---------- */
+  .conclusion-wrap { padding-top: 8px; padding-bottom: 8px; }
+  .conclusion-card { text-align: center; max-width: 760px; margin: 0 auto; padding: 46px 40px; }
+  @media (max-width: 720px) { .conclusion-card { padding: 34px 24px; } }
+  .conclusion-icon { width: 52px; height: 52px; border-radius: 14px; margin: 0 auto 18px; display: grid; place-items: center; background: var(--conversion-soft); color: var(--conversion); }
+  .conclusion-card .eyebrow { justify-content: center; width: 100%; }
+  .conclusion-card h3 { font-size: clamp(21px, 2.6vw, 28px); margin: 12px 0 14px; }
+  .conclusion-card .body-text { max-width: 62ch; margin-inline: auto; }
+
+  /* ---------- feature blocks ---------- */
+  .feature { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; padding: 60px 0; }
+  .feature.rev .feature-copy { order: 2; }
+  @media (max-width: 900px) { .feature, .feature.rev .feature-copy { grid-template-columns: 1fr; order: initial; } }
+  .feature-icon { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 16px; }
+  .feature-copy h3 { font-size: clamp(22px, 3vw, 30px); margin: 6px 0 14px; }
+  .feature-copy .body-text { margin-bottom: 18px; }
+  .feature-list { display: flex; flex-direction: column; gap: 11px; padding: 0; margin: 0; }
+  .feature-list li { list-style: none; display: flex; gap: 10px; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .feature-list svg { flex-shrink: 0; margin-top: 3px; }
+
+  .mock { padding: 20px; }
+  .mock-head { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .mock-head .chip { width: 8px; height: 8px; border-radius: 50%; }
+  .mock-head span.label { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+
+  .chat-bubble { max-width: 78%; padding: 10px 13px; border-radius: 14px; font-size: 13.5px; font-weight: 600; margin-bottom: 9px; line-height: 1.4; }
+  .chat-bubble.in { background: var(--panel-2); border-bottom-left-radius: 4px; }
+  .chat-bubble.out { background: var(--ai-soft); color: var(--ink); margin-left: auto; border-bottom-right-radius: 4px; }
+  .chat-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+  .chat-btn { font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: var(--radius-full); border: 1px solid var(--border-strong); color: var(--ink-soft); }
+
+  .pipeline { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+  .pipe-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--panel-2); border: 1px solid var(--border); }
+  .pipe-row.moving { animation: slide-in 5s var(--ease) infinite; }
+  @keyframes slide-in { 0% { transform: translateX(0); } 45% { transform: translateX(14px); } 55% { transform: translateX(14px); } 100% { transform: translateX(0); } }
+  .pipe-avatar { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+  .pipe-name { font-size: 13px; font-weight: 700; flex: 1; }
+  .pipe-stage { font-size: 11px; font-weight: 800; padding: 4px 9px; border-radius: var(--radius-full); }
+
+  .fgraph { display: flex; flex-direction: column; gap: 0; align-items: center; position: relative; }
+  .fnode { width: 100%; max-width: 300px; padding: 12px 15px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: var(--panel-2); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 9px; position: relative; z-index: 1; }
+  .fwire-v { width: 2px; height: 20px; background: var(--border-strong); position: relative; }
+  .fwire-v::after { content:""; position:absolute; left:-2px; top:-100%; width:6px; height:6px; border-radius:50%; background: var(--coral); animation: travel 3.2s linear infinite; }
+  @keyframes travel { 0% { top: -100%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+  .fbranch { display: flex; gap: 10px; width: 100%; justify-content: center; }
+  .fbranch .fnode { max-width: 140px; font-size: 12px; }
+
+  .stage-tracker { display: flex; align-items: center; gap: 4px; margin-bottom: 16px; }
+  .stage-tracker .seg { flex: 1; height: 8px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
+  .stage-tracker .seg i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--ai), var(--conversion)); border-radius: 5px; animation: fill-seg 4.5s var(--ease) infinite; }
+  .stage-tracker .seg:nth-child(1) i { animation-delay: 0s; }
+  .stage-tracker .seg:nth-child(2) i { animation-delay: 0.5s; }
+  .stage-tracker .seg:nth-child(3) i { animation-delay: 1s; }
+  .stage-tracker .seg:nth-child(4) i { animation-delay: 1.5s; }
+  @keyframes fill-seg { 0%, 8% { width: 0%; } 30%, 100% { width: 100%; } }
+  .stage-labels { display: flex; justify-content: space-between; font-size: 10.5px; font-weight: 700; color: var(--ink-soft); margin-bottom: 18px; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat-tile { padding: 14px 15px; border-radius: var(--radius-md); background: var(--panel-2); border: 1px solid var(--border); }
+  .stat-tile b { display: block; font-family: var(--font-display); font-size: 20px; }
+  .stat-tile span { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
+  .bars { display: flex; align-items: flex-end; gap: 5px; height: 46px; margin-top: 4px; }
+  .bars i { flex: 1; background: linear-gradient(180deg, var(--gold), var(--coral)); border-radius: 3px 3px 0 0; animation: grow-bar 2.6s var(--ease-spring) infinite alternate; }
+  @keyframes grow-bar { from { height: 20%; } to { height: var(--h, 90%); } }
+
+  /* ---------- journey map ---------- */
+  .journey { overflow-x: auto; padding-bottom: 14px; }
+  .journey-track { display: flex; gap: 0; min-width: 980px; padding: 30px 6px 6px; }
+  .jstep { flex: 1; text-align: center; position: relative; padding: 0 8px; }
+  .jstep .jdot { width: 46px; height: 46px; border-radius: 50%; margin: 0 auto 14px; display: grid; place-items: center; border: 1px solid var(--border-strong); background: var(--panel); position: relative; z-index: 2; }
+  .jstep .jline { position: absolute; top: 23px; left: 50%; width: 100%; height: 2px; background: var(--border-strong); z-index: 1; }
+  .jstep:last-child .jline { display: none; }
+  .jstep b { display: block; font-family: var(--font-display); font-size: 13px; margin-bottom: 4px; }
+  .jstep span { font-size: 11.5px; color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- timeline ---------- */
+  .ttv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .ttv { grid-template-columns: 1fr; } }
+  .ttv-step { padding: 20px; }
+  .ttv-day { font-family: var(--font-display); font-size: 13px; color: var(--coral-deep); margin-bottom: 10px; }
+  .ttv-step h4 { font-size: 15.5px; margin-bottom: 6px; }
+  .ttv-step p { font-size: 13.3px; color: var(--ink-soft); font-weight: 600; }
+
+  /* ---------- comparison ---------- */
+  .compare { border-collapse: collapse; width: 100%; }
+  .compare th, .compare td { padding: 15px 18px; text-align: left; font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--border); }
+  .compare th { background: var(--panel-2); font-family: var(--font-display); font-weight: 600; font-size: 13px; }
+  .compare tr:last-child td { border-bottom: none; }
+  .compare td:first-child { color: var(--ink-soft); width: 30%; }
+  .compare td.bad { color: var(--ink-soft); }
+  .compare td.bad svg { margin-right: 7px; vertical-align: -2px; color: rgba(183,189,208,0.55); }
+  .compare td.good { color: var(--ink); font-weight: 700; }
+  .compare td.good svg { margin-right: 7px; vertical-align: -2px; color: var(--conversion); }
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+  .table-wrap table { min-width: 640px; }
+
+  /* ---------- faq ---------- */
+  .faq-item { border-bottom: 1px solid var(--border); }
+  .faq-q { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 4px; cursor: pointer; font-size: 15px; font-weight: 700; }
+  .faq-q .chev { transition: transform 220ms var(--ease); flex-shrink: 0; color: var(--ink-soft); }
+  .faq-item[open] .faq-q .chev { transform: rotate(180deg); }
+  .faq-a { padding: 0 4px 20px; font-size: 14.3px; font-weight: 500; color: var(--ink-soft); max-width: 68ch; }
+  .faq-item summary::-webkit-details-marker { display: none; }
+
+  .cta-card { text-align: center; padding: 64px 32px; position: relative; overflow: hidden; }
+  .cta-card::before {
+    content: ""; position: absolute; inset: -40%; z-index: 0;
+    background:
+      radial-gradient(560px 320px at 22% 0%, rgba(255,106,53,0.26), transparent 70%),
+      radial-gradient(560px 320px at 82% 100%, rgba(58,168,255,0.22), transparent 70%);
+  }
+  .cta-card > * { position: relative; z-index: 1; }
+  .cta-card h2 { font-size: clamp(26px, 4vw, 38px); margin-bottom: 14px; }
+  .cta-card .lead-text { margin-bottom: 8px; max-width: 52ch; margin-inline: auto; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+
+  /* ---------- spotlight (blue + orange accent banner) ---------- */
+  .spotlight { padding: 8px 0 0; }
+  .spotlight-card {
+    position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between;
+    gap: 36px; flex-wrap: wrap; padding: 52px 44px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(120deg, #1c1410 0%, #171a24 45%, #0c2033 100%);
+    box-shadow: 0 30px 70px -22px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .spotlight-card::before {
+    content: ""; position: absolute; left: -8%; top: -55%; width: 58%; height: 170%;
+    background: radial-gradient(circle, rgba(255,90,46,0.38), transparent 65%); filter: blur(6px);
+  }
+  .spotlight-card::after {
+    content: ""; position: absolute; right: -14%; top: -45%; width: 66%; height: 180%;
+    background: radial-gradient(circle, rgba(14,165,233,0.34), transparent 62%); filter: blur(6px);
+  }
+  .spotlight-copy { position: relative; z-index: 1; max-width: 520px; }
+  .spotlight-copy h3 { color: #fdfcfa; font-size: clamp(23px, 3.2vw, 32px); line-height: 1.2; margin: 12px 0 14px; text-shadow: 0 0 30px rgba(255,138,81,0.35); }
+  .spotlight-copy p { color: rgba(253,252,250,0.68); font-size: 14.5px; font-weight: 500; line-height: 1.6; }
+  .spotlight-visual { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
+  .spotlight-visual .live-ticker, .spotlight-visual .capi-strip { width: fit-content; }
+  @media (max-width: 720px) { .spotlight-card { padding: 38px 26px; } }
+
+  footer { padding: 40px 20px 60px; text-align: center; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+  footer .fmark { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; color: var(--ink); margin-bottom: 10px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { transition: none; opacity: 1; transform: none; }
+    .spine::before, .graph-wire::after, .fwire-v::after, .pipe-row.moving, .bars i, .stage-tracker .seg i, .typing-row span, .live-ticker .pulse, .capi-strip .ping::before { animation: none; }
+  }
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+    <div class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12h4l2-7 4 14 2-7h4" stroke="#2a0d02" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Retain Growth
+    </div>
+    <div class="nav-right">
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" data-lang="ua" class="active">UA</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <button class="btn btn-primary btn-sm" data-i18n="nav.cta">Тріал 14 днів</button>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ A: ATTENTION ============ -->
+<section class="hero wrap">
+  <div class="spine" aria-hidden="true"></div>
+  <div class="hero-grid">
+    <div>
+      <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span data-i18n="hero.eyebrow">AI + CAPI + автоматизація ретеншну</span></span>
+      <h1 data-i18n-html="hero.h1">AI-система, що <em>24/7 перетворює</em> ваші рекламні витрати на дохід</h1>
+      <p class="lead-text" data-i18n-html="hero.lead"><b>Менше ручної роботи менеджерів, більше повернутого ROI реклами</b>: воронки, AI-агент продажів і наскрізна CAPI-аналітика ведуть кожного ліда з Telegram, WhatsApp, Messenger чи Instagram до оплати самі.</p>
+      <div class="channels" id="hero-channels"></div>
+      <div class="hero-actions">
+        <button class="btn btn-primary" data-i18n="hero.cta1">Почати тріал 14 днів</button>
+        <button class="btn btn-ghost" data-i18n="hero.cta2">Подивитись демо</button>
+      </div>
+      <div class="btn-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:var(--conversion)"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span data-i18n="hero.note">Без оплати. Скасування в один клік.</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+    <div class="node graph-card reveal">
+      <div class="node-tag tag-entry" data-i18n="hero.graph.tag">ENTRY</div>
+      <div class="chatwin">
+        <div class="chatwin-head">
+          <div class="chatwin-avatar">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8.2" r="3.4" stroke="currentColor" stroke-width="1.9"/><path d="M5 19.2c0-3.6 3.1-6 7-6s7 2.4 7 6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+            <span class="chan-badge"><svg viewBox="0 0 24 24" fill="none"><path d="M21 4 2.5 11.3c-1 .4-1 1.9.1 2.2l4.2 1.3 1.6 5c.3.9 1.4 1.1 2 .4l2.6-2.8 4.6 3.4c.9.6 2.1.1 2.3-1L21.9 5.2c.2-1-.9-1.7-1.9-1.2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.8 14.8 18 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+          </div>
+          <div class="chatwin-who">
+            <b data-i18n="hero.graph.name">Лід · Telegram</b>
+            <span class="chatwin-status"><span class="dot"></span><span data-i18n="hero.graph.status">AI відповідає замість менеджера</span></span>
+          </div>
+          <div class="chatwin-live"><span class="pulse"></span><span data-i18n="hero.graph.live">дохід росте</span></div>
+        </div>
+        <div class="chatwin-body">
+          <div class="sys-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 3l14 6-6 2-2 6-6-14Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span data-i18n="hero.graph.sysenter">Клік з реклами → лід у воронці</span></div>
+          <div class="chat-bubble in">
+            <span data-i18n="hero.graph.chat1">Скільки коштує підписка?</span>
+            <i class="bubble-time">14:02</i>
+          </div>
+          <div class="typing-row"><span></span><span></span><span></span></div>
+          <div class="chat-bubble out">
+            <span data-i18n="hero.graph.chat2">Скину варіанти за 10 секунд і одразу зʼєднаю з менеджером, якщо треба 👋</span>
+            <i class="bubble-time">14:02<svg viewBox="0 0 24 24" fill="none" style="color:var(--ai)"><path d="M2 12l4 4L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12l4 4L23 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></i>
+          </div>
+          <div class="sys-note good"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span data-i18n="hero.graph.capi">Purchase → доставлено в Meta CAPI</span></div>
+        </div>
+      </div>
+    </div>
+      <div class="hero-proof">
+        <div class="stat">
+          <span class="stat-ico" style="color:var(--gold)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.6V12l2.8 1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div><b class="proof-num"><span class="num" data-count="24">0</span><span class="sep">/</span><span>7</span></b><span data-i18n="hero.stat1">відповідь лідy миттєво</span></div>
+        </div>
+        <div class="stat">
+          <span class="stat-ico" style="color:var(--coral)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+          <div><b class="proof-num"><span class="num" data-count="2">0</span><span class="unit">с</span></b><span data-i18n="hero.stat2">від тапу по кнопці до кроку далі</span></div>
+        </div>
+        <div class="stat">
+          <span class="stat-ico" style="color:var(--ai)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div><b>CAPI</b><span data-i18n="hero.stat3">конверсії напряму в Ads Manager</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ I: INTEREST — pains ============ -->
+<section class="wrap pain-section">
+  <div class="section-head reveal">
+    <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.5v3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></span><span data-i18n="pain.eyebrow">Що зазвичай зʼїдає прибуток</span></span>
+    <h2 data-i18n="pain.h2">Кожен біль месенджер-продажів уже закритий вузлом у продукті</h2>
+    <p class="lead-text" data-i18n="pain.p">Не набір фіч під запит, а суцільний ланцюжок: від першого повідомлення ліда до події в рекламному кабінеті.</p>
+  </div>
+  <div class="pain-grid">
+    <div class="node pain-card reveal" id="pain-1"></div>
+    <div class="node pain-card reveal" id="pain-2"></div>
+    <div class="node pain-card reveal" id="pain-3"></div>
+    <div class="node pain-card reveal" id="pain-4"></div>
+    <div class="node pain-card reveal" id="pain-5"></div>
+    <div class="node pain-card reveal" id="pain-6"></div>
+  </div>
+</section>
+
+<!-- ============ CONCLUSION: AI reassurance ============ -->
+<section class="wrap conclusion-wrap">
+  <div class="node conclusion-card reveal">
+    <div class="conclusion-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span data-i18n="concl.eyebrow">Висновок</span></span>
+    <h3 data-i18n="concl.h">AI не замінює команду — він забирає рутину і повертає час на продажі</h3>
+    <p class="body-text" data-i18n="concl.p">Грамотно впроваджений AI не звільняє менеджерів, а знімає з них одноманітну частину роботи: миттєві відповіді, кваліфікацію лідів, нагадування тим, хто мовчить. Люди займаються складними угодами й живим спілкуванням, а швидкість і рутина — на AI. Результат — більше закритих угод тим самим складом команди.</p>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — funnel builder ============ -->
+<section class="wrap">
+  <div class="feature">
+    <div class="feature-copy reveal">
+      <div class="feature-icon" style="background:var(--condition-soft);color:var(--condition)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 5h16l-6 8v6l-4-2v-4L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+      <span class="node-tag tag-condition" style="position:static;display:inline-block" data-i18n="f1.tag">КОНСТРУКТОР ВОРОНОК</span>
+      <h3 data-i18n="f1.h">Візуальна воронка — тягнеш вузли, а не пишеш ТЗ програмісту</h3>
+      <p class="body-text" data-i18n="f1.p">Повідомлення, кнопки, умови за тегами, затримки, AI-вузли й точка конверсії — на одному полотні. Кожен колір вузла означає свою логіку, тож воронку читаєш з першого погляду.</p>
+      <ul class="feature-list">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f1.li1">Гілки за відповіддю ліда — без ручного сортування чатів</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f1.li2">Затримки й нагадування, якщо лід замовк</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f1.li3">Точка конверсії шле подію в CAPI автоматично</span></li>
+      </ul>
+    </div>
+    <div class="node mock reveal">
+      <div class="fgraph">
+        <div class="fnode" style="border-color:rgba(255,176,32,.5)"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></span><span data-i18n="f1.mock.n1">Вхід за посиланням</span></div>
+        <div class="fwire-v"></div>
+        <div class="fnode"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--ink-soft)"></span><span data-i18n="f1.mock.n2">Повідомлення + 2 кнопки</span></div>
+        <div class="fwire-v"></div>
+        <div class="fbranch">
+          <div class="fnode" style="border-color:rgba(13,148,136,.4)"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:var(--condition)"></span><span data-i18n="f1.mock.n3">Тег: гарячий</span></div>
+          <div class="fnode" style="border-color:rgba(139,92,246,.4)"><span class="dot" style="width:7px;height:7px;border-radius:50%;background:var(--delay)"></span><span data-i18n="f1.mock.n4">Чекати 24г</span></div>
+        </div>
+        <div class="fwire-v"></div>
+        <div class="fnode" style="border-color:rgba(14,165,233,.4)"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--ai)"></span><span data-i18n="f1.mock.n5">AI-агент кваліфікує</span></div>
+        <div class="fwire-v"></div>
+        <div class="fnode" style="border-color:rgba(22,163,74,.45)"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--conversion)"></span><span data-i18n="f1.mock.n6">Конверсія → CAPI</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — AI agent ============ -->
+<section class="wrap">
+  <div class="feature rev">
+    <div class="feature-copy reveal">
+      <div class="feature-icon" style="background:var(--ai-soft);color:var(--ai)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v3M12 19v3M4.2 4.2l2 2M17.8 17.8l2 2M2 12h3M19 12h3M4.2 19.8l2-2M17.8 6.2l2-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/></svg></div>
+      <span class="node-tag tag-ai" style="position:static;display:inline-block" data-i18n="f2.tag">AI-АГЕНТ ПРОДАЖІВ</span>
+      <h3 data-i18n="f2.h">AI не спамить скриптом — він продає діалогом</h3>
+      <p class="body-text" data-i18n="f2.p">Відповідає на питання про ціну й умови, кваліфікує ліда і сам передає розмову менеджеру рівно в той момент, коли лід готовий говорити з людиною.</p>
+      <ul class="feature-list">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f2.li1">Розуміє контекст усієї переписки, не лише останнє повідомлення</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f2.li2">Автоматично зупиняється, щойно менеджер відповів вручну</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f2.li3">Помічає власні збої і сигналізує в адмінку, а не мовчить</span></li>
+      </ul>
+    </div>
+    <div class="node mock reveal">
+      <div class="mock-head"><span class="chip" style="background:var(--ai)"></span><span class="label" data-i18n="f2.mock.head">AI · відповідає зараз</span></div>
+      <div class="chat-bubble in" data-i18n="f2.mock.c1">Хочу консультацію, але не певен, чи мені підходить</div>
+      <div class="typing-row" style="margin-bottom:9px"><span></span><span></span><span></span></div>
+      <div class="chat-bubble out" data-i18n="f2.mock.c2">Розкажіть коротко про задачу — підберу формат і, якщо треба, одразу зʼєднаю з менеджером.</div>
+      <div class="chat-buttons">
+        <span class="chat-btn" data-i18n="f2.mock.b1">✅ З менеджером</span>
+        <span class="chat-btn" data-i18n="f2.mock.b2">Спершу тарифи</span>
+      </div>
+      <div class="capi-strip" style="margin-top:14px;background:var(--ai-soft);color:var(--ai);border-color:rgba(14,165,233,.25)">
+        <span class="ping"></span><span data-i18n="f2.mock.tag">Передано менеджеру миттєво — без черги</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — Аналітична воронка (flagship, on par with AI) ============ -->
+<section class="wrap">
+  <div class="feature">
+    <div class="feature-copy reveal">
+      <div class="feature-icon" style="background:var(--gold-soft);color:var(--coral-deep)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <span class="node-tag" style="position:static;display:inline-block;color:var(--coral-deep)" data-i18n="f5.tag">АНАЛІТИЧНА ВОРОНКА</span>
+      <h3 data-i18n="f5.h">Друга половина системи, не менш важлива за AI: наскрізна аналітика руху ліда</h3>
+      <p class="body-text" data-i18n="f5.p">AI сам визначає, на якому етапі воронки зараз клієнт — від першого кліку по рекламі до оплати — і система в потрібну мить шле сигнал конверсії в Meta CAPI. Жодного ручного відмічання стадій, жодних "здогадок" в Ads Manager.</p>
+      <ul class="feature-list">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.li1">Наскрізний рух ліда через усі канали в один звіт</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.li2">AI сам класифікує етап — не потрібен ручний тег</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f5.li3">CAPI-подія летить у Meta в момент реальної дії, не пізніше</span></li>
+      </ul>
+    </div>
+    <div class="node mock reveal">
+      <div class="mock-head"><span class="chip" style="background:var(--coral)"></span><span class="label" data-i18n="f5.mock.head">Рух ліда · зараз</span></div>
+      <div class="stage-tracker">
+        <div class="seg"><i></i></div><div class="seg"><i></i></div><div class="seg"><i></i></div><div class="seg"><i></i></div>
+      </div>
+      <div class="stage-labels">
+        <span data-i18n="f5.mock.s0">Клік</span><span data-i18n="f5.mock.s1">Діалог</span><span data-i18n="f5.mock.s2">Кваліфікація</span><span data-i18n="f5.mock.s3">Оплата</span>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-tile"><b class="num">₴184 300</b><span data-i18n="f5.mock.m1">Revenue за 30 днів</span></div>
+        <div class="stat-tile"><b class="num">6.8%</b><span data-i18n="f5.mock.m2">Клік → оплата</span></div>
+      </div>
+      <div class="stat-tile" style="margin-bottom:14px">
+        <span data-i18n="f5.mock.m3" style="display:block;margin-bottom:6px">Конверсії по днях · приклад</span>
+        <div class="bars">
+          <i style="--h:34%"></i><i style="--h:52%"></i><i style="--h:41%"></i><i style="--h:68%"></i><i style="--h:59%"></i><i style="--h:83%"></i><i style="--h:71%"></i>
+        </div>
+      </div>
+      <div class="capi-strip"><span class="ping"></span><span data-i18n="f5.mock.capi">Purchase · pixel 11148… · доставлено за 340мс</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — unified inbox ============ -->
+<section class="wrap">
+  <div class="feature rev">
+    <div class="feature-copy reveal">
+      <div class="feature-icon" style="background:var(--coral-soft);color:var(--coral-deep)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 12h-5l-2 3h-4l-2-3H3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.5 5h13l2.5 7v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2.5-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+      <span class="node-tag" style="position:static;display:inline-block;color:var(--coral-deep)" data-i18n="f3.tag">ЄДИНИЙ INBOX · CRM</span>
+      <h3 data-i18n="f3.h">Один inbox для всіх каналів. Один pipeline для всіх лідів</h3>
+      <p class="body-text" data-i18n="f3.p">Telegram, WhatsApp, Messenger та Instagram зʼїжджаються в один список чатів зі статусами, тегами й історією воронки — CRM в одній вкладці, а не в трьох різних застосунках.</p>
+      <ul class="feature-list">
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f3.li1">Видно, на якому вузлі воронки лід зараз стоїть</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f3.li2">Ручна відповідь менеджера й AI ніколи не перекриваються</span></li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion);flex-shrink:0"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f3.li3">Закрив чат — завжди можна відкрити назад, нічого не губиться</span></li>
+      </ul>
+    </div>
+    <div class="node mock reveal">
+      <div class="mock-head"><span class="chip" style="background:var(--coral)"></span><span class="label" data-i18n="f3.mock.head">Pipeline · сьогодні</span></div>
+      <div class="pipeline" id="pipeline-mock"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — journey map ============ -->
+<section class="wrap">
+  <div class="section-head reveal">
+    <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.1" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="12" r="2.1" stroke="currentColor" stroke-width="1.6"/><path d="M7.3 12h3.2M13.5 12h3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="0.5 3.4"/></svg></span><span data-i18n="journey.eyebrow">Шлях одного ліда</span></span>
+    <h2 data-i18n="journey.h2">Від кліку по рекламі до події в Ads Manager — без єдиної ручної дії</h2>
+  </div>
+  <div class="node journey reveal" style="padding:8px 22px 22px">
+    <div class="journey-track" id="journey-track"></div>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — time to value ============ -->
+<section class="wrap">
+  <div class="section-head reveal">
+    <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.6V12l2.8 1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span data-i18n="ttv.eyebrow">14 днів на випробування</span></span>
+    <h2 data-i18n="ttv.h2">Перший автоматичний продаж — на тижні запуску, не через квартал</h2>
+  </div>
+  <div class="ttv" id="ttv-track"></div>
+</section>
+
+<!-- ============ D: DESIRE — blue + orange spotlight ============ -->
+<section class="wrap">
+  <div class="spotlight">
+    <div class="node spotlight-card reveal">
+      <div class="spotlight-copy">
+        <span class="eyebrow" style="color:#ff8551"><span class="eyebrow-chip" style="background:linear-gradient(135deg, rgba(255,138,81,0.24), rgba(255,138,81,0.04));border-color:rgba(255,138,81,0.3)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span data-i18n="spot.eyebrow">AI + CAPI наживо, 24/7</span></span>
+        <h3 data-i18n="spot.h">Поки ви спите — AI веде лідів, а CAPI рахує дохід</h3>
+        <p data-i18n="spot.p">Жодної паузи між часовими поясами: AI відповідає й кваліфікує, а сервер шле кожну конверсію в Meta без затримок і без вашої участі.</p>
+        <button class="btn btn-primary" style="margin-top:22px" data-i18n="spot.btn">Почати тріал 14 днів</button>
+      </div>
+      <div class="spotlight-visual">
+        <div class="live-ticker" style="background:rgba(74,222,128,0.16);color:#4ade80"><span class="pulse"></span><span data-i18n="spot.live">Дохід зростає, поки ви це читаєте</span></div>
+        <div class="capi-strip" style="background:rgba(56,189,248,0.14);color:#38bdf8;border-color:rgba(56,189,248,.3)"><span class="ping"></span><span data-i18n="spot.capi">CAPI-подія доставлена за 340мс</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ D: DESIRE — comparison ============ -->
+<section class="wrap">
+  <div class="section-head reveal">
+    <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M6 7h12M6 7l-2.6 5.2a2.6 2.6 0 0 0 5.2 0L6 7ZM18 7l-2.6 5.2a2.6 2.6 0 0 0 5.2 0L18 7Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span><span data-i18n="cmp.eyebrow">Різниця</span></span>
+    <h2 data-i18n="cmp.h2">Як зазвичай продають у месенджерах — і як це працює тут</h2>
+  </div>
+  <div class="table-wrap reveal">
+    <table class="compare">
+      <thead><tr><th data-i18n="cmp.th0">&nbsp;</th><th data-i18n="cmp.th1">Типовий підхід</th><th data-i18n="cmp.th2">Retain Growth</th></tr></thead>
+      <tbody id="cmp-body"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ A: ACTION — FAQ ============ -->
+<section class="wrap">
+  <div class="section-head reveal">
+    <span class="eyebrow"><span class="eyebrow-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.5"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.9.35-1.4.95-1.4 1.9v.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17.3" r="0.9" fill="currentColor"/></svg></span><span data-i18n="faq.eyebrow">Перед стартом</span></span>
+    <h2 data-i18n="faq.h2">Що зазвичай питають, перш ніж платити</h2>
+  </div>
+  <div class="node reveal" style="padding:6px 26px" id="faq-list"></div>
+</section>
+
+<!-- ============ A: ACTION — final CTA ============ -->
+<section class="wrap">
+  <div class="node cta-card reveal">
+    <span class="node-tag tag-conversion" style="left:50%;transform:translateX(-50%)" data-i18n="cta.tag">СТАРТ</span>
+    <h2 data-i18n="cta.h2">Підключіть месенджери за один вечір — 14 днів безкоштовно</h2>
+    <p class="lead-text" data-i18n="cta.p">Без картки. Перша воронка й перший AI-агент — поки не побачите перший автоматичний продаж.</p>
+    <div class="cta-row">
+      <button class="btn btn-primary" data-i18n="cta.btn1">Почати тріал 14 днів</button>
+      <button class="btn btn-ghost" data-i18n="cta.btn2">Забронювати демо</button>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="fmark">
+    <span class="logo-mark" style="width:22px;height:22px;border-radius:6px"><svg viewBox="0 0 24 24" fill="none" width="12" height="12"><path d="M4 12h4l2-7 4 14 2-7h4" stroke="#2a0d02" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    Retain Growth
+  </div>
+  <div data-i18n="footer.line">Месенджер-маркетинг, воронки, AI-продажі й CAPI-аналітика в одній платформі.</div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- icon set ---------------- */
+  var ICONS = {
+    check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--conversion)"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>',
+    bolt: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+    click: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 3l14 6-6 2-2 6-6-14Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+    message: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 5.5h16v10H10l-4 3.5v-3.5H4v-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+    handoff: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 12h9.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M9.5 8l4 4-4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="19.3" cy="12" r="2.3" stroke="currentColor" stroke-width="1.6"/></svg>',
+    card: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="13" rx="2.2" stroke="currentColor" stroke-width="1.6"/><path d="M3 10.2h18" stroke="currentColor" stroke-width="1.6"/><path d="M6.5 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    funnel: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 5h16l-6 8v6l-4-2v-4L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    ai: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v3M12 19v3M4.2 4.2l2 2M17.8 17.8l2 2M2 12h3M19 12h3M4.2 19.8l2-2M17.8 6.2l2-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="12" r="4.5" stroke="currentColor" stroke-width="1.8"/></svg>',
+    chart: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 19V10M10 19V5M16 19v-7M22 19H2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    inbox: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 12h-5l-2 3h-4l-2-3H3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.5 5h13l2.5 7v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2.5-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    clock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.6V12l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    copy2: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+    nodata: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19V14M9 19V10M14 19V16M19 19v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3 4l18 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    warn: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.5v3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
+    scatter: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="18" r="2.2" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="18" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg>',
+    shield: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    telegram: '<svg viewBox="0 0 24 24" fill="none"><path d="M21 4 2.5 11.3c-1 .4-1 1.9.1 2.2l4.2 1.3 1.6 5c.3.9 1.4 1.1 2 .4l2.6-2.8 4.6 3.4c.9.6 2.1.1 2.3-1L21.9 5.2c.2-1-.9-1.7-1.9-1.2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8.8 14.8 18 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    whatsapp: '<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-12.4-6.7L4 20l4.9-1.5A8 8 0 0 0 20 12Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.8 8.6c-.2.9.4 2 1.3 3.1 1 1.2 2.3 1.9 3.3 2.1.7.1 1.4-.4 1.5-1l.1-.6-1.9-.9-.5.7c-.7-.2-1.4-.7-1.9-1.3-.5-.6-.8-1.3-.9-2l.7-.4-.7-1.9-.6.1c-.6.1-.4.6-.4 1.1Z" fill="currentColor"/></svg>',
+    messenger: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3C6.9 3 3 6.6 3 11.4c0 2.6 1.2 4.9 3.1 6.5V21l2.8-1.6c1 .3 2 .4 3.1.4 5.1 0 9-3.6 9-8.4S17.1 3 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m7 13.4 3-3.2 2.4 1.8 3.4-3.2-3.1 3.4-2.4-1.8-3.3 3Z" fill="currentColor"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3.8" stroke="currentColor" stroke-width="1.6"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/></svg>',
+    viber: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3C7.2 3 3.6 6.2 3.6 10.6c0 2.4 1.1 4.5 2.9 5.9-.1.9-.4 2.3-.9 3.2 1.3-.2 2.8-.8 3.7-1.4.9.2 1.8.3 2.7.3 4.8 0 8.4-3.2 8.4-7.6S16.8 3 12 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 8.6c-.2 1.3.6 3.1 1.9 4.4 1.3 1.3 3 2 4.3 1.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'
+  };
+  function icon(name) { return ICONS[name] || ""; }
+
+  /* ---------------- i18n dictionary ---------------- */
+  var DICT = {
+    "nav.cta": ["Тріал 14 днів", "14-day trial"],
+    "hero.eyebrow": ["AI + CAPI + автоматизація ретеншну", "AI + CAPI + retention automation"],
+    "hero.h1": [
+      "AI-система, що <em>24/7 перетворює</em> ваші рекламні витрати на дохід",
+      "The AI system that <em>runs 24/7</em>, turning your ad spend into revenue"
+    ],
+    "hero.lead": [
+      "<b>Менше ручної роботи менеджерів, більше повернутого ROI реклами</b>: воронки, AI-агент продажів і наскрізна CAPI-аналітика ведуть кожного ліда з Telegram, WhatsApp, Messenger чи Instagram до оплати самі.",
+      "<b>Less manual work for managers, more ad ROI recovered</b>: funnels, an AI sales agent and end-to-end CAPI analytics carry every lead from Telegram, WhatsApp, Messenger or Instagram to payment on their own."
+    ],
+    "hero.cta1": ["Почати тріал 14 днів", "Start the 14-day trial"],
+    "hero.cta2": ["Подивитись демо", "Watch the demo"],
+    "hero.note": ["Без оплати. Скасування в один клік.", "No payment required. Cancel in one click."],
+    "hero.stat1": ["відповідь ліду миттєво", "instant reply to every lead"],
+    "hero.stat2": ["від тапу по кнопці до кроку далі", "from a button tap to the next step"],
+    "hero.stat3": ["конверсії напряму в Ads Manager", "conversions straight into Ads Manager"],
+    "hero.graph.tag": ["ENTRY", "ENTRY"],
+    "hero.graph.live": ["дохід росте", "revenue's growing"],
+    "hero.graph.name": ["Лід · Telegram", "Lead · Telegram"],
+    "hero.graph.status": ["AI відповідає замість менеджера", "AI is replying instead of a manager"],
+    "hero.graph.sysenter": ["Клік з реклами → лід у воронці", "Ad click → lead entered the funnel"],
+    "hero.graph.chat1": ["Скільки коштує підписка?", "How much is the subscription?"],
+    "hero.graph.chat2": ["Скину варіанти за 10 секунд і одразу зʼєднаю з менеджером, якщо треба 👋", "I'll send options in 10 seconds and loop in a manager right away if you need one 👋"],
+    "hero.graph.capi": ["Purchase → доставлено в Meta CAPI", "Purchase → delivered to Meta CAPI"],
+    "pain.eyebrow": ["Що зазвичай зʼїдає прибуток", "What usually eats your margin"],
+    "pain.h2": ["Кожен біль месенджер-продажів уже закритий вузлом у продукті", "Every messenger-sales pain already has a node that closes it"],
+    "pain.p": ["Не набір фіч під запит, а суцільний ланцюжок: від першого повідомлення ліда до події в рекламному кабінеті.", "Not a pile of feature requests, but one continuous chain — from a lead's first message to the event in the ad account."],
+    "concl.eyebrow": ["Висновок", "The takeaway"],
+    "concl.h": ["AI не замінює команду — він забирає рутину і повертає час на продажі", "AI doesn't replace your team — it removes the routine and gives sales back the time"],
+    "concl.p": ["Грамотно впроваджений AI не звільняє менеджерів, а знімає з них одноманітну частину роботи: миттєві відповіді, кваліфікацію лідів, нагадування тим, хто мовчить. Люди займаються складними угодами й живим спілкуванням, а швидкість і рутина — на AI. Результат — більше закритих угод тим самим складом команди.", "Implemented properly, AI doesn't lay managers off — it takes the repetitive part off their plate: instant replies, lead qualification, nudges for leads who've gone quiet. People handle complex deals and real conversation, while AI handles speed and routine. The result: more closed deals with the same team."],
+    "f1.tag": ["КОНСТРУКТОР ВОРОНОК", "FUNNEL BUILDER"],
+    "f1.h": ["Візуальна воронка — тягнеш вузли, а не пишеш ТЗ програмісту", "A visual funnel — drag nodes, don't file a ticket with a developer"],
+    "f1.p": ["Повідомлення, кнопки, умови за тегами, затримки, AI-вузли й точка конверсії — на одному полотні. Кожен колір вузла означає свою логіку, тож воронку читаєш з першого погляду.", "Messages, buttons, tag conditions, delays, AI nodes and a conversion point — one canvas. Every node color means its own logic, so you read the funnel at a glance."],
+    "f1.li1": ["Гілки за відповіддю ліда — без ручного сортування чатів", "Branches by the lead's own answer — no manual chat sorting"],
+    "f1.li2": ["Затримки й нагадування, якщо лід замовк", "Delays and nudges when a lead goes quiet"],
+    "f1.li3": ["Точка конверсії шле подію в CAPI автоматично", "The conversion node fires a CAPI event automatically"],
+    "f1.mock.n1": ["Вхід за посиланням", "Entry via link"],
+    "f1.mock.n2": ["Повідомлення + 2 кнопки", "Message + 2 buttons"],
+    "f1.mock.n3": ["Тег: гарячий", "Tag: hot"],
+    "f1.mock.n4": ["Чекати 24г", "Wait 24h"],
+    "f1.mock.n5": ["AI-агент кваліфікує", "AI agent qualifies"],
+    "f1.mock.n6": ["Конверсія → CAPI", "Conversion → CAPI"],
+    "f2.tag": ["AI-АГЕНТ ПРОДАЖІВ", "AI SALES AGENT"],
+    "f2.h": ["AI не спамить скриптом — він продає діалогом", "The AI doesn't spam a script — it sells through conversation"],
+    "f2.p": ["Відповідає на питання про ціну й умови, кваліфікує ліда і сам передає розмову менеджеру рівно в той момент, коли лід готовий говорити з людиною.", "Answers pricing and terms, qualifies the lead, and hands the conversation to a manager the moment the lead is ready for a human."],
+    "f2.li1": ["Розуміє контекст усієї переписки, не лише останнє повідомлення", "Understands the whole thread, not just the last message"],
+    "f2.li2": ["Автоматично зупиняється, щойно менеджер відповів вручну", "Steps back the instant a manager replies manually"],
+    "f2.li3": ["Помічає власні збої і сигналізує в адмінку, а не мовчить", "Flags its own failures in the admin panel instead of going silent"],
+    "f2.mock.head": ["AI · відповідає зараз", "AI · replying now"],
+    "f2.mock.c1": ["Хочу консультацію, але не певен, чи мені підходить", "I want a consult but I'm not sure it's for me"],
+    "f2.mock.c2": ["Розкажіть коротко про задачу — підберу формат і, якщо треба, одразу зʼєднаю з менеджером.", "Tell me briefly what you need — I'll suggest a format, or connect you with a manager right away."],
+    "f2.mock.b1": ["✅ З менеджером", "✅ Talk to a manager"],
+    "f2.mock.b2": ["Спершу тарифи", "Show pricing first"],
+    "f2.mock.tag": ["Передано менеджеру миттєво — без черги", "Handed to a manager instantly — no queue"],
+    "f5.tag": ["АНАЛІТИЧНА ВОРОНКА", "ANALYTICS FUNNEL"],
+    "f5.h": ["Друга половина системи, не менш важлива за AI: наскрізна аналітика руху ліда", "The other half of the system, every bit as important as AI: end-to-end lead-movement analytics"],
+    "f5.p": ["AI сам визначає, на якому етапі воронки зараз клієнт — від першого кліку по рекламі до оплати — і система в потрібну мить шле сигнал конверсії в Meta CAPI. Жодного ручного відмічання стадій, жодних «здогадок» в Ads Manager.", "The AI itself determines what funnel stage the customer is on — from the first ad click to payment — and the system fires a conversion signal to Meta CAPI at the exact moment. No manual stage-tagging, no guessing in Ads Manager."],
+    "f5.li1": ["Наскрізний рух ліда через усі канали в один звіт", "The lead's whole cross-channel movement in one report"],
+    "f5.li2": ["AI сам класифікує етап — не потрібен ручний тег", "The AI classifies the stage itself — no manual tagging"],
+    "f5.li3": ["CAPI-подія летить у Meta в момент реальної дії, не пізніше", "The CAPI event fires the moment the action happens, never later"],
+    "f5.mock.head": ["Рух ліда · зараз", "Lead movement · live"],
+    "f5.mock.s0": ["Клік", "Click"], "f5.mock.s1": ["Діалог", "Dialogue"], "f5.mock.s2": ["Кваліфікація", "Qualified"], "f5.mock.s3": ["Оплата", "Payment"],
+    "f5.mock.m1": ["Revenue за 30 днів", "Revenue, last 30 days"],
+    "f5.mock.m2": ["Клік → оплата", "Click → payment"],
+    "f5.mock.m3": ["Конверсії по днях · приклад", "Conversions by day · example"],
+    "f5.mock.capi": ["Purchase · pixel 11148… · доставлено за 340мс", "Purchase · pixel 11148… · delivered in 340ms"],
+    "f3.tag": ["ЄДИНИЙ INBOX · CRM", "UNIFIED INBOX · CRM"],
+    "f3.h": ["Один inbox для всіх каналів. Один pipeline для всіх лідів", "One inbox for every channel. One pipeline for every lead"],
+    "f3.p": ["Telegram, WhatsApp, Messenger та Instagram зʼїжджаються в один список чатів зі статусами, тегами й історією воронки — CRM в одній вкладці, а не в трьох різних застосунках.", "Telegram, WhatsApp, Messenger and Instagram land in one chat list with statuses, tags and funnel history — CRM in one tab, not spread across three apps."],
+    "f3.li1": ["Видно, на якому вузлі воронки лід зараз стоїть", "See exactly which funnel node a lead is sitting on"],
+    "f3.li2": ["Ручна відповідь менеджера й AI ніколи не перекриваються", "A manager's manual reply and the AI never overlap"],
+    "f3.li3": ["Закрив чат — завжди можна відкрити назад, нічого не губиться", "Close a chat and reopen it anytime — nothing gets lost"],
+    "f3.mock.head": ["Pipeline · сьогодні", "Pipeline · today"],
+    "journey.eyebrow": ["Шлях одного ліда", "One lead's journey"],
+    "journey.h2": ["Від кліку по рекламі до події в Ads Manager — без єдиної ручної дії", "From an ad click to an event in Ads Manager — with zero manual steps"],
+    "ttv.eyebrow": ["14 днів на випробування", "14 days to try it"],
+    "ttv.h2": ["Перший автоматичний продаж — на тижні запуску, не через квартал", "Your first automated sale — launch week, not next quarter"],
+    "spot.eyebrow": ["AI + CAPI наживо, 24/7", "AI + CAPI live, 24/7"],
+    "spot.h": ["Поки ви спите — AI веде лідів, а CAPI рахує дохід", "While you sleep, the AI runs your leads and CAPI counts the revenue"],
+    "spot.p": ["Жодної паузи між часовими поясами: AI відповідає й кваліфікує, а сервер шле кожну конверсію в Meta без затримок і без вашої участі.", "No pause across time zones: the AI replies and qualifies while the server sends every conversion to Meta instantly, with no one at the keyboard."],
+    "spot.btn": ["Почати тріал 14 днів", "Start the 14-day trial"],
+    "spot.live": ["Дохід зростає, поки ви це читаєте", "Revenue is growing while you read this"],
+    "spot.capi": ["CAPI-подія доставлена за 340мс", "CAPI event delivered in 340ms"],
+    "cmp.eyebrow": ["Різниця", "The difference"],
+    "cmp.h2": ["Як зазвичай продають у месенджерах — і як це працює тут", "How messenger sales usually work — and how this works instead"],
+    "cmp.th0": [" ", " "], "cmp.th1": ["Типовий підхід", "The usual approach"], "cmp.th2": ["Retain Growth", "Retain Growth"],
+    "faq.eyebrow": ["Перед стартом", "Before you start"],
+    "faq.h2": ["Що зазвичай питають, перш ніж платити", "What people ask before they pay"],
+    "cta.tag": ["СТАРТ", "START"],
+    "cta.h2": ["Підключіть месенджери за один вечір — 14 днів безкоштовно", "Connect your messengers in one evening — 14 days free"],
+    "cta.p": ["Без картки. Перша воронка й перший AI-агент — поки не побачите перший автоматичний продаж.", "No card required. Your first funnel and first AI agent — until you see your first automated sale."],
+    "cta.btn1": ["Почати тріал 14 днів", "Start the 14-day trial"],
+    "cta.btn2": ["Забронювати демо", "Book a demo"],
+    "footer.line": ["Месенджер-маркетинг, воронки, AI-продажі й CAPI-аналітика в одній платформі.", "Messenger marketing, funnels, AI sales and CAPI analytics — one platform."]
+  };
+
+  var LANG_IDX = { ua: 0, en: 1 };
+  var lang = "ua";
+
+  function applyLang() {
+    var idx = LANG_IDX[lang];
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var key = el.getAttribute("data-i18n");
+      if (DICT[key]) el.textContent = DICT[key][idx];
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach(function (el) {
+      var key = el.getAttribute("data-i18n-html");
+      if (DICT[key]) el.innerHTML = DICT[key][idx];
+    });
+    document.querySelectorAll(".lang-toggle button").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-lang") === lang);
+    });
+    document.documentElement.setAttribute("lang", lang);
+    renderData();
+  }
+
+  document.querySelectorAll(".lang-toggle button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      lang = b.getAttribute("data-lang");
+      try { localStorage.setItem("rg-lang", lang); } catch (e) {}
+      applyLang();
+    });
+  });
+  try { var saved = localStorage.getItem("rg-lang"); if (saved === "ua" || saved === "en") lang = saved; } catch (e) {}
+
+  /* ---------------- channel row ---------------- */
+  var CHANNELS = [
+    { key: "telegram", ua: "Telegram", en: "Telegram", soon: false },
+    { key: "whatsapp", ua: "WhatsApp", en: "WhatsApp", soon: false },
+    { key: "messenger", ua: "Messenger", en: "Messenger", soon: false },
+    { key: "instagram", ua: "Instagram", en: "Instagram", soon: true },
+    { key: "viber", ua: "Viber", en: "Viber", soon: true }
+  ];
+  function renderChannels() {
+    var el = document.getElementById("hero-channels");
+    if (!el) return;
+    el.innerHTML = CHANNELS.map(function (c) {
+      var label = lang === "ua" ? c.ua : c.en;
+      var soonWord = lang === "ua" ? "скоро" : "soon";
+      return '<span class="chan' + (c.soon ? " soon" : "") + '">' + icon(c.key) + '<span>' + label + '</span>' +
+        (c.soon ? '<span class="soon-badge">' + soonWord + '</span>' : '') + '</span>';
+    }).join("");
+  }
+
+  /* ---------------- pain pairs ---------------- */
+  var PAIN_PAIRS = [
+    { badIcon: "message", goodIcon: "bolt",
+      bad: { ua: "<b>Одна розсилка на всіх</b> — гарячий лід відповідає і чекає годинами, поки хтось вручну відкриє чат і згадає, хто це", en: "<b>One broadcast blast for everyone</b> — a hot lead replies, then waits for hours until someone finally opens the chat and remembers who they are" },
+      good: { ua: "AI-агент відповідає за секунди, кваліфікує і сам кличе людину, коли треба", en: "The AI agent replies in seconds, qualifies the lead, and calls in a human exactly when needed" } },
+    { badIcon: "copy2", goodIcon: "inbox",
+      bad: { ua: "<b>CRM і чат живуть окремо</b> — імʼя, номер і історію менеджер вручну копіює туди-сюди, гублячи половину контексту", en: "<b>CRM and chat live in separate worlds</b> — a manager copy-pastes names, numbers and history back and forth by hand, losing half the context on the way" },
+      good: { ua: "Один inbox: стадія воронки, теги й історія прямо біля переписки", en: "One inbox: funnel stage, tags and history sit right next to the conversation" } },
+    { badIcon: "nodata", goodIcon: "chart",
+      bad: { ua: "<b>Бюджет зливається в чорну діру</b> — ліди сиплються в чат, а в Ads Manager суцільні нулі конверсій, і Facebook ріже охоплення", en: "<b>Budget vanishes into a black hole</b> — leads keep landing in chat while Ads Manager shows nothing but zero conversions, so Facebook throttles your reach" },
+      good: { ua: "Сервер шле Purchase-подію напряму в Meta CAPI, незалежно від браузера ліда", en: "The server fires the Purchase event straight to Meta CAPI, independent of the lead's browser" } },
+    { badIcon: "clock", goodIcon: "shield",
+      bad: { ua: "<b>Менеджер відповідає, коли встигне</b> — часом через 5 годин, коли лід уже купив у конкурента", en: "<b>The manager replies whenever they get around to it</b> — sometimes 5 hours later, after the lead has already bought from a competitor" },
+      good: { ua: "Перша відповідь миттєва, 24/7, ще до того, як менеджер побачив чат", en: "The first reply is instant, 24/7 — before a manager has even seen the chat" } },
+    { badIcon: "warn", goodIcon: "funnel",
+      bad: { ua: "<b>Воронка живе в голові одного менеджера</b> — звільнився чи захворів, і ніхто не знає, кому що обіцяли", en: "<b>The funnel exists only in one manager's head</b> — the moment they quit or get sick, nobody knows who was promised what" },
+      good: { ua: "Візуальний граф вузлів: умови, затримки й кроки видно й контрольовано", en: "A visual node graph: conditions, delays and steps are visible and controlled" } },
+    { badIcon: "scatter", goodIcon: "ai",
+      bad: { ua: "<b>Кожен канал — окрема людина й звичка</b> — Telegram, Instagram і WhatsApp ведуться по-різному, і лід губиться між ними", en: "<b>Every channel needs its own person and habit</b> — Telegram, Instagram and WhatsApp are run differently, and leads fall through the cracks between them" },
+      good: { ua: "Один AI-агент і одна воронка працюють однаково в усіх каналах одразу", en: "One AI agent and one funnel work the same way across every channel at once" } }
+  ];
+  function renderPainPairs() {
+    PAIN_PAIRS.forEach(function (pair, i) {
+      var el = document.getElementById("pain-" + (i + 1));
+      if (!el) return;
+      var bad = lang === "ua" ? pair.bad.ua : pair.bad.en;
+      var good = lang === "ua" ? pair.good.ua : pair.good.en;
+      el.innerHTML =
+        '<div class="pain-row"><div class="pain-icon bad">' + icon(pair.badIcon) + '</div><div class="pain-text">' + bad + '</div></div>' +
+        '<div class="pain-divider"></div>' +
+        '<div class="pain-row"><div class="pain-icon good">' + icon(pair.goodIcon) + '</div><div class="pain-text good-text">' + good + '</div></div>';
+    });
+  }
+
+  var PIPELINE = [
+    { name: { ua: "Олена К.", en: "Olena K." }, stage: { ua: "AI кваліфікує", en: "AI qualifying" }, color: "ai", chan: "telegram" },
+    { name: { ua: "Максим П.", en: "Maksym P." }, stage: { ua: "Чекає менеджера", en: "Awaiting manager" }, color: "coral", chan: "instagram" },
+    { name: { ua: "Ірина В.", en: "Iryna V." }, stage: { ua: "Оплата", en: "Payment" }, color: "conversion", chan: "whatsapp" },
+    { name: { ua: "Дмитро С.", en: "Dmytro S." }, stage: { ua: "Пауза 24г", en: "Paused 24h" }, color: "delay", chan: "messenger" }
+  ];
+  function renderPipeline() {
+    var el = document.getElementById("pipeline-mock");
+    if (!el) return;
+    el.innerHTML = PIPELINE.map(function (p, i) {
+      var name = lang === "ua" ? p.name.ua : p.name.en;
+      var stage = lang === "ua" ? p.stage.ua : p.stage.en;
+      var initials = name.split(" ").map(function (w) { return w[0]; }).join("");
+      return '<div class="pipe-row' + (i === 0 ? " moving" : "") + '"><div class="pipe-avatar" style="background:var(--' + p.color + '-soft,var(--panel-2));color:var(--' + p.color + ')">' + initials + '</div>' +
+        '<div class="pipe-name">' + name + '</div>' +
+        '<span style="color:var(--ink-soft)">' + icon(p.chan) + '</span>' +
+        '<div class="pipe-stage" style="background:var(--' + p.color + '-soft,var(--panel-2));color:var(--' + p.color + ')">' + stage + '</div></div>';
+    }).join("");
+  }
+
+  var JOURNEY = [
+    { ua: ["Клік", "Реклама в Meta"], en: ["Click", "Meta ad"], color: "coral", icon: "click" },
+    { ua: ["Перше повідомлення", "Telegram / WhatsApp / IG"], en: ["First message", "Telegram / WhatsApp / IG"], color: "coral", icon: "message" },
+    { ua: ["Вхід у воронку", "Автоматично, за лінком"], en: ["Enters the funnel", "Automatically, via the link"], color: "gold", icon: "funnel" },
+    { ua: ["AI кваліфікує", "Питання, класифікація етапу"], en: ["AI qualifies", "Questions, stage classification"], color: "ai", icon: "ai" },
+    { ua: ["Передача менеджеру", "У потрібний момент"], en: ["Handoff to a manager", "At the right moment"], color: "delay", icon: "handoff" },
+    { ua: ["Аналітична воронка", "Оновлює стадію сама"], en: ["Analytics funnel", "Updates the stage itself"], color: "condition", icon: "chart" },
+    { ua: ["Оплата", "Подія Purchase"], en: ["Payment", "Purchase event"], color: "conversion", icon: "card" },
+    { ua: ["CAPI → Meta", "Ads Manager бачить продаж"], en: ["CAPI → Meta", "Ads Manager sees the sale"], color: "conversion", icon: "bolt" }
+  ];
+  function renderJourney() {
+    var el = document.getElementById("journey-track");
+    if (!el) return;
+    el.innerHTML = JOURNEY.map(function (s) {
+      var t = lang === "ua" ? s.ua : s.en;
+      return '<div class="jstep"><div class="jline"></div><div class="jdot" style="color:var(--' + s.color + ')">' + icon(s.icon) + '</div>' +
+        '<b>' + t[0] + '</b><span>' + t[1] + '</span></div>';
+    }).join("");
+  }
+
+  var TTV = [
+    { day: { ua: "День 0", en: "Day 0" }, h: { ua: "Підключення каналів", en: "Connect channels" }, p: { ua: "Telegram, WhatsApp, Messenger, Instagram — офіційні API, без сірих ботів", en: "Telegram, WhatsApp, Messenger, Instagram — official APIs, no gray-market bots" } },
+    { day: { ua: "День 1", en: "Day 1" }, h: { ua: "Перша воронка", en: "First funnel" }, p: { ua: "Повідомлення, кнопки, умови — готово за годину, не за тиждень", en: "Messages, buttons, conditions — ready in an hour, not a week" } },
+    { day: { ua: "День 2", en: "Day 2" }, h: { ua: "Pixel і CAPI", en: "Pixel and CAPI" }, p: { ua: "Кожен лінк лідогенерації привʼязаний до свого pixel", en: "Every lead-gen link is tied to its own pixel" } },
+    { day: { ua: "Тиждень 1", en: "Week 1" }, h: { ua: "Перший автоматичний продаж", en: "First automated sale" }, p: { ua: "Видно в дашборді й одразу в Ads Manager — ще всередині тріалу", en: "Visible on the dashboard and in Ads Manager — still inside the trial" } }
+  ];
+  function renderTTV() {
+    var el = document.getElementById("ttv-track");
+    if (!el) return;
+    el.innerHTML = TTV.map(function (s) {
+      return '<div class="node ttv-step"><div class="ttv-day">' + (lang === "ua" ? s.day.ua : s.day.en) + '</div>' +
+        '<h4>' + (lang === "ua" ? s.h.ua : s.h.en) + '</h4><p>' + (lang === "ua" ? s.p.ua : s.p.en) + '</p></div>';
+    }).join("");
+  }
+
+  var CMP = [
+    { l: { ua: "Перша відповідь ліду", en: "First reply to a lead" }, bad: { ua: "коли менеджер побачить чат", en: "whenever a manager sees the chat" }, good: { ua: "миттєво, 24/7", en: "instantly, 24/7" } },
+    { l: { ua: "Канали", en: "Channels" }, bad: { ua: "один месенджер, окремий процес", en: "one messenger, a separate process" }, good: { ua: "Telegram + WhatsApp + Messenger + Instagram разом", en: "Telegram + WhatsApp + Messenger + Instagram together" } },
+    { l: { ua: "CRM і переписка", en: "CRM and the conversation" }, bad: { ua: "два різні інструменти", en: "two separate tools" }, good: { ua: "один inbox", en: "one inbox" } },
+    { l: { ua: "Атрибуція реклами", en: "Ad attribution" }, bad: { ua: "залежить від браузера ліда", en: "depends on the lead's browser" }, good: { ua: "сервер шле CAPI-подію напряму", en: "the server sends the CAPI event directly" } },
+    { l: { ua: "Стадія воронки в CRM", en: "Funnel stage in the CRM" }, bad: { ua: "менеджер відмічає вручну", en: "a manager tags it by hand" }, good: { ua: "AI визначає й оновлює сам", en: "the AI determines and updates it itself" } },
+    { l: { ua: "Перед покупкою", en: "Before you buy" }, bad: { ua: "довгий договір, оплата наперед", en: "a long contract, pay up front" }, good: { ua: "14 днів тріалу без картки", en: "a 14-day trial, no card" } }
+  ];
+  function renderCmp() {
+    var el = document.getElementById("cmp-body");
+    if (!el) return;
+    el.innerHTML = CMP.map(function (r) {
+      return '<tr><td>' + (lang === "ua" ? r.l.ua : r.l.en) + '</td><td class="bad">' + icon("x") + (lang === "ua" ? r.bad.ua : r.bad.en) + '</td>' +
+        '<td class="good">' + icon("check") + (lang === "ua" ? r.good.ua : r.good.en) + '</td></tr>';
+    }).join("");
+  }
+
+  var FAQ = [
+    { q: { ua: "Скільки часу займає впровадження і чи потрібен програміст?", en: "How long does setup take, and do I need a developer?" },
+      a: { ua: "Ні, програміст не потрібен. Підключення каналу — кілька хвилин, перша воронка збирається на візуальному конструкторі за годину-дві. Більшість команд запускають перший автоматичний продаж ще всередині 14-денного тріалу.", en: "No developer needed. Connecting a channel takes minutes, and the first funnel comes together on the visual builder in an hour or two. Most teams launch their first automated sale within the 14-day trial." } },
+    { q: { ua: "Що буде з моїми лідами й переписками, якщо я вирішу піти?", en: "What happens to my leads and conversations if I decide to leave?" },
+      a: { ua: "Дані належать вам: історію переписок, лідів і CRM можна вивантажити в будь-який момент. Ми нічого не тримаємо «в заручниках» — відписатись можна в один клік, без дзвінків у підтримку.", en: "Your data is yours: conversation history, leads and CRM records can be exported anytime. Nothing is held hostage — cancel in one click, no support call required." } },
+    { q: { ua: "Наскільки безпечно давати доступ до Telegram/WhatsApp/Meta акаунтів?", en: "How safe is it to connect my Telegram/WhatsApp/Meta accounts?" },
+      a: { ua: "Підключення йде через офіційні API месенджерів, а токени доступу зберігаються в зашифрованому сховищі (Vault), а не у відкритому вигляді в базі. Кожен клієнт ізольований на рівні даних — інша компанія фізично не бачить ваших лідів чи налаштувань.", en: "Connections use the messengers' official APIs, and access tokens sit in an encrypted vault, never in plain text. Every customer's data is isolated at the database level — no other company can see your leads or settings." } },
+    { q: { ua: "Що як AI скаже клієнту щось не те?", en: "What if the AI tells a customer something wrong?" },
+      a: { ua: "AI працює в межах сценарію, який задаєте ви, а не вигадує довільно. Він сам зупиняється й передає розмову людині, якщо не впевнений у відповіді, а ви в будь-який момент можете відповісти вручну — тоді AI автоматично відступає, щоб не дублювати повідомлення.", en: "The AI stays inside the script you define — it doesn't improvise freely. It hands off to a human whenever it's unsure, and if you reply manually at any point, it automatically steps back so nothing gets duplicated." } },
+    { q: { ua: "У мене вже є CRM або чат-бот. Це замінить чи доповнить їх?", en: "I already have a CRM or a chatbot. Does this replace or complement it?" },
+      a: { ua: "Найчастіше замінює окремі чат-боти й таблиці, якими вели воронку вручну — CRM, воронка, AI й аналітика вже в комплекті. Якщо у вас складна окрема CRM, з нею можна працювати паралельно на перехідний період.", en: "It usually replaces the separate chatbots and spreadsheets teams use to run a funnel by hand — CRM, funnel, AI and analytics come built in. If you run a more complex separate CRM, the two can work side by side during a transition." } },
+    { q: { ua: "Що входить у 14-денний тріал і чи спишуться гроші автоматично?", en: "What's included in the 14-day trial, and will I be charged automatically?" },
+      a: { ua: "Картка не потрібна для старту, тож нічого не спишеться саме собою. У тріалі доступні воронки, AI-агент, єдиний inbox і CAPI-аналітика без обмежень — щоб оцінити результат на реальних лідах, а не в демо-режимі.", en: "No card is needed to start, so nothing gets charged on its own. The trial includes funnels, the AI agent, the unified inbox and CAPI analytics with no caps — so you judge it on real leads, not a demo mode." } }
+  ];
+  function renderFaq() {
+    var el = document.getElementById("faq-list");
+    if (!el) return;
+    el.innerHTML = FAQ.map(function (f, i) {
+      return '<details class="faq-item"' + (i === 0 ? " open" : "") + '><summary class="faq-q">' +
+        '<span>' + (lang === "ua" ? f.q.ua : f.q.en) + '</span>' +
+        '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '</summary><div class="faq-a">' + (lang === "ua" ? f.a.ua : f.a.en) + '</div></details>';
+    }).join("");
+  }
+
+  function renderData() {
+    renderChannels();
+    renderPainPairs();
+    renderPipeline();
+    renderJourney();
+    renderTTV();
+    renderCmp();
+    renderFaq();
+  }
+
+  applyLang();
+
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
+  }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+  document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+
+  document.querySelectorAll("[data-count]").forEach(function (el) {
+    var target = parseInt(el.getAttribute("data-count"), 10);
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        obs.unobserve(el);
+        var start = null, dur = 900;
+        function step(ts) {
+          if (!start) start = ts;
+          var p = Math.min(1, (ts - start) / dur);
+          el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+          if (p < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      });
+    }, { threshold: 0.5 });
+    obs.observe(el);
+  });
+})();
+</script>
+</body>
+</html>
