@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import type { RealtimePostgresInsertPayload } from '@supabase/supabase-js'
+import type { RealtimePostgresInsertPayload, RealtimePostgresUpdatePayload } from '@supabase/supabase-js'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabaseClient'
-import { IconArchiveBox, IconBan, IconBolt, IconChat, IconClose, IconCpu, IconFile, IconInbox, IconLink, IconPaperclip, IconSpinner, IconUser } from '../components/icons'
+import { IconArchiveBox, IconBan, IconBolt, IconChat, IconClose, IconCpu, IconEdit, IconFile, IconInbox, IconLink, IconPaperclip, IconSpinner, IconUser } from '../components/icons'
 import Marquee from '../components/Marquee'
 import LeadProfile from '../components/LeadProfile'
 import LeadIndicatorIcons from '../components/LeadIndicatorIcons'
@@ -253,6 +253,11 @@ interface MessageRow {
   transcript?: string | null
   /** 'ai' | 'agent' | 'system' | 'lead' | null — drives the outbound bubble color. */
   sender?: string | null
+  /** Manager who typed it (null for lead/system/AI messages). */
+  sent_by?: string | null
+  /** Telegram's message_id — present only on messages sent after editing shipped. */
+  external_id?: string | null
+  edited_at?: string | null
 }
 
 interface ThreadRow {
@@ -552,6 +557,11 @@ export default function Chats() {
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [reply, setReply] = useState('')
   const [sending, setSending] = useState(false)
+  // Inline edit of one of the manager's own sent messages (Telegram only).
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
   const [replyError, setReplyError] = useState<string | null>(null)
 
   const [attachDraft, setAttachDraft] = useState<AttachDraft | null>(null)
@@ -560,6 +570,7 @@ export default function Chats() {
   const attachInputRef = useRef<HTMLInputElement>(null)
 
   const [orgId, setOrgId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const selectedIdRef = useRef<string | null>(null)
 
   const [threadsCursor, setThreadsCursor] = useState<string | null>(null)
@@ -838,6 +849,7 @@ export default function Chats() {
       .auth.getUser()
       .then(({ data }) => {
         if (cancelled || !data.user) return
+        setUserId(data.user.id)
         return supabase.from('profiles').select('org_id').eq('id', data.user.id).single()
       })
       .then((result) => {
@@ -886,6 +898,20 @@ export default function Chats() {
             // the agent is actively viewing this thread, so zero it back out.
             if (row.direction === 'inbound') void markThreadRead(row.thread_id)
           }
+        },
+      )
+      // Edits made from another tab/manager: only body/edited_at are patched
+      // (transcripts arrive through their own path).
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `org_id=eq.${orgId}` },
+        (payload: RealtimePostgresUpdatePayload<MessageInsertPayload & { edited_at?: string | null }>) => {
+          const row = payload.new
+          if (!row.edited_at) return
+          setMessages((prev) => prev.map((m) => (m.id === row.id && m.body !== row.body ? { ...m, body: row.body, edited_at: row.edited_at } : m)))
+          setThreads((prev) =>
+            prev.map((t) => (t.messages[0]?.id === row.id ? { ...t, messages: [{ ...t.messages[0], body: row.body }] } : t)),
+          )
         },
       )
       .subscribe()
@@ -985,12 +1011,14 @@ export default function Chats() {
     setMessagesLoading(true)
     setReply('')
     setReplyError(null)
+    setEditingId(null)
+    setEditError(null)
     setMessagesCursor(null)
     setMessagesHasMore(true)
 
     supabase
       .from('messages')
-      .select('id, body, direction, created_at, meta, transcript, sender')
+      .select('id, body, direction, created_at, meta, transcript, sender, sent_by, external_id, edited_at')
       .eq('thread_id', selectedId)
       .order('created_at', { ascending: false })
       .limit(MESSAGES_PAGE_SIZE)
@@ -1032,7 +1060,7 @@ export default function Chats() {
 
     const { data, error } = await supabase
       .from('messages')
-      .select('id, body, direction, created_at, meta, transcript, sender')
+      .select('id, body, direction, created_at, meta, transcript, sender, sent_by, external_id, edited_at')
       .eq('thread_id', selectedId)
       .lt('created_at', messagesCursor)
       .order('created_at', { ascending: false })
@@ -1089,10 +1117,66 @@ export default function Chats() {
     }
   }
 
+  function startEdit(message: MessageRow) {
+    setEditingId(message.id)
+    setEditDraft(message.body ?? '')
+    setEditError(null)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditError(null)
+  }
+
+  async function saveEdit(message: MessageRow) {
+    const text = editDraft.trim()
+    if (!text || editSaving) return
+    if (text === (message.body ?? '').trim()) {
+      cancelEdit()
+      return
+    }
+
+    setEditSaving(true)
+    setEditError(null)
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    if (!accessToken) {
+      setEditError('Сесія недійсна, увійдіть знову')
+      setEditSaving(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/.netlify/functions/edit-message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ messageId: message.id, text }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setEditError(data.error ?? 'Не вдалося відредагувати повідомлення')
+      } else {
+        // Patched by id, so it lands correctly even if the manager switched
+        // threads meanwhile (the row simply isn't in the list then).
+        setMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, body: text, edited_at: data.message?.edited_at ?? new Date().toISOString() } : m)))
+        setEditingId(null)
+      }
+    } catch {
+      setEditError('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   async function handleReplySubmit(event: FormEvent) {
     event.preventDefault()
     if (!selectedId || (!reply.trim() && !attachDraft) || sending) return
 
+    // Captured before any await: the manager may switch threads while the
+    // request is in flight, and the response must only land in the thread it
+    // was sent to.
+    const sentThreadId = selectedId
     setSending(true)
     setReplyError(null)
 
@@ -1113,7 +1197,7 @@ export default function Chats() {
           authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          threadId: selectedId,
+          threadId: sentThreadId,
           text: reply,
           attachments: attachDraft ? [attachDraft] : undefined,
         }),
@@ -1124,8 +1208,15 @@ export default function Chats() {
       if (!res.ok) {
         setReplyError(data.error ?? 'Не вдалося надіслати повідомлення')
       } else {
-        if (data.message) setMessages((prev) => [...prev, data.message as MessageRow])
-        setReply('')
+        // Skipped when another thread is open now — the messages realtime
+        // channel already refreshes the list preview either way. Deduped by id
+        // because that same channel may deliver this row first.
+        if (data.message && selectedIdRef.current === sentThreadId) {
+          setMessages((prev) => (prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message as MessageRow]))
+        }
+        // The thread-switch effect already reset the draft text; don't wipe
+        // whatever is in the box for the thread that's open now.
+        if (selectedIdRef.current === sentThreadId) setReply('')
         setAttachDraft(null)
       }
     } catch {
@@ -1579,7 +1670,33 @@ export default function Chats() {
                                 {(meta?.attachments ?? []).map((att, i) => (
                                   <AttachmentView key={`${att.url}-${i}`} attachment={att} onZoom={setZoomedImage} />
                                 ))}
-                                {message.body}
+                                {editingId === message.id ? (
+                                  <div className="msg-edit-box">
+                                    <textarea
+                                      className="input textarea msg-edit-input"
+                                      value={editDraft}
+                                      onChange={(e) => setEditDraft(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Escape') cancelEdit()
+                                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void saveEdit(message)
+                                      }}
+                                      rows={3}
+                                      autoFocus
+                                      disabled={editSaving}
+                                    />
+                                    {editError && <span className="msg-edit-error">{editError}</span>}
+                                    <span className="msg-edit-actions">
+                                      <button type="button" className="btn btn-ghost" onClick={cancelEdit} disabled={editSaving}>
+                                        Скасувати
+                                      </button>
+                                      <button type="button" className="btn btn-primary" onClick={() => void saveEdit(message)} disabled={editSaving || !editDraft.trim()}>
+                                        {editSaving ? <IconSpinner size={14} /> : 'Зберегти'}
+                                      </button>
+                                    </span>
+                                  </div>
+                                ) : (
+                                  message.body
+                                )}
                                 {/* Under the player, never instead of it: the
                                     transcript is an aid, the recording is the
                                     message. */}
@@ -1589,7 +1706,23 @@ export default function Chats() {
                                   ) : (
                                     <span className="msg-transcript is-pending">Розшифровується…</span>
                                   ))}
-                                <span className="message-time">{formatMessageTime(message.created_at)}</span>
+                                <span className="message-time">
+                                  {message.edited_at ? 'змінено · ' : ''}
+                                  {formatMessageTime(message.created_at)}
+                                  {/* Telegram only — WhatsApp Cloud API has no edit
+                                      for outbound business messages. external_id is
+                                      missing on messages sent before editing shipped. */}
+                                  {editingId !== message.id &&
+                                    message.direction === 'outbound' &&
+                                    message.sender === 'agent' &&
+                                    message.sent_by === userId &&
+                                    message.external_id &&
+                                    selectedThread?.channel_type === 'telegram' && (
+                                      <button type="button" className="msg-edit-btn" onClick={() => startEdit(message)} aria-label="Редагувати повідомлення" title="Редагувати">
+                                        <IconEdit size={12} />
+                                      </button>
+                                    )}
+                                </span>
                                 {/* Readonly on purpose: these are the buttons
                                     rendered inside Telegram/WhatsApp, and only
                                     the lead can act on them. */}

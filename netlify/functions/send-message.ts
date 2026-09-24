@@ -17,6 +17,7 @@ interface TelegramApiResponse {
   ok: boolean;
   description?: string;
   error_code?: number;
+  result?: { message_id?: number };
 }
 
 interface ThreadWithLead {
@@ -258,8 +259,10 @@ export const handler: Handler = async (event) => {
       sender: "agent",
       sent_by: userData.user.id,
       meta: attachment ? { attachments: [attachment] } : null,
+      // Telegram's id for this message — what edit-message.ts needs later.
+      external_id: sendData.result?.message_id != null ? String(sendData.result.message_id) : null,
     })
-    .select("id, body, direction, created_at, meta, sender")
+    .select("id, body, direction, created_at, meta, sender, sent_by, external_id, edited_at")
     .single();
 
   if (insertError || !message) {
