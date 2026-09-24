@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimePostgresChangesPayload, RealtimePostgresUpdatePayload } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
 
@@ -43,61 +43,67 @@ export function useLeadIndicators(leadIds: string[]): Record<string, LeadIndicat
   const idsRef = useRef<Set<string>>(new Set())
   idsRef.current = new Set(key ? key.split(',') : [])
 
+  // Only the newest load may write state: a refresh (reconnect / tab focus)
+  // can overlap the load for a changed list, and an older, slower response
+  // must not overwrite a newer one.
+  const loadSeq = useRef(0)
+
+  const loadFor = useCallback(async (ids: string[]) => {
+    const seq = ++loadSeq.current
+
+    const [tasksRes, leadsRes] = await Promise.all([
+      supabase.from('lead_tasks').select('id, lead_id, title, deadline').eq('completed', false).in('lead_id', ids),
+      supabase.from('leads').select('id, manager_notes, blocked_bot').in('id', ids),
+    ])
+
+    if (seq !== loadSeq.current) return
+
+    const next: Record<string, LeadIndicatorEntry> = {}
+
+    if (!tasksRes.error && tasksRes.data) {
+      for (const row of tasksRes.data as { id: string; lead_id: string; title: string; deadline: string | null }[]) {
+        const entry = next[row.lead_id] ?? (next[row.lead_id] = emptyEntry())
+        next[row.lead_id] = withTasks(entry, [...entry.tasks, { id: row.id, title: row.title, deadline: row.deadline }])
+      }
+    }
+
+    if (!leadsRes.error && leadsRes.data) {
+      for (const row of leadsRes.data as { id: string; manager_notes: string | null; blocked_bot: boolean }[]) {
+        if ((!row.manager_notes || !row.manager_notes.trim()) && !row.blocked_bot) continue
+        const entry = next[row.id] ?? (next[row.id] = emptyEntry())
+        if (row.manager_notes && row.manager_notes.trim()) entry.notes = row.manager_notes
+        entry.blockedBot = row.blocked_bot
+      }
+    }
+
+    setData(next)
+  }, [])
+
   useEffect(() => {
     if (!key) {
+      loadSeq.current++
       setData({})
       return
     }
-    const ids = key.split(',')
-
-    let cancelled = false
-
-    async function load() {
-      const [tasksRes, leadsRes] = await Promise.all([
-        supabase.from('lead_tasks').select('id, lead_id, title, deadline').eq('completed', false).in('lead_id', ids),
-        supabase.from('leads').select('id, manager_notes, blocked_bot').in('id', ids),
-      ])
-
-      if (cancelled) return
-
-      const next: Record<string, LeadIndicatorEntry> = {}
-      const now = Date.now()
-
-      function entryFor(id: string) {
-        return next[id] ?? (next[id] = { tasks: [], hasOverdueTask: false, notes: null, blockedBot: false })
-      }
-
-      if (!tasksRes.error && tasksRes.data) {
-        for (const row of tasksRes.data as { id: string; lead_id: string; title: string; deadline: string | null }[]) {
-          const entry = entryFor(row.lead_id)
-          entry.tasks.push({ id: row.id, title: row.title, deadline: row.deadline })
-          if (row.deadline && new Date(row.deadline).getTime() < now) entry.hasOverdueTask = true
-        }
-      }
-
-      if (!leadsRes.error && leadsRes.data) {
-        for (const row of leadsRes.data as { id: string; manager_notes: string | null; blocked_bot: boolean }[]) {
-          if ((!row.manager_notes || !row.manager_notes.trim()) && !row.blocked_bot) continue
-          const entry = entryFor(row.id)
-          if (row.manager_notes && row.manager_notes.trim()) entry.notes = row.manager_notes
-          entry.blockedBot = row.blocked_bot
-        }
-      }
-
-      if (!cancelled) setData(next)
-    }
-
-    void load()
+    void loadFor(key.split(','))
 
     return () => {
-      cancelled = true
+      loadSeq.current++
     }
-  }, [key])
+  }, [key, loadFor])
+
+  // Re-runs the same load for whatever is on screen right now. Used to catch
+  // up after Realtime events that were missed while the channel was offline.
+  const refresh = useCallback(() => {
+    const ids = Array.from(idsRef.current)
+    if (ids.length > 0) void loadFor(ids)
+  }, [loadFor])
 
   // Events are unfiltered on purpose: RLS already limits INSERT/UPDATE to the
   // caller's org, and postgres_changes can't filter DELETE at all (old row is
   // PK-only). Anything for a lead that isn't currently on screen is dropped.
   useEffect(() => {
+    let hasSubscribed = false
     const channel = supabase
       .channel(`lead-indicators-${Math.random().toString(36).slice(2)}`)
       .on(
@@ -151,12 +157,36 @@ export function useLeadIndicators(leadIds: string[]): Record<string, LeadIndicat
           })
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        // The first SUBSCRIBED is the initial connect (the list load above
+        // already covers it). Any later one means the socket dropped and
+        // rejoined — events in between were never delivered, so re-fetch.
+        if (status !== 'SUBSCRIBED') return
+        if (hasSubscribed) refresh()
+        hasSubscribed = true
+      })
 
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [])
+  }, [refresh])
+
+  // A backgrounded tab can silently miss events (throttled timers, sleeping
+  // laptop) without the channel ever reporting a drop. Debounced so quickly
+  // flipping between tabs doesn't fire a load per flip.
+  useEffect(() => {
+    let timer: number | undefined
+    function onVisibility() {
+      if (document.visibilityState !== 'visible') return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(refresh, 400)
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [refresh])
 
   return data
 }
