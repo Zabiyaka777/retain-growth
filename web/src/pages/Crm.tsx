@@ -6,7 +6,9 @@ import { CHANNELS } from '../components/LeadGenLinks'
 import LeadProfile from '../components/LeadProfile'
 import LeadIndicatorIcons from '../components/LeadIndicatorIcons'
 import { useLeadIndicators } from '../hooks/useLeadIndicators'
-import { leadDisplayName } from '../lib/leadDisplayName'
+import { leadDisplayName, leadInitial } from '../lib/leadDisplayName'
+import LeadAvatar from '../components/LeadAvatar'
+import { useLeadAvatars } from '../hooks/useLeadAvatars'
 import {
   IconAlert,
   IconArchiveBox,
@@ -43,6 +45,8 @@ interface LeadDirectoryRow {
   channel_type: string
   status: LeadStatus
   created_at: string
+  avatar_url: string | null
+  avatar_checked_at: string | null
   source_link_id: string | null
   source_name: string | null
   last_active_at: string
@@ -294,6 +298,7 @@ export default function Crm() {
     (statusFilter ? 1 : 0) + tagFilter.length + (sourceFilter ? 1 : 0) + (channelFilter ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0)
 
   const leadIndicators = useLeadIndicators(rows.map((r) => r.id))
+  const leadAvatars = useLeadAvatars(rows)
 
   return (
     <div className="page fade-in">
@@ -482,7 +487,7 @@ export default function Crm() {
                   >
                     <td>
                       <div className="crm-lead-cell">
-                        <span className="thread-avatar">{leadLabel(row).slice(0, 1).replace('@', '')}</span>
+                        <LeadAvatar url={leadAvatars[row.id]} initial={leadInitial(row)} />
                         <span>{leadLabel(row)}</span>
                         <LeadIndicatorIcons entry={leadIndicators[row.id]} />
                       </div>

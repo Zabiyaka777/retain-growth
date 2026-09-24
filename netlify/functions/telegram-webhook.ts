@@ -539,7 +539,9 @@ export const handler: Handler = async (event) => {
           body: JSON.stringify({
             orgId,
             threadId: thread.id,
-            title: username ? `@${username}` : "Новий лід",
+            // Same priority as the dashboard (web/src/lib/leadDisplayName.ts):
+            // Telegram name, then @username.
+            title: [firstName, lastName].filter(Boolean).join(" ").trim() || (username ? `@${username}` : "Новий лід"),
             body: messageText || (media ? "Надіслав(ла) файл" : ""),
           }),
         });

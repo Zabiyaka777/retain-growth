@@ -5945,3 +5945,207 @@ a.lp-cta-custom:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0
 /* Which manager wrote an outbound message (messages.sender_name) — a quiet
    first line inside the bubble, not a second header competing with the text. */
 .msg-sender { display: block; margin-bottom: 0.15rem; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.01em; opacity: 0.72; }
+
+/* ---------- Lead avatars (Telegram photo, initial as fallback) ---------- */
+.thread-avatar.has-photo {
+  background: var(--surface-active);
+  overflow: hidden;
+  padding: 0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.thread-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+/* =====================================================================
+   Chats — glass workspace
+   Depth comes from layers of translucency over a soft ambient light, not
+   from solid dark slabs. backdrop-filter is deliberately limited to the two
+   big panes (thread list, conversation): it is costly to composite, and a
+   long message list must never carry one per bubble. Bubbles get their depth
+   from gradients and soft shadows instead. Scoped to .page-workspace so no
+   other screen changes.
+   ===================================================================== */
+.page-workspace {
+  position: relative;
+  isolation: isolate;
+  --glass-bg: rgba(22, 22, 27, 0.52);
+  --glass-bg-strong: rgba(28, 28, 34, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.08);
+  --glass-line-strong: rgba(255, 255, 255, 0.13);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 38%);
+  --glass-shadow: 0 30px 70px -38px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* The light the glass refracts: three soft pools (brand coral, AI blue, a
+   touch of violet) — plain gradients, no filters, so it costs nothing. */
+.page-workspace::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 42% at 12% 18%, rgba(255, 122, 69, 0.16), transparent 70%),
+    radial-gradient(34% 40% at 88% 12%, rgba(56, 189, 248, 0.12), transparent 70%),
+    radial-gradient(40% 46% at 70% 96%, rgba(167, 139, 250, 0.1), transparent 72%);
+}
+
+.page-workspace .thread-list,
+.page-workspace .thread-detail {
+  background: var(--glass-sheen), var(--glass-bg);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+/* .card's hover lift/border change reads as jitter on a pane you work in. */
+.page-workspace .thread-list:hover,
+.page-workspace .thread-detail:hover {
+  border-color: var(--glass-line);
+  transform: none;
+}
+
+/* Filter pills above the list: glass chips instead of solid buttons. */
+.page-workspace .chats-layout > div:first-child > div:first-child .btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--glass-line);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* ---- thread list ---- */
+.page-workspace .thread-list {
+  gap: 0.125rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.page-workspace .thread-item {
+  border-radius: 16px;
+  padding: 0.625rem 0.6875rem;
+}
+.page-workspace .thread-item:hover {
+  background: rgba(255, 255, 255, 0.045);
+  transform: none;
+}
+.page-workspace .thread-item.active {
+  background: linear-gradient(135deg, rgba(255, 122, 69, 0.2), rgba(255, 122, 69, 0.07));
+  border-color: rgba(255, 122, 69, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 10px 26px -18px rgba(255, 122, 69, 0.7);
+}
+.page-workspace .thread-avatar {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* ---- conversation pane ---- */
+.page-workspace .thread-detail-header {
+  margin: -0.875rem -0.875rem 0;
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid var(--glass-line);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+}
+
+/* Messages dissolve into the header and the composer instead of being cut
+   off by a hard edge — the layered-glass feel, done with a mask on the one
+   scroller rather than a blur. */
+.page-workspace .message-list {
+  padding: 0.875rem 0.5rem 0.75rem 0.125rem;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+/* ---- bubbles: soft, rounder, no hard edges ---- */
+.page-workspace .message-bubble {
+  border-radius: 20px;
+  padding: 0.5625rem 0.875rem;
+}
+.page-workspace .message-bubble.inbound {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom-left-radius: 7px;
+  box-shadow: 0 8px 22px -16px rgba(0, 0, 0, 0.8);
+}
+.page-workspace .message-bubble.outbound {
+  background: linear-gradient(160deg, #ff9563, var(--accent) 60%, #f56d37);
+  border-bottom-right-radius: 7px;
+  box-shadow: 0 10px 26px -16px rgba(255, 122, 69, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.page-workspace .message-bubble.outbound.is-ai {
+  background: linear-gradient(160deg, #6dd0fb, var(--ai) 60%, #22a6e4);
+  box-shadow: 0 10px 26px -16px rgba(56, 189, 248, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.page-workspace .feed-system-marker,
+.page-workspace .feed-system-block {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--glass-line);
+}
+
+/* Entrance for a message that arrived while the thread was open (see
+   settledIdsRef in Chats.tsx): fade and a short rise instead of a jump.
+   Transform/opacity only — composited, no layout work. */
+@keyframes chatBubbleIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.page-workspace .message-bubble.is-new {
+  animation: chatBubbleIn 320ms var(--ease) both;
+}
+.page-workspace .message-bubble.outbound.is-new {
+  transform-origin: bottom right;
+}
+.page-workspace .message-bubble.inbound.is-new {
+  transform-origin: bottom left;
+}
+
+/* ---- composer: one glass bar ---- */
+.page-workspace .reply-box {
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid var(--glass-line-strong);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 34px -24px rgba(0, 0, 0, 0.9);
+  transition: border-color var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
+}
+.page-workspace .reply-box:focus-within {
+  border-color: rgba(255, 122, 69, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 4px rgba(255, 122, 69, 0.1), 0 14px 34px -24px rgba(0, 0, 0, 0.9);
+}
+.page-workspace .reply-box textarea {
+  min-height: 44px;
+  padding: 0.625rem 0.75rem;
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+}
+.page-workspace .reply-box textarea:focus {
+  box-shadow: none;
+}
+.page-workspace .reply-box .btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-workspace .message-bubble.is-new { animation: none; }
+}
+
+/* Older engines without backdrop-filter: a denser tint keeps text legible. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .page-workspace .thread-list,
+  .page-workspace .thread-detail {
+    background: var(--glass-sheen), rgba(20, 20, 24, 0.94);
+  }
+}

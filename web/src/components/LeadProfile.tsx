@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+import { leadDisplayName, leadInitial } from '../lib/leadDisplayName'
+import LeadAvatar from './LeadAvatar'
+import { useLeadAvatars } from '../hooks/useLeadAvatars'
 import { IconArchiveBox, IconBan, IconBell, IconBellOff, IconCheckCircle, IconClose, IconInbox, IconSpinner, IconTrash } from './icons'
 
 type LeadStatus = 'active' | 'blocked' | 'archived'
@@ -10,6 +13,11 @@ type ThreadStatus = 'open' | 'closed'
 interface LeadCore {
   id: string
   username: string | null
+  first_name: string | null
+  last_name: string | null
+  channel_type: string
+  avatar_url: string | null
+  avatar_checked_at: string | null
   external_id: string
   status: LeadStatus
   created_at: string
@@ -94,9 +102,10 @@ interface LeadTask {
   created_at: string
 }
 
-function leadLabel(lead: Pick<LeadCore, 'username' | 'external_id'> | null) {
-  if (!lead) return 'Без імені'
-  return lead.username ? `@${lead.username}` : lead.external_id
+// Same priority as everywhere else (lib/leadDisplayName): Telegram name,
+// then @username, then the raw id.
+function leadLabel(lead: Pick<LeadCore, 'username' | 'first_name' | 'last_name' | 'external_id'> | null) {
+  return leadDisplayName(lead)
 }
 
 async function getAccessToken() {
@@ -128,6 +137,7 @@ interface LeadProfileProps {
 
 export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusChange, onThreadClosed, onThreadOpened, onDeleted }: LeadProfileProps) {
   const [lead, setLead] = useState<LeadCore | null>(null)
+  const leadAvatars = useLeadAvatars(lead ? [lead] : [])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [tags, setTags] = useState<TagRef[]>([])
@@ -227,7 +237,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
       ] = await Promise.all([
         supabase
           .from('leads')
-          .select('id, username, external_id, status, created_at, source_link_id, manager_notes, current_stage_id, subscribed')
+          .select('id, username, first_name, last_name, channel_type, avatar_url, avatar_checked_at, external_id, status, created_at, source_link_id, manager_notes, current_stage_id, subscribed')
           .eq('id', leadId)
           .single(),
         supabase.from('lead_tags').select('tag_id, tags ( name )').eq('lead_id', leadId),
@@ -1057,16 +1067,20 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
   return (
     <div className="profile-panel">
       <div className="profile-drawer-header">
-        <span className="thread-avatar">{leadLabel(lead).slice(0, 1).replace('@', '')}</span>
+        <LeadAvatar url={leadAvatars[lead.id]} initial={leadInitial(lead)} />
         <div className="profile-drawer-header-text">
           <div className="thread-item-name">{leadLabel(lead)}</div>
-          {/* leadLabel already prefers @username, so this only adds
-              information when there wasn't one to begin with. */}
-          {!lead.username && (
+          {/* The title is the Telegram name when there is one, so the
+              @username goes underneath — or the note that there isn't one. */}
+          {lead.username && leadLabel(lead) !== `@${lead.username}` ? (
+            <div className="settings-row-hint" style={{ marginTop: 0 }}>
+              @{lead.username}
+            </div>
+          ) : !lead.username ? (
             <div className="settings-row-hint" style={{ marginTop: 0 }}>
               Без нікнейму
             </div>
-          )}
+          ) : null}
         </div>
         {onClose && (
           <button type="button" className="btn-icon-ghost" onClick={onClose} aria-label="Закрити профіль">

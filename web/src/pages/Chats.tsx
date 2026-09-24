@@ -11,7 +11,9 @@ import HoverTooltip from '../components/HoverTooltip'
 import { useLeadIndicators } from '../hooks/useLeadIndicators'
 import { useAiPausedThreads } from '../hooks/useAiPausedThreads'
 import { setActiveThreadId } from '../lib/activeThread'
-import { leadDisplayName } from '../lib/leadDisplayName'
+import { leadDisplayName, leadInitial } from '../lib/leadDisplayName'
+import LeadAvatar from '../components/LeadAvatar'
+import { useLeadAvatars } from '../hooks/useLeadAvatars'
 
 type LeadStatus = 'active' | 'blocked' | 'archived'
 
@@ -25,6 +27,8 @@ interface LeadRef {
   created_at: string
   source_link_id: string | null
   manager_notes: string | null
+  avatar_url: string | null
+  avatar_checked_at: string | null
 }
 
 // Set by the backend for messages that aren't ordinary text — a lead-gen
@@ -281,7 +285,7 @@ const THREADS_PAGE_SIZE = 20
 const MESSAGES_PAGE_SIZE = 20
 
 const THREAD_SELECT =
-  'id, channel_type, created_at, updated_at, unread_count, status, leads ( id, username, first_name, last_name, external_id, status, created_at, source_link_id, manager_notes ), messages ( id, body, direction, created_at )'
+  'id, channel_type, created_at, updated_at, unread_count, status, leads ( id, username, first_name, last_name, external_id, status, created_at, source_link_id, manager_notes, avatar_url, avatar_checked_at ), messages ( id, body, direction, created_at )'
 
 interface MessageInsertPayload {
   id: string
@@ -593,6 +597,11 @@ export default function Chats() {
   // render (or the frame after, if Realtime already added the row) jumps to
   // the bottom — regardless of any unread divider still in the list.
   const scrollToBottomRef = useRef(false)
+  // Ids already on screen when the thread opened (or loaded as an older
+  // page). Only messages outside this set — arriving live, or just sent — get
+  // the fade-and-rise entrance, so opening a thread or paging back through
+  // history never makes the whole list float in.
+  const settledIdsRef = useRef<Set<string>>(new Set())
   const firstUnreadRef = useRef<HTMLDivElement>(null)
   const [firstUnreadId, setFirstUnreadId] = useState<string | null>(null)
 
@@ -1042,6 +1051,7 @@ export default function Chats() {
         if (cancelled) return
         if (!error && data) {
           const rows = (data as MessageRow[]).slice().reverse()
+          settledIdsRef.current = new Set(rows.map((r) => r.id))
           setMessages(rows)
           setMessagesCursor(rows[0]?.created_at ?? null)
           setMessagesHasMore(data.length === MESSAGES_PAGE_SIZE)
@@ -1084,6 +1094,7 @@ export default function Chats() {
 
     if (!error && data) {
       const older = (data as MessageRow[]).slice().reverse()
+      older.forEach((r) => settledIdsRef.current.add(r.id))
       setMessages((prev) => [...older, ...prev])
       setMessagesCursor(older[0]?.created_at ?? messagesCursor)
       setMessagesHasMore(data.length === MESSAGES_PAGE_SIZE)
@@ -1349,6 +1360,11 @@ export default function Chats() {
   // recompute this every time onlyUnread/showClosed toggles.
   const leadIds = threads.map((t) => t.leads?.id).filter((id): id is string => Boolean(id))
   const leadIndicators = useLeadIndicators(leadIds)
+  const leadAvatars = useLeadAvatars(
+    threads.flatMap((t) =>
+      t.leads ? [{ id: t.leads.id, channel_type: t.channel_type, avatar_url: t.leads.avatar_url, avatar_checked_at: t.leads.avatar_checked_at }] : [],
+    ),
+  )
   const aiPausedByThread = useAiPausedThreads(threads.map((t) => t.id))
 
   return (
@@ -1443,7 +1459,7 @@ export default function Chats() {
                       className={`thread-item${thread.id === selectedId ? ' active' : ''}${leadStatus === 'blocked' ? ' thread-item-blocked' : ''}`}
                       onClick={() => selectThread(thread.id)}
                     >
-                      <span className="thread-avatar">{leadLabel(thread.leads).slice(0, 1).replace('@', '')}</span>
+                      <LeadAvatar url={thread.leads ? leadAvatars[thread.leads.id] : null} initial={leadInitial(thread.leads)} />
                       <span className="thread-item-body">
                         <span className="thread-item-top">
                           <span className="thread-item-name">{leadLabel(thread.leads)}</span>
@@ -1520,7 +1536,7 @@ export default function Chats() {
             ) : (
               <>
                 <div className="thread-detail-header">
-                  <span className="thread-avatar">{leadLabel(selectedThread.leads).slice(0, 1).replace('@', '')}</span>
+                  <LeadAvatar url={selectedThread.leads ? leadAvatars[selectedThread.leads.id] : null} initial={leadInitial(selectedThread.leads)} />
                   <div className="thread-detail-identity">
                     <div className="thread-item-name">
                       {leadLabel(selectedThread.leads)}
@@ -1690,7 +1706,7 @@ export default function Chats() {
                               </div>
                             ) : (
                               <div
-                                className={`message-bubble ${message.direction}${message.sender === 'ai' ? ' is-ai' : ''}`}
+                                className={`message-bubble ${message.direction}${message.sender === 'ai' ? ' is-ai' : ''}${settledIdsRef.current.has(message.id) ? '' : ' is-new'}`}
                               >
                                 {/* Who among the managers answered — several can
                                     share one inbox. Manager replies only: AI and
