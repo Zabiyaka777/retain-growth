@@ -1,7 +1,38 @@
 import { Fragment, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { IconAlert, IconChevronDown, IconChevronUp, IconHistory, IconSpinner, IconTarget, IconTrendingUp, IconUpload } from '../components/icons'
+import {
+  MAX_PERIOD_DAYS,
+  convertSpend,
+  inRange,
+  listDays,
+  pctChange,
+  previousPeriod,
+  resolvePeriod,
+  roiPercent,
+  rowOverlaps,
+  summarizeSales,
+  summarizeSpend,
+  todayUtc,
+  type AdSpendSummaryRow,
+  type PeriodPreset,
+  type StageHistoryRow,
+} from '../lib/analyticsFinance'
+import {
+  IconAlert,
+  IconChevronDown,
+  IconChevronUp,
+  IconHistory,
+  IconPercent,
+  IconSparkles,
+  IconSpinner,
+  IconTarget,
+  IconTrendingUp,
+  IconUpload,
+  IconUsers,
+  IconWallet,
+} from '../components/icons'
 
 interface LeadGenLinkRow {
   id: string
@@ -35,12 +66,33 @@ interface DayBucket {
   unsubscribes: number
 }
 
-const DAYS_WINDOW = 30
+// Whole 1000-row pages until one comes back short — PostgREST caps a single
+// response at 1000 rows, which would silently truncate any sum built on top.
+// Callers must order by a unique column so pages never overlap or skip.
+async function fetchAll<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const PAGE = 1000
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1)
+    if (error) return { data: out, error }
+    out.push(...(data ?? []))
+    if (!data || data.length < PAGE) break
+  }
+  return { data: out, error: null }
+}
 
-function buildLinkStats(links: LeadGenLinkRow[], events: SubscriptionEventRow[], leads: LeadSourceRow[]): LinkStats[] {
+function buildLinkStats(
+  links: LeadGenLinkRow[],
+  events: SubscriptionEventRow[],
+  leads: LeadSourceRow[],
+  from: string,
+  to: string,
+): LinkStats[] {
   const eventTotals = new Map<string, { subscribes: number; unsubscribes: number }>()
   for (const ev of events) {
-    if (!ev.link_id) continue
+    if (!ev.link_id || !inRange(ev.created_at, from, to)) continue
     const totals = eventTotals.get(ev.link_id) ?? { subscribes: 0, unsubscribes: 0 }
     if (ev.event_type === 'subscribe') totals.subscribes += 1
     else totals.unsubscribes += 1
@@ -69,23 +121,15 @@ function buildLinkStats(links: LeadGenLinkRow[], events: SubscriptionEventRow[],
 // Buckets by the event's UTC calendar date (created_at.slice(0, 10)) — a
 // simple day grouping, not a timezone-aware local-day one. Fine for a
 // "простий" trend view; a precise per-org-timezone cutoff would need more
-// than this page asks for.
-function buildDailyBuckets(events: SubscriptionEventRow[], linkId: string): DayBucket[] {
-  const days: DayBucket[] = []
-  const today = new Date()
-  today.setUTCHours(0, 0, 0, 0)
-
-  for (let i = DAYS_WINDOW - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setUTCDate(d.getUTCDate() - i)
-    days.push({ date: d.toISOString().slice(0, 10), subscribes: 0, unsubscribes: 0 })
-  }
+// than this page asks for. linkId null = every event (the org-wide card).
+function buildDailyBuckets(events: SubscriptionEventRow[], linkId: string | null, from: string, to: string): DayBucket[] {
+  const days: DayBucket[] = listDays(from, to).map((date) => ({ date, subscribes: 0, unsubscribes: 0 }))
 
   const byDate = new Map(days.map((d) => [d.date, d]))
   for (const ev of events) {
-    if (ev.link_id !== linkId) continue
+    if (linkId !== null && ev.link_id !== linkId) continue
     const bucket = byDate.get(ev.created_at.slice(0, 10))
-    if (!bucket) continue // outside the 30-day window
+    if (!bucket) continue // outside the selected period
     if (ev.event_type === 'subscribe') bucket.subscribes += 1
     else bucket.unsubscribes += 1
   }
@@ -116,7 +160,7 @@ function DailyChart({ days }: { days: DayBucket[] }) {
           <i className="analytics-legend-dot analytics-legend-unsub" /> Відписки
         </span>
       </div>
-      <svg className="analytics-chart" viewBox={`0 0 ${width} ${CHART_HEIGHT}`} preserveAspectRatio="none" role="img" aria-label="Підписки та відписки за останні 30 днів">
+      <svg className="analytics-chart" viewBox={`0 0 ${width} ${CHART_HEIGHT}`} preserveAspectRatio="none" role="img" aria-label="Підписки та відписки за обраний період">
         {days.map((day, i) => {
           const x = i * DAY_SLOT
           const subHeight = (day.subscribes / max) * (CHART_HEIGHT - 4)
@@ -239,13 +283,6 @@ interface ConversionNodeRow {
   config: { stage_id?: string } | null
 }
 
-interface StageHistoryRow {
-  lead_id: string
-  stage_id: string
-  value: number | null
-  entered_at: string
-}
-
 interface StageFunnelStep {
   id: string
   name: string
@@ -327,12 +364,73 @@ function countRowsByImport(rows: { import_id: string }[]): Map<string, number> {
   return counts
 }
 
+function formatSigned(value: number, digits = 0): string {
+  return `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(digits)}`
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  const W = 100
+  const H = 28
+  const max = Math.max(...values, 0)
+  if (values.length < 2 || max <= 0) return <div className="kpi-spark kpi-spark-empty" aria-hidden="true" />
+  const step = W / (values.length - 1)
+  const pts = values.map((v, i) => `${(i * step).toFixed(2)},${(H - 2 - (v / max) * (H - 4)).toFixed(2)}`)
+  return (
+    <svg className="kpi-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+      <polygon className="kpi-spark-fill" points={`0,${H} ${pts.join(' ')} ${W},${H}`} />
+      <polyline className="kpi-spark-line" points={pts.join(' ')} />
+    </svg>
+  )
+}
+
+interface KpiCardProps {
+  icon: React.ReactNode
+  label: string
+  value: string
+  /** Change vs the previous period of the same length; null = nothing to compare. */
+  delta: { text: string; tone: 'up' | 'down' | 'flat' } | null
+  hint?: React.ReactNode
+  spark?: number[]
+}
+
+function KpiCard({ icon, label, value, delta, hint, spark }: KpiCardProps) {
+  return (
+    <div className="card kpi-card">
+      <div className="kpi-card-top">
+        <span className="kpi-label">{label}</span>
+        <span className="kpi-icon" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
+      <div className="kpi-value">{value}</div>
+      <div className="kpi-delta-row">
+        {delta ? (
+          <>
+            <span className={`kpi-delta is-${delta.tone}`}>{delta.text}</span>
+            <span className="kpi-delta-note">до попереднього періоду</span>
+          </>
+        ) : (
+          <span className="kpi-delta-note">немає бази для порівняння</span>
+        )}
+      </div>
+      {spark && <Sparkline values={spark} />}
+      {hint && <div className="kpi-hint">{hint}</div>}
+    </div>
+  )
+}
+
 async function getAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession()
   return data.session?.access_token ?? null
 }
 
 export default function Analytics() {
+  // One period drives every block on the page.
+  const [preset, setPreset] = useState<PeriodPreset>(30)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const period = useMemo(() => resolvePeriod(preset, customFrom, customTo), [preset, customFrom, customTo])
+
   const [links, setLinks] = useState<LeadGenLinkRow[]>([])
   const [events, setEvents] = useState<SubscriptionEventRow[]>([])
   const [leadSources, setLeadSources] = useState<LeadSourceRow[]>([])
@@ -346,8 +444,12 @@ export default function Analytics() {
     async function load() {
       const [linksRes, eventsRes, leadsRes] = await Promise.all([
         supabase.from('lead_gen_links').select('id, name').order('name'),
-        supabase.from('lead_subscription_events').select('link_id, event_type, created_at'),
-        supabase.from('leads').select('source_link_id').not('source_link_id', 'is', null),
+        fetchAll<SubscriptionEventRow>((a, b) =>
+          supabase.from('lead_subscription_events').select('link_id, event_type, created_at').order('id').range(a, b),
+        ),
+        fetchAll<LeadSourceRow>((a, b) =>
+          supabase.from('leads').select('source_link_id').not('source_link_id', 'is', null).order('id').range(a, b),
+        ),
       ])
 
       if (cancelled) return
@@ -370,7 +472,10 @@ export default function Analytics() {
     }
   }, [])
 
-  const rows = useMemo(() => buildLinkStats(links, events, leadSources), [links, events, leadSources])
+  const rows = useMemo(
+    () => buildLinkStats(links, events, leadSources, period.from, period.to),
+    [links, events, leadSources, period.from, period.to],
+  )
 
   // ---- Ad spend section state — independent of everything above ----
   const [adSpendImports, setAdSpendImports] = useState<AdSpendImportRow[]>([])
@@ -383,8 +488,6 @@ export default function Analytics() {
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [matchingRowId, setMatchingRowId] = useState<string | null>(null)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -448,20 +551,13 @@ export default function Analytics() {
   // fetched (all leads with a source_link_id) — a second full leads fetch
   // here would just duplicate that query for the same data.
   // Overlap semantics: a row shows when its reporting window touches the
-  // selected range at all, not only when fully contained. Rows imported
-  // without any reporting dates can't be placed on the timeline, so an
-  // active filter hides them rather than guessing where they belong.
-  const visibleAdSpendRows = useMemo(() => {
-    if (!dateFrom && !dateTo) return adSpendRows
-    return adSpendRows.filter((row) => {
-      const start = row.report_start_date ?? row.report_end_date
-      const end = row.report_end_date ?? row.report_start_date
-      if (!start || !end) return false
-      if (dateFrom && end < dateFrom) return false
-      if (dateTo && start > dateTo) return false
-      return true
-    })
-  }, [adSpendRows, dateFrom, dateTo])
+  // page period at all, not only when fully contained. Rows imported without
+  // any reporting dates can't be placed on the timeline, so they're hidden
+  // rather than guessed at.
+  const visibleAdSpendRows = useMemo(
+    () => adSpendRows.filter((row) => rowOverlaps(row, period.from, period.to)),
+    [adSpendRows, period.from, period.to],
+  )
 
   const selectedImport = useMemo(
     () => adSpendImports.find((i) => i.id === selectedImportId) ?? null,
@@ -496,7 +592,9 @@ export default function Analytics() {
     async function load() {
       const [stagesRes, historyRes, funnelsRes, linksRes, leadLinksRes, nodesRes] = await Promise.all([
         supabase.from('funnel_stages').select('id, name, position, org_id').order('position'),
-        supabase.from('lead_stage_history').select('lead_id, stage_id, value, entered_at'),
+        fetchAll<StageHistoryRow>((a, b) =>
+          supabase.from('lead_stage_history').select('lead_id, stage_id, value, entered_at').order('id').range(a, b),
+        ),
         supabase.from('funnels').select('id, name').order('name'),
         supabase.from('lead_gen_links').select('id, funnel_id'),
         // Own leads fetch: the Підписки-за-джерелом section's one drops leads
@@ -537,15 +635,111 @@ export default function Analytics() {
   )
 
   const visibleStageHistory = useMemo(() => {
-    if (!selectedFunnelId) return stageHistory
+    const inPeriod = stageHistory.filter((row) => inRange(row.entered_at, period.from, period.to))
+    if (!selectedFunnelId) return inPeriod
     const allowed = leadIdsForFunnel(selectedFunnelId, linkFunnels, leadLinks)
-    return stageHistory.filter((row) => allowed.has(row.lead_id))
-  }, [selectedFunnelId, stageHistory, linkFunnels, leadLinks])
+    return inPeriod.filter((row) => allowed.has(row.lead_id))
+  }, [selectedFunnelId, stageHistory, linkFunnels, leadLinks, period.from, period.to])
 
   const funnelSteps = useMemo(
     () => buildStageFunnel(visibleStages, visibleStageHistory),
     [visibleStages, visibleStageHistory],
   )
+
+  // ---- Base currency + manual rates (edited in Налаштування → Організація) ----
+  const [baseCurrency, setBaseCurrency] = useState('UAH')
+  const [rates, setRates] = useState<Map<string, number>>(new Map())
+  const [currencyLoading, setCurrencyLoading] = useState(true)
+  const [currencyError, setCurrencyError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all([
+      supabase.from('organizations').select('base_currency').maybeSingle(),
+      supabase.from('org_currency_rates').select('currency, rate_to_base'),
+    ]).then(([orgRes, ratesRes]) => {
+      if (cancelled) return
+      const firstError = orgRes.error ?? ratesRes.error
+      if (firstError) {
+        setCurrencyError(firstError.message)
+      } else {
+        if (orgRes.data?.base_currency) setBaseCurrency((orgRes.data.base_currency as string).toUpperCase())
+        setRates(
+          new Map(((ratesRes.data ?? []) as { currency: string; rate_to_base: number }[]).map((r) => [r.currency, Number(r.rate_to_base)])),
+        )
+      }
+      setCurrencyLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // The KPI sums cover every import, while the table below shows just the
+  // selected one — so this is its own fetch of the whole org's rows. Refetched
+  // whenever the import list changes (upload / delete).
+  const [allAdRows, setAllAdRows] = useState<AdSpendSummaryRow[]>([])
+  const [allAdLoading, setAllAdLoading] = useState(true)
+  const [allAdError, setAllAdError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (adSpendLoading) return
+    let cancelled = false
+    void fetchAll<AdSpendSummaryRow>((a, b) =>
+      supabase.from('ad_spend_rows').select('id, spend, currency, report_start_date, report_end_date').order('id').range(a, b),
+    ).then(({ data, error: fetchError }) => {
+      if (cancelled) return
+      if (fetchError) setAllAdError(fetchError.message)
+      else {
+        setAllAdError(null)
+        setAllAdRows(data)
+      }
+      setAllAdLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [adSpendLoading, adSpendImports])
+
+  // «Продажа» is the built-in stage every org shares (org_id null).
+  const salesStageId = useMemo(() => stages.find((st) => st.org_id === null && st.name === 'Продажа')?.id ?? null, [stages])
+  const prev = useMemo(() => previousPeriod(period), [period])
+
+  const sales = useMemo(() => summarizeSales(stageHistory, salesStageId, period.from, period.to), [stageHistory, salesStageId, period])
+  const prevSales = useMemo(() => summarizeSales(stageHistory, salesStageId, prev.from, prev.to), [stageHistory, salesStageId, prev])
+  const spend = useMemo(() => summarizeSpend(allAdRows, period.from, period.to, baseCurrency, rates), [allAdRows, period, baseCurrency, rates])
+  const prevSpend = useMemo(() => summarizeSpend(allAdRows, prev.from, prev.to, baseCurrency, rates), [allAdRows, prev, baseCurrency, rates])
+  const roi = roiPercent(sales.total, spend.total)
+  const prevRoi = roiPercent(prevSales.total, prevSpend.total)
+
+  const salesSpark = useMemo(() => listDays(period.from, period.to).map((d) => sales.byDay.get(d) ?? 0), [sales, period])
+  const dailyAll = useMemo(() => buildDailyBuckets(events, null, period.from, period.to), [events, period])
+  const totalSubscribes = useMemo(() => dailyAll.reduce((n, d) => n + d.subscribes, 0), [dailyAll])
+  const totalUnsubscribes = useMemo(() => dailyAll.reduce((n, d) => n + d.unsubscribes, 0), [dailyAll])
+  const datelessAdRows = useMemo(() => allAdRows.filter((r) => !r.report_start_date && !r.report_end_date).length, [allAdRows])
+
+  const kpiLoading = loading || stageLoading || allAdLoading || currencyLoading
+  const kpiError = error ?? stageError ?? allAdError ?? currencyError
+
+  // Rows the spend sum had to leave out, and why — shown under the card.
+  const spendExclusions: string[] = []
+  if (spend.missingRates.length > 0) spendExclusions.push(`немає курсу для ${spend.missingRates.join(', ')}`)
+  if (spend.noCurrency > 0) spendExclusions.push(`${spend.noCurrency} ${spend.noCurrency === 1 ? 'рядок' : 'рядків'} без валюти`)
+  if (datelessAdRows > 0) spendExclusions.push(`${datelessAdRows} ${datelessAdRows === 1 ? 'рядок' : 'рядків'} без дат звіту`)
+
+  function moneyDelta(current: number, previous: number): KpiCardProps['delta'] {
+    const change = pctChange(current, previous)
+    if (change === null) return null
+    return { text: `${formatSigned(change, 1)}%`, tone: change > 0 ? 'up' : change < 0 ? 'down' : 'flat' }
+  }
+
+  function selectCustomPeriod() {
+    if (preset !== 'custom' && !customFrom && !customTo) {
+      setCustomFrom(period.from)
+      setCustomTo(period.to)
+    }
+    setPreset('custom')
+  }
 
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -665,7 +859,134 @@ export default function Analytics() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Глибока аналітика</h1>
-          <p className="page-description">Підписки та відписки по джерелах лідогенерації</p>
+          <p className="page-description">Продажі, витрати та ROI за обраний період; підписки по джерелах лідогенерації</p>
+        </div>
+
+        <div className="period-picker">
+          <div className="period-seg" role="group" aria-label="Період">
+            {([7, 30, 90] as const).map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`period-seg-btn${preset === n ? ' active' : ''}`}
+                onClick={() => setPreset(n)}
+                aria-pressed={preset === n}
+              >
+                {n} днів
+              </button>
+            ))}
+            <button
+              type="button"
+              className={`period-seg-btn${preset === 'custom' ? ' active' : ''}`}
+              onClick={selectCustomPeriod}
+              aria-pressed={preset === 'custom'}
+            >
+              Період
+            </button>
+          </div>
+          {preset === 'custom' && (
+            <div className="crm-date-range">
+              <input
+                id="analytics-period-from"
+                type="date"
+                className="input"
+                value={customFrom}
+                max={customTo || todayUtc()}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                aria-label="Початок періоду"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+              />
+              <span className="crm-date-sep">—</span>
+              <input
+                id="analytics-period-to"
+                type="date"
+                className="input"
+                value={customTo}
+                min={customFrom || undefined}
+                max={todayUtc()}
+                onChange={(e) => setCustomTo(e.target.value)}
+                aria-label="Кінець періоду"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+              />
+            </div>
+          )}
+          <span className="period-range-note">
+            {formatPeriodDate(period.from)} – {formatPeriodDate(period.to)} · {period.days} дн.
+            {period.clamped ? ` (максимум ${MAX_PERIOD_DAYS})` : ''}
+          </span>
+        </div>
+      </div>
+
+      {kpiError && (
+        <div className="alert alert-error">
+          <IconAlert size={16} />
+          <span>Не вдалося завантажити дані для показників: {kpiError}</span>
+        </div>
+      )}
+
+      <div className="kpi-grid">
+        <KpiCard
+          icon={<IconWallet size={16} />}
+          label="Сума продажів"
+          value={kpiLoading ? '…' : `${formatMoney(sales.total)} ${baseCurrency}`}
+          delta={kpiLoading ? null : moneyDelta(sales.total, prevSales.total)}
+          spark={kpiLoading ? undefined : salesSpark}
+          hint={kpiLoading ? undefined : `${sales.leads} ${sales.leads === 1 ? 'лід' : 'лідів'} на стадії «Продажа»`}
+        />
+        <KpiCard
+          icon={<IconTrendingUp size={16} />}
+          label="Витрати на рекламу"
+          value={kpiLoading ? '…' : `${formatMoney(spend.total)} ${baseCurrency}`}
+          delta={kpiLoading ? null : moneyDelta(spend.total, prevSpend.total)}
+          hint={
+            kpiLoading ? undefined : (
+              <>
+                {spend.counted} {spend.counted === 1 ? 'рядок' : 'рядків'} з усіх імпортів, що перетинають період (беруться повністю).
+                {spendExclusions.length > 0 && (
+                  <span className="kpi-warning">
+                    {' '}
+                    Не враховано: {spendExclusions.join('; ')}.{' '}
+                    <Link to="/dashboard/settings?tab=organization">Курси валют</Link>
+                  </span>
+                )}
+              </>
+            )
+          }
+        />
+        <KpiCard
+          icon={<IconPercent size={16} />}
+          label="Чистий ROI"
+          value={kpiLoading ? '…' : roi === null ? '—' : `${formatSigned(roi, 1)}%`}
+          delta={
+            kpiLoading || roi === null || prevRoi === null
+              ? null
+              : { text: `${formatSigned(roi - prevRoi, 1)} п.п.`, tone: roi > prevRoi ? 'up' : roi < prevRoi ? 'down' : 'flat' }
+          }
+          hint={kpiLoading ? undefined : roi === null ? 'Немає витрат за період — ROI не рахується' : '(продажі − витрати) / витрати'}
+        />
+        <div className="card kpi-card kpi-card-subs">
+          <div className="kpi-card-top">
+            <span className="kpi-label">Підписки / відписки</span>
+            <span className="kpi-icon" aria-hidden="true">
+              <IconUsers size={16} />
+            </span>
+          </div>
+          <div className="kpi-value">
+            {loading ? (
+              '…'
+            ) : (
+              <>
+                <span className="analytics-net-positive">+{totalSubscribes}</span>
+                <span className="kpi-value-sep"> / </span>
+                <span className="analytics-net-negative">−{totalUnsubscribes}</span>
+              </>
+            )}
+          </div>
+          {!loading && <DailyChart days={dailyAll} />}
         </div>
       </div>
 
@@ -723,7 +1044,7 @@ export default function Analytics() {
                       {expanded && (
                         <tr className="analytics-expanded-row">
                           <td colSpan={5}>
-                            <DailyChart days={buildDailyBuckets(events, row.linkId)} />
+                            <DailyChart days={buildDailyBuckets(events, row.linkId, period.from, period.to)} />
                           </td>
                         </tr>
                       )}
@@ -782,38 +1103,9 @@ export default function Analytics() {
               )}
             </div>
 
-            <div className="analytics-filter-row">
-              <span className="analytics-filter-label">Період звіту:</span>
-              <div className="crm-date-range">
-                <input
-                  type="date"
-                  className="input"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  aria-label="Період звіту від"
-                />
-                <span className="crm-date-sep">—</span>
-                <input
-                  type="date"
-                  className="input"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  aria-label="Період звіту до"
-                />
-              </div>
-              {(dateFrom || dateTo) && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => {
-                    setDateFrom('')
-                    setDateTo('')
-                  }}
-                >
-                  Скинути
-                </button>
-              )}
-            </div>
+            <p className="settings-row-hint" style={{ padding: '0 1rem 0.75rem' }}>
+              Показані рядки, чий період звіту перетинає обраний угорі сторінки період.
+            </p>
 
             <div className="crm-table-wrap">
               <table className="crm-table">
@@ -867,6 +1159,15 @@ export default function Analytics() {
                           <td>
                             {row.spend.toFixed(2)}
                             {row.currency ? ` ${row.currency}` : ''}
+                            {(() => {
+                              const converted = convertSpend(row, baseCurrency, rates)
+                              if ('value' in converted) return null
+                              return (
+                                <span className="badge badge-warning analytics-no-rate">
+                                  {converted.excluded === 'no_currency' ? 'немає валюти' : 'немає курсу'}
+                                </span>
+                              )
+                            })()}
                           </td>
                           <td>{results ?? <span className="crm-cell-muted">—</span>}</td>
                           <td>
@@ -945,8 +1246,8 @@ export default function Analytics() {
             </div>
 
             <p className="settings-row-hint stage-funnel-hint">
-              Кількість — унікальні ліди, які будь-коли досягали етапу. Сума — остання зафіксована сума на цьому етапі
-              по кожному ліду.
+              Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді
+              сума на етапі по кожному ліду.
               {selectedFunnelId
                 ? ' Показані лише ліди, що прийшли з посилань цього тунелю — прямі переходи без посилання сюди не потрапляють.'
                 : ''}
@@ -977,6 +1278,24 @@ export default function Analytics() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Placeholder only: reserves the slot in the layout. Deliberately inert —
+          no handlers, no data, not focusable — until the real AI logic exists. */}
+      <div className="card ai-reco-card" aria-disabled="true">
+        <div className="ai-reco-head">
+          <span className="kpi-icon" aria-hidden="true">
+            <IconSparkles size={16} />
+          </span>
+          <h3>Рекомендації від AI по оптимізації</h3>
+          <span className="badge badge-neutral">Незабаром</span>
+        </div>
+        <ul className="ai-reco-list" aria-label="Приклади майбутніх рекомендацій">
+          <li>Кампанія «Літня розпродаж — Instagram» дає найдешевші ліди — варто збільшити бюджет.</li>
+          <li>Кампанія «Ретаргетинг — Telegram» витрачає бюджет без продажів за 14 днів — перегляньте аудиторію або зупиніть.</li>
+          <li>Ліди з посилання «Вебінар» частіше відписуються на 3-й день — варто змінити повідомлення воронки на цьому кроці.</li>
+        </ul>
+        <p className="ai-reco-note">Приклад тексту — реальні рекомендації з’являться після запуску функції.</p>
       </div>
 
       {/* Portalled to document.body, like the delay/condition node modals —

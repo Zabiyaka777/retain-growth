@@ -608,3 +608,23 @@ export function IconCreditCard(props: IconProps) {
     </svg>
   )
 }
+
+export function IconWallet(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18a1 1 0 0 1 1 1v2" />
+      <path d="M4 7.5V17a2 2 0 0 0 2 2h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H6.5A2.5 2.5 0 0 1 4 7.5Z" />
+      <circle cx="15.5" cy="13.5" r="1.1" />
+    </svg>
+  )
+}
+
+export function IconPercent(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M19 5 5 19" />
+      <circle cx="7" cy="7" r="2.2" />
+      <circle cx="17" cy="17" r="2.2" />
+    </svg>
+  )
+}

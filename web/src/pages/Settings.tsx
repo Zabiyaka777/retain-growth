@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { IconAlert, IconBuilding, IconCheckCircle, IconPlug, IconSparkles, IconSpinner } from '../components/icons'
+import { IconAlert, IconBuilding, IconCheckCircle, IconPlug, IconPlus, IconSparkles, IconSpinner, IconTrash } from '../components/icons'
 
 type Tab = 'integrations' | 'organization' | 'ai'
 
@@ -708,23 +708,250 @@ function AiPanel() {
 
 function OrganizationPanel() {
   return (
-    <div className="card" style={{ maxWidth: 480 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">Назва організації</div>
-            <div className="settings-row-hint">Використовується у звітах та повідомленнях</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="card" style={{ maxWidth: 480 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">Назва організації</div>
+              <div className="settings-row-hint">Використовується у звітах та повідомленнях</div>
+            </div>
+            <span className="badge badge-neutral">Незабаром</span>
           </div>
-          <span className="badge badge-neutral">Незабаром</span>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">Учасники команди</div>
-            <div className="settings-row-hint">Запрошуйте колег до організації</div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">Учасники команди</div>
+              <div className="settings-row-hint">Запрошуйте колег до організації</div>
+            </div>
+            <span className="badge badge-neutral">Незабаром</span>
           </div>
-          <span className="badge badge-neutral">Незабаром</span>
         </div>
       </div>
+      <CurrencyPanel />
+    </div>
+  )
+}
+
+interface RateDraft {
+  key: number
+  currency: string
+  rate: string
+}
+
+// Base currency + manual exchange rates for Analytics' spend conversion. No
+// live rate feed on purpose: the user updates these by hand when they care.
+function CurrencyPanel() {
+  const { session } = useAuth()
+  const [baseCurrency, setBaseCurrency] = useState('UAH')
+  const [rates, setRates] = useState<RateDraft[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const [nextKey, setNextKey] = useState(1)
+
+  useEffect(() => {
+    if (!session) return
+    let cancelled = false
+    Promise.all([
+      supabase.from('organizations').select('base_currency').maybeSingle(),
+      supabase.from('org_currency_rates').select('currency, rate_to_base').order('currency'),
+    ]).then(([orgRes, ratesRes]) => {
+      if (cancelled) return
+      if (orgRes.error || ratesRes.error) {
+        setError((orgRes.error ?? ratesRes.error)!.message)
+      } else {
+        if (orgRes.data?.base_currency) setBaseCurrency(orgRes.data.base_currency as string)
+        const loaded = ((ratesRes.data ?? []) as { currency: string; rate_to_base: number }[]).map((r, i) => ({
+          key: i,
+          currency: r.currency,
+          rate: String(r.rate_to_base),
+        }))
+        setRates(loaded)
+        setNextKey(loaded.length)
+      }
+      setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [session])
+
+  function updateRate(key: number, patch: Partial<RateDraft>) {
+    setRates((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+    setSaved(false)
+  }
+
+  async function handleSave(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+    setSaved(false)
+
+    const base = baseCurrency.trim().toUpperCase()
+    if (!/^[A-Z]{3}$/.test(base)) {
+      setError('Базова валюта — 3 латинські літери, напр. UAH')
+      return
+    }
+    const payload: { currency: string; rate: number }[] = []
+    for (const r of rates) {
+      const currency = r.currency.trim().toUpperCase()
+      if (!currency && !r.rate.trim()) continue
+      const rate = Number(r.rate.replace(',', '.'))
+      if (!/^[A-Z]{3}$/.test(currency)) {
+        setError(`Невалідний код валюти: «${r.currency}»`)
+        return
+      }
+      if (!Number.isFinite(rate) || rate <= 0) {
+        setError(`Курс для ${currency} має бути додатним числом`)
+        return
+      }
+      payload.push({ currency, rate })
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    if (!accessToken) {
+      setError('Сесія недійсна, увійдіть знову')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const res = await fetch('/.netlify/functions/save-currency-settings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ baseCurrency: base, rates: payload }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Не вдалося зберегти')
+      } else {
+        setBaseCurrency(data.baseCurrency)
+        const saved = data.rates as { currency: string; rate: number }[]
+        setRates(saved.map((r, i) => ({ key: i, currency: r.currency, rate: String(r.rate) })))
+        setNextKey(saved.length)
+        setSaved(true)
+      }
+    } catch {
+      setError('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 480 }}>
+      <div className="settings-row-label">Валюта та курси</div>
+      <p className="settings-row-hint" style={{ margin: '0.25rem 0 1rem' }}>
+        Аналітика показує продажі й витрати в базовій валюті. Суми продажів вважаються вже в ній, а витрати з імпортованих
+        CSV перераховуються за курсами нижче. Курс — скільки одиниць базової валюти в одній одиниці валюти витрат. Оновлюйте
+        вручну, коли потрібно.
+      </p>
+
+      {loading ? (
+        <p className="settings-row-hint">Завантаження…</p>
+      ) : (
+        <form className="auth-form" onSubmit={handleSave} autoComplete="off">
+          <div className="field">
+            <label htmlFor="settings-base-currency">Базова валюта</label>
+            <input
+              id="settings-base-currency"
+              className="input"
+              value={baseCurrency}
+              onChange={(e) => {
+                setBaseCurrency(e.target.value.toUpperCase())
+                setSaved(false)
+              }}
+              maxLength={3}
+              placeholder="UAH"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              style={{ maxWidth: 120 }}
+            />
+            <p className="settings-row-hint">
+              Зміна базової валюти не перераховує вже введені курси — введіть їх заново відносно нової.
+            </p>
+          </div>
+
+          <div className="field">
+            <label>Курси до {baseCurrency || 'базової'}</label>
+            {rates.length === 0 && <p className="settings-row-hint">Курсів ще немає — рядки у валюті, відмінній від базової, не потраплять у ROI.</p>}
+            {rates.map((r) => (
+              <div key={r.key} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <input
+                  className="input"
+                  value={r.currency}
+                  onChange={(e) => updateRate(r.key, { currency: e.target.value.toUpperCase() })}
+                  maxLength={3}
+                  placeholder="USD"
+                  aria-label="Валюта"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  style={{ width: 90 }}
+                />
+                <span className="settings-row-hint">1 =</span>
+                <input
+                  className="input"
+                  value={r.rate}
+                  onChange={(e) => updateRate(r.key, { rate: e.target.value })}
+                  inputMode="decimal"
+                  placeholder="41.50"
+                  aria-label={`Курс ${r.currency || 'валюти'} до ${baseCurrency}`}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  style={{ width: 120 }}
+                />
+                <span className="settings-row-hint">{baseCurrency}</span>
+                <button
+                  type="button"
+                  className="btn-icon-ghost"
+                  onClick={() => {
+                    setRates((prev) => prev.filter((x) => x.key !== r.key))
+                    setSaved(false)
+                  }}
+                  aria-label={`Видалити курс ${r.currency}`}
+                  title="Видалити"
+                >
+                  <IconTrash size={14} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ alignSelf: 'flex-start' }}
+              onClick={() => {
+                setRates((prev) => [...prev, { key: nextKey, currency: '', rate: '' }])
+                setNextKey((k) => k + 1)
+                setSaved(false)
+              }}
+            >
+              <IconPlus size={14} />
+              Додати валюту
+            </button>
+          </div>
+
+          {error && (
+            <div className="alert alert-error">
+              <IconAlert size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+          {saved && (
+            <div className="alert alert-info">
+              <IconCheckCircle size={16} />
+              <span>Збережено</span>
+            </div>
+          )}
+
+          <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start' }}>
+            {saving ? <IconSpinner size={16} /> : 'Зберегти'}
+          </button>
+        </form>
+      )}
     </div>
   )
 }
