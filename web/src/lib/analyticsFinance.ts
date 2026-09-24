@@ -11,7 +11,7 @@ export interface StageHistoryRow {
 // ---------- Єдиний період сторінки. Усі дати — календарні дні UTC у форматі
 // YYYY-MM-DD (як і групування подій нижче), межі включно. ----------
 
-export type PeriodPreset = 7 | 30 | 90 | 'custom'
+export type PeriodPreset = 1 | 7 | 30 | 90 | 'custom'
 
 export interface Period {
   from: string
@@ -183,3 +183,56 @@ export function pctChange(current: number, previous: number): number | null {
   return previous > 0 ? ((current - previous) / previous) * 100 : null
 }
 
+
+/** Spend per new subscriber; null when there's nobody to divide by. */
+export function costPerSubscriber(spend: number, subscribes: number): number | null {
+  return subscribes > 0 ? spend / subscribes : null
+}
+
+export interface SubscribeEventLike {
+  event_type: 'subscribe' | 'unsubscribe'
+  created_at: string
+  channel_type?: string | null
+}
+
+/** Subscribe events inside [from, to] — the "new subscribers" figure. */
+export function countSubscribes(events: SubscribeEventLike[], from: string, to: string): number {
+  let n = 0
+  for (const ev of events) if (ev.event_type === 'subscribe' && inRange(ev.created_at, from, to)) n += 1
+  return n
+}
+
+export interface ChannelSlice {
+  key: string
+  count: number
+  /** Share of all new subscribers in the period, 0..100. */
+  percent: number
+}
+
+/**
+ * New subscribers per channel in the period, largest first. Channels in
+ * `known` always appear (even at 0); events with no/unknown channel_type are
+ * folded into a single trailing "other" slice, only when non-empty.
+ */
+export function subscribesByChannel(
+  events: SubscribeEventLike[],
+  from: string,
+  to: string,
+  known: string[],
+): { slices: ChannelSlice[]; other: number; total: number } {
+  const counts = new Map<string, number>(known.map((k) => [k, 0]))
+  let other = 0
+  let total = 0
+  for (const ev of events) {
+    if (ev.event_type !== 'subscribe' || !inRange(ev.created_at, from, to)) continue
+    total += 1
+    const key = ev.channel_type ?? ''
+    if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1)
+    else other += 1
+  }
+  const slices = known
+    .map((key, i) => ({ key, count: counts.get(key) ?? 0, i }))
+    .sort((a, b) => b.count - a.count || a.i - b.i)
+    .map(({ key, count }) => ({ key, count, percent: total > 0 ? (count / total) * 100 : 0 }))
+  return { slices, other, total }
+}

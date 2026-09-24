@@ -1,10 +1,12 @@
-import { Fragment, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import {
   MAX_PERIOD_DAYS,
   convertSpend,
+  costPerSubscriber,
+  countSubscribes,
   inRange,
   listDays,
   pctChange,
@@ -13,6 +15,7 @@ import {
   roiPercent,
   rowOverlaps,
   summarizeSales,
+  subscribesByChannel,
   summarizeSpend,
   todayUtc,
   type AdSpendSummaryRow,
@@ -25,6 +28,7 @@ import {
   IconChevronUp,
   IconHistory,
   IconPercent,
+  IconChat,
   IconSparkles,
   IconSpinner,
   IconTarget,
@@ -45,6 +49,8 @@ interface SubscriptionEventRow {
   link_id: string | null
   event_type: SubscriptionEventType
   created_at: string
+  /** telegram | whatsapp | fbm; null only on events written before the column existed and never backfilled. */
+  channel_type: string | null
 }
 
 interface LeadSourceRow {
@@ -81,6 +87,62 @@ async function fetchAll<T>(
     if (!data || data.length < PAGE) break
   }
   return { data: out, error: null }
+}
+
+const fetchSubscriptionEvents = () =>
+  fetchAll<SubscriptionEventRow>((a, b) =>
+    supabase.from('lead_subscription_events').select('link_id, event_type, created_at, channel_type').order('id').range(a, b),
+  )
+
+const fetchStageHistory = () =>
+  fetchAll<StageHistoryRow>((a, b) =>
+    supabase.from('lead_stage_history').select('lead_id, stage_id, value, entered_at').order('id').range(a, b),
+  )
+
+// Original brand colours, straight from each platform's identity.
+const CHANNELS = [
+  { key: 'telegram', label: 'Telegram', color: '#26A5E4' },
+  { key: 'whatsapp', label: 'WhatsApp', color: '#25D366' },
+  { key: 'fbm', label: 'Messenger', color: '#0084FF' },
+] as const
+
+/** Tweens a number toward its latest value (count-up on load, glide on change). */
+function AnimatedNumber({ value, format }: { value: number; format: (n: number) => string }) {
+  const [shown, setShown] = useState(0)
+  const shownRef = useRef(0)
+  const firstRun = useRef(true)
+  const [pulse, setPulse] = useState(0)
+
+  useEffect(() => {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduced) {
+      shownRef.current = value
+      setShown(value)
+      return
+    }
+    if (!firstRun.current) setPulse((n) => n + 1)
+    firstRun.current = false
+
+    const from = shownRef.current
+    const start = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / 650)
+      const eased = 1 - Math.pow(1 - t, 3)
+      const next = from + (value - from) * eased
+      shownRef.current = next
+      setShown(next)
+      if (t < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value])
+
+  return (
+    <span key={pulse} className={`anim-num${pulse > 0 ? ' is-pulse' : ''}`}>
+      {format(shown)}
+    </span>
+  )
 }
 
 function buildLinkStats(
@@ -386,16 +448,18 @@ function Sparkline({ values }: { values: number[] }) {
 interface KpiCardProps {
   icon: React.ReactNode
   label: string
-  value: string
+  value: React.ReactNode
+  /** Position in the entrance stagger. */
+  index?: number
   /** Change vs the previous period of the same length; null = nothing to compare. */
   delta: { text: string; tone: 'up' | 'down' | 'flat' } | null
   hint?: React.ReactNode
   spark?: number[]
 }
 
-function KpiCard({ icon, label, value, delta, hint, spark }: KpiCardProps) {
+function KpiCard({ icon, label, value, index = 0, delta, hint, spark }: KpiCardProps) {
   return (
-    <div className="card kpi-card">
+    <div className="card kpi-card" style={{ '--i': index } as React.CSSProperties}>
       <div className="kpi-card-top">
         <span className="kpi-label">{label}</span>
         <span className="kpi-icon" aria-hidden="true">
@@ -444,9 +508,7 @@ export default function Analytics() {
     async function load() {
       const [linksRes, eventsRes, leadsRes] = await Promise.all([
         supabase.from('lead_gen_links').select('id, name').order('name'),
-        fetchAll<SubscriptionEventRow>((a, b) =>
-          supabase.from('lead_subscription_events').select('link_id, event_type, created_at').order('id').range(a, b),
-        ),
+        fetchSubscriptionEvents(),
         fetchAll<LeadSourceRow>((a, b) =>
           supabase.from('leads').select('source_link_id').not('source_link_id', 'is', null).order('id').range(a, b),
         ),
@@ -592,9 +654,7 @@ export default function Analytics() {
     async function load() {
       const [stagesRes, historyRes, funnelsRes, linksRes, leadLinksRes, nodesRes] = await Promise.all([
         supabase.from('funnel_stages').select('id, name, position, org_id').order('position'),
-        fetchAll<StageHistoryRow>((a, b) =>
-          supabase.from('lead_stage_history').select('lead_id, stage_id, value, entered_at').order('id').range(a, b),
-        ),
+        fetchStageHistory(),
         supabase.from('funnels').select('id, name').order('name'),
         supabase.from('lead_gen_links').select('id, funnel_id'),
         // Own leads fetch: the Підписки-за-джерелом section's one drops leads
@@ -718,6 +778,15 @@ export default function Analytics() {
   const totalUnsubscribes = useMemo(() => dailyAll.reduce((n, d) => n + d.unsubscribes, 0), [dailyAll])
   const datelessAdRows = useMemo(() => allAdRows.filter((r) => !r.report_start_date && !r.report_end_date).length, [allAdRows])
 
+  const subscribes = totalSubscribes
+  const prevSubscribes = useMemo(() => countSubscribes(events, prev.from, prev.to), [events, prev])
+  const cps = costPerSubscriber(spend.total, subscribes)
+  const prevCps = costPerSubscriber(prevSpend.total, prevSubscribes)
+  const channelSplit = useMemo(
+    () => subscribesByChannel(events, period.from, period.to, CHANNELS.map((c) => c.key)),
+    [events, period],
+  )
+
   const kpiLoading = loading || stageLoading || allAdLoading || currencyLoading
   const kpiError = error ?? stageError ?? allAdError ?? currencyError
 
@@ -726,6 +795,48 @@ export default function Analytics() {
   if (spend.missingRates.length > 0) spendExclusions.push(`немає курсу для ${spend.missingRates.join(', ')}`)
   if (spend.noCurrency > 0) spendExclusions.push(`${spend.noCurrency} ${spend.noCurrency === 1 ? 'рядок' : 'рядків'} без валюти`)
   if (datelessAdRows > 0) spendExclusions.push(`${datelessAdRows} ${datelessAdRows === 1 ? 'рядок' : 'рядків'} без дат звіту`)
+
+  // ---- Live refresh: new subscribe events / stage entries land without a reload ----
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  const refreshLive = useCallback(async () => {
+    const [ev, hist] = await Promise.all([fetchSubscriptionEvents(), fetchStageHistory()])
+    if (!ev.error) setEvents(ev.data)
+    if (!hist.error) setStageHistory(hist.data)
+    if (!ev.error && !hist.error) setLastUpdated(new Date())
+  }, [])
+
+  // Debounced: a burst of inserts (an import, a funnel walk) is one refetch.
+  // Missed events after a dropped socket or a backgrounded tab are caught the
+  // same way — a rejoin and a tab coming back to the foreground both refetch.
+  useEffect(() => {
+    let timer: number | undefined
+    let hasSubscribed = false
+    const schedule = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => void refreshLive(), 1500)
+    }
+    const channel = supabase
+      .channel(`analytics-live-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lead_subscription_events' }, schedule)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'lead_subscription_events' }, schedule)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lead_stage_history' }, schedule)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'lead_stage_history' }, schedule)
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') return
+        if (hasSubscribed) schedule()
+        hasSubscribed = true
+      })
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') schedule()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+      void supabase.removeChannel(channel)
+    }
+  }, [refreshLive])
 
   function moneyDelta(current: number, previous: number): KpiCardProps['delta'] {
     const change = pctChange(current, previous)
@@ -855,7 +966,7 @@ export default function Analytics() {
   }
 
   return (
-    <div className="page fade-in">
+    <div className="page fade-in analytics-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Глибока аналітика</h1>
@@ -864,7 +975,7 @@ export default function Analytics() {
 
         <div className="period-picker">
           <div className="period-seg" role="group" aria-label="Період">
-            {([7, 30, 90] as const).map((n) => (
+            {([1, 7, 30, 90] as const).map((n) => (
               <button
                 key={n}
                 type="button"
@@ -872,7 +983,7 @@ export default function Analytics() {
                 onClick={() => setPreset(n)}
                 aria-pressed={preset === n}
               >
-                {n} днів
+                {n === 1 ? '1 день' : `${n} днів`}
               </button>
             ))}
             <button
@@ -918,6 +1029,11 @@ export default function Analytics() {
             {formatPeriodDate(period.from)} – {formatPeriodDate(period.to)} · {period.days} дн.
             {period.clamped ? ` (максимум ${MAX_PERIOD_DAYS})` : ''}
           </span>
+          <span className="live-indicator" title="Нові підписки та етапи воронки підтягуються автоматично">
+            <i className="live-dot" aria-hidden="true" />
+            Наживо
+            {lastUpdated && <> · оновлено {lastUpdated.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</>}
+          </span>
         </div>
       </div>
 
@@ -930,17 +1046,19 @@ export default function Analytics() {
 
       <div className="kpi-grid">
         <KpiCard
+          index={0}
           icon={<IconWallet size={16} />}
           label="Сума продажів"
-          value={kpiLoading ? '…' : `${formatMoney(sales.total)} ${baseCurrency}`}
+          value={kpiLoading ? '…' : <AnimatedNumber value={sales.total} format={(n) => `${formatMoney(n)} ${baseCurrency}`} />}
           delta={kpiLoading ? null : moneyDelta(sales.total, prevSales.total)}
           spark={kpiLoading ? undefined : salesSpark}
           hint={kpiLoading ? undefined : `${sales.leads} ${sales.leads === 1 ? 'лід' : 'лідів'} на стадії «Продажа»`}
         />
         <KpiCard
+          index={1}
           icon={<IconTrendingUp size={16} />}
           label="Витрати на рекламу"
-          value={kpiLoading ? '…' : `${formatMoney(spend.total)} ${baseCurrency}`}
+          value={kpiLoading ? '…' : <AnimatedNumber value={spend.total} format={(n) => `${formatMoney(n)} ${baseCurrency}`} />}
           delta={kpiLoading ? null : moneyDelta(spend.total, prevSpend.total)}
           hint={
             kpiLoading ? undefined : (
@@ -958,9 +1076,10 @@ export default function Analytics() {
           }
         />
         <KpiCard
+          index={2}
           icon={<IconPercent size={16} />}
           label="Чистий ROI"
-          value={kpiLoading ? '…' : roi === null ? '—' : `${formatSigned(roi, 1)}%`}
+          value={kpiLoading ? '…' : roi === null ? '—' : <AnimatedNumber value={roi} format={(n) => `${formatSigned(n, 1)}%`} />}
           delta={
             kpiLoading || roi === null || prevRoi === null
               ? null
@@ -968,7 +1087,32 @@ export default function Analytics() {
           }
           hint={kpiLoading ? undefined : roi === null ? 'Немає витрат за період — ROI не рахується' : '(продажі − витрати) / витрати'}
         />
-        <div className="card kpi-card kpi-card-subs">
+        <KpiCard
+          index={3}
+          icon={<IconUsers size={16} />}
+          label="Вартість підписника"
+          value={kpiLoading ? '…' : cps === null ? '—' : <AnimatedNumber value={cps} format={(n) => `${formatMoney(n)} ${baseCurrency}`} />}
+          delta={
+            kpiLoading || cps === null || prevCps === null
+              ? null
+              : (() => {
+                  const change = pctChange(cps, prevCps)
+                  return change === null ? null : { text: `${formatSigned(change, 1)}%`, tone: change < 0 ? 'up' : change > 0 ? 'down' : 'flat' }
+                })()
+          }
+          hint={
+            kpiLoading ? undefined : (
+              <>
+                {subscribes === 0 ? 'Немає нових підписок за період' : `Витрати / ${subscribes} нових підписок`}
+                {spendExclusions.length > 0 && <span className="kpi-warning"> Витрати неповні — див. картку витрат.</span>}
+              </>
+            )
+          }
+        />
+      </div>
+
+      <div className="analytics-live-row">
+        <div className="card analytics-live-card analytics-subs-card" style={{ '--i': 4 } as React.CSSProperties}>
           <div className="kpi-card-top">
             <span className="kpi-label">Підписки / відписки</span>
             <span className="kpi-icon" aria-hidden="true">
@@ -980,14 +1124,143 @@ export default function Analytics() {
               '…'
             ) : (
               <>
-                <span className="analytics-net-positive">+{totalSubscribes}</span>
+                <span className="analytics-net-positive">
+                  +<AnimatedNumber value={totalSubscribes} format={(n) => String(Math.round(n))} />
+                </span>
                 <span className="kpi-value-sep"> / </span>
-                <span className="analytics-net-negative">−{totalUnsubscribes}</span>
+                <span className="analytics-net-negative">
+                  −<AnimatedNumber value={totalUnsubscribes} format={(n) => String(Math.round(n))} />
+                </span>
               </>
             )}
           </div>
           {!loading && <DailyChart days={dailyAll} />}
         </div>
+
+        <div className="card analytics-live-card analytics-channels" style={{ '--i': 5 } as React.CSSProperties}>
+          <div className="kpi-card-top">
+            <span className="kpi-label">Нові підписники за каналом</span>
+            <span className="kpi-icon" aria-hidden="true">
+              <IconChat size={16} />
+            </span>
+          </div>
+          {loading ? (
+            <div className="kpi-value">…</div>
+          ) : (
+            <>
+              <div className="kpi-value">
+                <AnimatedNumber value={channelSplit.total} format={(n) => String(Math.round(n))} />
+                <span className="kpi-value-unit"> за період</span>
+              </div>
+              <ul className="channel-list">
+                {channelSplit.slices.map((slice, i) => {
+                  const meta = CHANNELS.find((c) => c.key === slice.key)!
+                  return (
+                    <li
+                      key={slice.key}
+                      className={`channel-row${i === 0 && slice.count > 0 ? ' is-top' : ''}`}
+                      style={{ '--channel': meta.color } as React.CSSProperties}
+                    >
+                      <span className="channel-row-head">
+                        <span className="channel-dot" aria-hidden="true" />
+                        <span className="channel-name">{meta.label}</span>
+                        <span className="channel-count">
+                          {slice.count}
+                          <small>{slice.percent.toFixed(0)}%</small>
+                        </span>
+                      </span>
+                      <span className="channel-track">
+                        <span className="channel-fill" style={{ width: `${slice.percent}%` }} />
+                      </span>
+                    </li>
+                  )
+                })}
+                {channelSplit.other > 0 && (
+                  <li className="channel-row is-other" style={{ '--channel': 'var(--fg-subtle)' } as React.CSSProperties}>
+                    <span className="channel-row-head">
+                      <span className="channel-dot" aria-hidden="true" />
+                      <span className="channel-name">Інший / невідомий</span>
+                      <span className="channel-count">
+                        {channelSplit.other}
+                        <small>{((channelSplit.other / channelSplit.total) * 100).toFixed(0)}%</small>
+                      </span>
+                    </span>
+                    <span className="channel-track">
+                      <span className="channel-fill" style={{ width: `${(channelSplit.other / channelSplit.total) * 100}%` }} />
+                    </span>
+                  </li>
+                )}
+              </ul>
+            </>
+          )}
+        </div>
+
+      <div className="card card-tight analytics-live-card analytics-funnel-card" style={{ '--i': 6 } as React.CSSProperties}>
+        <div className="analytics-section-header">
+          <IconTarget size={16} aria-hidden="true" />
+          <h3>Аналітична воронка</h3>
+        </div>
+
+        {stageLoading ? (
+          <p className="settings-row-hint" style={{ padding: '0 1rem 1rem' }}>
+            Завантаження…
+          </p>
+        ) : stageError ? (
+          <div className="alert alert-error" style={{ margin: '0 1rem 1rem' }}>
+            <IconAlert size={16} />
+            <span>{stageError}</span>
+          </div>
+        ) : stages.length === 0 ? (
+          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
+            <h3>Ще немає етапів продажу</h3>
+            <p>Додайте conversion-вузол у тунель або оберіть етап у профілі ліда.</p>
+          </div>
+        ) : (
+          <>
+            <div className="analytics-filter-row" title={`Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді сума на етапі по кожному ліду.${selectedFunnelId ? ' Показані лише ліди з посилань цього тунелю — прямі переходи не потрапляють.' : ''}`}>
+              <span className="analytics-filter-label">Тунель:</span>
+              <select
+                className="input stage-funnel-select"
+                value={selectedFunnelId}
+                onChange={(e) => setSelectedFunnelId(e.target.value)}
+                aria-label="Тунель"
+              >
+                <option value="">Усі тунелі</option>
+                {funnels.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="stage-funnel">
+              {funnelSteps.map((step, i) => (
+                <div className="stage-funnel-step" key={step.id}>
+                  <div className="stage-funnel-card" style={{ width: `${step.widthPercent}%` }}>
+                    <div className="stage-funnel-card-main">
+                      <span className="stage-funnel-name">{step.name}</span>
+                      <span className="stage-funnel-sum">{formatMoney(step.total)}</span>
+                    </div>
+                    <div className="stage-funnel-card-meta">
+                      <span className="stage-funnel-count">
+                        <AnimatedNumber value={step.leads} format={(n) => String(Math.round(n))} />
+                        <small>лідів</small>
+                      </span>
+                      {step.prevPercent !== null && (
+                        <span className={`stage-funnel-conv${step.prevPercent < 100 ? ' is-drop' : ''}`}>
+                          {step.prevPercent.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {i < funnelSteps.length - 1 && <span className="stage-funnel-connector" aria-hidden="true" />}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
       </div>
 
       <div className="card card-tight">
@@ -1201,80 +1474,6 @@ export default function Analytics() {
                   )}
                 </tbody>
               </table>
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="card card-tight">
-        <div className="analytics-section-header">
-          <IconTarget size={16} aria-hidden="true" />
-          <h3>Аналітична воронка</h3>
-        </div>
-
-        {stageLoading ? (
-          <p className="settings-row-hint" style={{ padding: '0 1rem 1rem' }}>
-            Завантаження…
-          </p>
-        ) : stageError ? (
-          <div className="alert alert-error" style={{ margin: '0 1rem 1rem' }}>
-            <IconAlert size={16} />
-            <span>{stageError}</span>
-          </div>
-        ) : stages.length === 0 ? (
-          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
-            <h3>Ще немає етапів продажу</h3>
-            <p>Додайте conversion-вузол у тунель або оберіть етап у профілі ліда.</p>
-          </div>
-        ) : (
-          <>
-            <div className="analytics-filter-row">
-              <span className="analytics-filter-label">Тунель:</span>
-              <select
-                className="input stage-funnel-select"
-                value={selectedFunnelId}
-                onChange={(e) => setSelectedFunnelId(e.target.value)}
-                aria-label="Тунель"
-              >
-                <option value="">Усі тунелі</option>
-                {funnels.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <p className="settings-row-hint stage-funnel-hint">
-              Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді
-              сума на етапі по кожному ліду.
-              {selectedFunnelId
-                ? ' Показані лише ліди, що прийшли з посилань цього тунелю — прямі переходи без посилання сюди не потрапляють.'
-                : ''}
-            </p>
-            <div className="stage-funnel">
-              {funnelSteps.map((step, i) => (
-                <div className="stage-funnel-step" key={step.id}>
-                  <div className="stage-funnel-card" style={{ width: `${step.widthPercent}%` }}>
-                    <div className="stage-funnel-card-main">
-                      <span className="stage-funnel-name">{step.name}</span>
-                      <span className="stage-funnel-sum">{formatMoney(step.total)}</span>
-                    </div>
-                    <div className="stage-funnel-card-meta">
-                      <span className="stage-funnel-count">
-                        {step.leads}
-                        <small>лідів</small>
-                      </span>
-                      {step.prevPercent !== null && (
-                        <span className={`stage-funnel-conv${step.prevPercent < 100 ? ' is-drop' : ''}`}>
-                          {step.prevPercent.toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {i < funnelSteps.length - 1 && <span className="stage-funnel-connector" aria-hidden="true" />}
-                </div>
-              ))}
             </div>
           </>
         )}

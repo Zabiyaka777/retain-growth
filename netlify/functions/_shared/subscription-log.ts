@@ -19,12 +19,13 @@ export async function logInitialSubscribeEvent(
   orgId: string,
   leadId: string,
   isNewLead: boolean,
+  channelType: string,
 ): Promise<string | null> {
   if (!isNewLead) return null;
 
   const { data, error } = await supabase
     .from("lead_subscription_events")
-    .insert({ org_id: orgId, lead_id: leadId, link_id: null, event_type: "subscribe" })
+    .insert({ org_id: orgId, lead_id: leadId, link_id: null, event_type: "subscribe", channel_type: channelType })
     .select("id")
     .single();
 
@@ -59,7 +60,15 @@ export async function patchInitialSubscribeLink(supabase: SupabaseClient, eventI
  * second link after the first-touch one had already been set produced zero
  * new events.
  */
-export async function logRepeatSubscribeEvent(supabase: SupabaseClient, orgId: string, leadId: string, linkId: string): Promise<void> {
-  const { error } = await supabase.from("lead_subscription_events").insert({ org_id: orgId, lead_id: leadId, link_id: linkId, event_type: "subscribe" });
+export async function logRepeatSubscribeEvent(
+  supabase: SupabaseClient,
+  orgId: string,
+  leadId: string,
+  linkId: string,
+  channelType: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("lead_subscription_events")
+    .insert({ org_id: orgId, lead_id: leadId, link_id: linkId, event_type: "subscribe", channel_type: channelType });
   if (error) console.error("subscription-log: repeat subscribe insert failed", error);
 }

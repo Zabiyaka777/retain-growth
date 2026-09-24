@@ -239,7 +239,7 @@ export const handler: Handler = async (event) => {
   // leads.subscribed defaults to true — see telegram-webhook.ts for why this
   // call exists. link_id starts null and gets patched below if/when
   // source_link_id attribution resolves later in this same request.
-  const initialSubscribeEventId = await logInitialSubscribeEvent(supabase, orgId, lead.id, isNewLead);
+  const initialSubscribeEventId = await logInitialSubscribeEvent(supabase, orgId, lead.id, isNewLead, "whatsapp");
 
   const isSuppressed = lead.status === "blocked" || lead.status === "archived";
 
@@ -372,7 +372,7 @@ export const handler: Handler = async (event) => {
       if (initialSubscribeEventId) {
         await patchInitialSubscribeLink(supabase, initialSubscribeEventId, leadGenLink.id);
       } else {
-        await logRepeatSubscribeEvent(supabase, orgId, lead.id, leadGenLink.id);
+        await logRepeatSubscribeEvent(supabase, orgId, lead.id, leadGenLink.id, "whatsapp");
       }
 
       if (inboundMessage) {

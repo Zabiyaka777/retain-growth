@@ -468,7 +468,7 @@ export const handler: Handler = async (event) => {
   // default visible in "Підписки за джерелом" instead of it silently never
   // happening. link_id starts null and gets patched below once/if
   // source_link_id attribution resolves later in this same request.
-  const initialSubscribeEventId = await logInitialSubscribeEvent(supabase, orgId, lead.id, isNewLead);
+  const initialSubscribeEventId = await logInitialSubscribeEvent(supabase, orgId, lead.id, isNewLead, "telegram");
 
   // No automated reply of any kind reaches a blocked or archived lead — the
   // message itself is still recorded below either way, so the thread stays
@@ -656,7 +656,7 @@ export const handler: Handler = async (event) => {
       if (initialSubscribeEventId) {
         await patchInitialSubscribeLink(supabase, initialSubscribeEventId, leadGenLink.id);
       } else {
-        await logRepeatSubscribeEvent(supabase, orgId, lead.id, leadGenLink.id);
+        await logRepeatSubscribeEvent(supabase, orgId, lead.id, leadGenLink.id, "telegram");
       }
 
       // Label the raw "/start <token>" so the chat can render it as a system

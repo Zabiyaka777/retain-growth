@@ -894,12 +894,15 @@ async function logSubscriptionEvent(
   leadId: string,
   eventType: "subscribe" | "unsubscribe",
 ) {
-  const { data: lead } = await supabase.from("leads").select("source_link_id").eq("id", leadId).maybeSingle();
+  // channel_type comes off the lead row (a lead lives on exactly one channel),
+  // already in hand for the link_id snapshot — no extra query.
+  const { data: lead } = await supabase.from("leads").select("source_link_id, channel_type").eq("id", leadId).maybeSingle();
 
   const { error } = await supabase.from("lead_subscription_events").insert({
     org_id: orgId,
     lead_id: leadId,
     link_id: (lead?.source_link_id as string | null) ?? null,
+    channel_type: (lead?.channel_type as string | null) ?? null,
     event_type: eventType,
   });
   if (error) console.error("funnel-graph: lead_subscription_events insert failed", error);

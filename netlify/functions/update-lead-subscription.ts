@@ -81,7 +81,7 @@ export const handler: Handler = async (event) => {
     .update({ subscribed })
     .eq("id", leadId)
     .eq("org_id", orgId)
-    .select("id, source_link_id")
+    .select("id, source_link_id, channel_type")
     .maybeSingle();
 
   if (updateError) {
@@ -96,6 +96,7 @@ export const handler: Handler = async (event) => {
     org_id: orgId,
     lead_id: leadId,
     link_id: (lead.source_link_id as string | null) ?? null,
+    channel_type: (lead.channel_type as string | null) ?? null,
     event_type: subscribed ? "subscribe" : "unsubscribe",
   });
   if (eventError) console.error("update-lead-subscription: lead_subscription_events insert failed", eventError);
