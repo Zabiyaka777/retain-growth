@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import {
@@ -8,6 +8,9 @@ import {
   LANDING_TEMPLATES,
   LANDING_THEMES,
   LandingTemplate,
+  MAX_PRODUCT_IMAGES,
+  ORB_ANIMATIONS,
+  ORB_SIZES,
   TEMPLATE_META,
   THEME_META,
   withConfigDefaults,
@@ -15,6 +18,8 @@ import {
   type ImageUploadState,
   type LandingConfig,
   type LandingTemplateKey,
+  type OrbAnimation,
+  type OrbSize,
 } from '../components/LandingTemplates'
 import { RESERVED_SLUGS } from '../lib/reservedSlugs'
 import { IconAlert, IconArrowLeft, IconCheckCircle, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
@@ -55,6 +60,104 @@ interface ExistingPage {
   status: 'draft' | 'published'
   config: Partial<LandingConfig> | null
   meta_access_token_secret_id: string | null
+  funnel_id: string | null
+  entry_node_id: string | null
+}
+
+interface FunnelOption {
+  id: string
+  name: string
+}
+
+interface EntryNodeOption {
+  id: string
+  label: string
+}
+
+const ORB_SIZE_LABEL: Record<OrbSize, string> = { sm: 'S', md: 'M', lg: 'L' }
+const ORB_ANIMATION_LABEL: Record<OrbAnimation, string> = { none: 'Без анімації', pulse: 'Пульс', bounce: 'Підстрибування' }
+
+// A slim scroll indicator that sits BESIDE the phone frame (never inside the
+// screen, where it would cover the page): shows where the viewport is in the
+// page and can be dragged, or clicked, to jump — editing a long page through
+// a narrow phone-sized window is otherwise a lot of wheel scrolling.
+function PhoneScrollbar({ screenRef }: { screenRef: RefObject<HTMLDivElement | null> }) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLElement | null>(null)
+  const dragRef = useRef<{ startY: number; startTop: number } | null>(null)
+  const [thumb, setThumb] = useState({ top: 0, height: 100, visible: false })
+
+  useEffect(() => {
+    const scroller = screenRef.current?.querySelector<HTMLElement>('.lp-scroll') ?? null
+    scrollerRef.current = scroller
+    if (!scroller) return
+    const read = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scroller
+      const height = Math.max((clientHeight / Math.max(scrollHeight, 1)) * 100, 8)
+      const range = scrollHeight - clientHeight
+      setThumb({ visible: range > 1, height, top: range > 1 ? (scrollTop / range) * (100 - height) : 0 })
+    }
+    read()
+    scroller.addEventListener('scroll', read, { passive: true })
+    const ro = new ResizeObserver(read)
+    ro.observe(scroller)
+    if (scroller.firstElementChild) ro.observe(scroller.firstElementChild)
+    return () => {
+      scroller.removeEventListener('scroll', read)
+      ro.disconnect()
+    }
+  }, [screenRef])
+
+  function jumpTo(fraction: number) {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    scroller.scrollTop = Math.min(1, Math.max(0, fraction)) * (scroller.scrollHeight - scroller.clientHeight)
+  }
+
+  function onTrackDown(e: React.PointerEvent<HTMLDivElement>) {
+    const track = trackRef.current
+    if (!track || e.target !== track) return
+    const rect = track.getBoundingClientRect()
+    const travel = 1 - thumb.height / 100
+    // Centre the thumb where the track was clicked.
+    jumpTo(travel > 0 ? ((e.clientY - rect.top) / rect.height - thumb.height / 200) / travel : 0)
+  }
+
+  function onThumbDown(e: React.PointerEvent<HTMLDivElement>) {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* not capturable — moves still reach the thumb while the pointer is over it */
+    }
+    dragRef.current = { startY: e.clientY, startTop: scrollerRef.current?.scrollTop ?? 0 }
+  }
+  function onThumbMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    const scroller = scrollerRef.current
+    const track = trackRef.current
+    if (!drag || !scroller || !track) return
+    const travelPx = track.clientHeight * (1 - thumb.height / 100)
+    if (travelPx <= 0) return
+    scroller.scrollTop = drag.startTop + ((e.clientY - drag.startY) / travelPx) * (scroller.scrollHeight - scroller.clientHeight)
+  }
+  function onThumbUp(e: React.PointerEvent<HTMLDivElement>) {
+    dragRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
+  if (!thumb.visible) return null
+  return (
+    <div ref={trackRef} className="lpe-scrollbar" onPointerDown={onTrackDown} aria-hidden="true">
+      <div
+        className="lpe-scrollbar-thumb"
+        style={{ top: `${thumb.top}%`, height: `${thumb.height}%` }}
+        onPointerDown={onThumbDown}
+        onPointerMove={onThumbMove}
+        onPointerUp={onThumbUp}
+        onPointerCancel={onThumbUp}
+      />
+    </div>
+  )
 }
 
 const COUNTDOWN_LABEL: Record<CountdownMode, string> = { off: 'Вимкнено', deadline: 'До дати', cycle: 'Циклічний' }
@@ -110,18 +213,38 @@ export default function LandingPageForm() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [, setSaved] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const screenRef = useRef<HTMLDivElement>(null)
+  // Where the page's messenger buttons lead — mirrored onto its lead-gen link on save.
+  const [funnels, setFunnels] = useState<FunnelOption[]>([])
+  const [funnelId, setFunnelId] = useState('')
+  const [entryNodes, setEntryNodes] = useState<EntryNodeOption[]>([])
+  const [entryNodesLoading, setEntryNodesLoading] = useState(false)
+  const [entryNodeId, setEntryNodeId] = useState('')
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
+      const { data: funnelsData } = await supabase.from('funnels').select('id, name').order('name')
+      if (cancelled) return
+      setFunnels((funnelsData ?? []) as FunnelOption[])
       if (pageId) {
         const { data } = await supabase
           .from('landing_pages')
-          .select('id, org_id, name, template_key, slug, status, config, meta_access_token_secret_id')
+          .select('id, org_id, name, template_key, slug, status, config, meta_access_token_secret_id, funnel_id, entry_node_id')
           .eq('id', pageId)
+          .maybeSingle()
+        // The link that actually routes this page's visitors is the source of
+        // truth (it may have been made through the old link-form field, or
+        // edited there since) — the page's own columns are the fallback.
+        const { data: boundLink } = await supabase
+          .from('lead_gen_links')
+          .select('funnel_id, entry_node_id')
+          .eq('landing_page_id', pageId)
+          .order('created_at', { ascending: true })
+          .limit(1)
           .maybeSingle()
         if (cancelled) return
         const p = data as ExistingPage | null
@@ -135,6 +258,8 @@ export default function LandingPageForm() {
           setStatus(p.status)
           setHasCapiToken(!!p.meta_access_token_secret_id)
           setConfig(withConfigDefaults(p.config))
+          setFunnelId(boundLink?.funnel_id ?? p.funnel_id ?? '')
+          setEntryNodeId(boundLink?.entry_node_id ?? p.entry_node_id ?? '')
         }
       }
       setLoading(false)
@@ -144,6 +269,34 @@ export default function LandingPageForm() {
       cancelled = true
     }
   }, [pageId])
+
+  // Entry points of the picked funnel; picking a different funnel clears the
+  // entry choice in its own handler, so a just-loaded value is never wiped.
+  useEffect(() => {
+    if (!funnelId) {
+      setEntryNodes([])
+      return
+    }
+    let cancelled = false
+    setEntryNodesLoading(true)
+    supabase
+      .from('funnel_nodes')
+      .select('id, config')
+      .eq('funnel_id', funnelId)
+      .eq('type', 'entry')
+      .then(({ data }) => {
+        if (cancelled) return
+        const options = ((data ?? []) as { id: string; config: { label?: string } | null }[]).map((n) => ({
+          id: n.id,
+          label: n.config?.label?.trim() || 'Точка входу без назви',
+        }))
+        setEntryNodes(options)
+        setEntryNodesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [funnelId])
 
   // Live availability while typing. Slugs are global and RLS hides other orgs'
   // rows, so this asks check-landing-slug (yes/no only). Debounced; a late
@@ -176,46 +329,75 @@ export default function LandingPageForm() {
     setSaved(false)
   }
 
-  async function onImageFile(file: File) {
+  // Uploads one image; resolves to its URL, or null after showing the reason.
+  async function uploadImageFile(file: File): Promise<string | null> {
     if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
       setUpload({ kind: 'error', message: `Це не зображення — ${file.name}` })
-      return
+      return null
     }
     if (file.size > MAX_IMAGE_BYTES) {
       setUpload({ kind: 'error', message: `Файл завеликий — ${(file.size / 1048576).toFixed(1)} MB. Максимум 4 MB.` })
-      return
+      return null
     }
     const accessToken = await getAccessToken()
     if (!accessToken) {
       setUpload({ kind: 'error', message: 'Сесія недійсна, увійдіть знову' })
-      return
+      return null
     }
     setUpload({ kind: 'uploading', progress: 0, name: file.name, size: file.size })
     const dataBase64 = await blobToBase64(file)
     // XHR instead of fetch purely for upload progress events.
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/.netlify/functions/upload-attachment')
-    xhr.setRequestHeader('content-type', 'application/json')
-    xhr.setRequestHeader('authorization', `Bearer ${accessToken}`)
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) setUpload({ kind: 'uploading', progress: (e.loaded / e.total) * 100, name: file.name, size: file.size })
-    }
-    xhr.onerror = () => setUpload({ kind: 'error', message: 'Мережева помилка. Спробуйте ще раз' })
-    xhr.onload = () => {
-      let data: { url?: string; error?: string } = {}
-      try {
-        data = JSON.parse(xhr.responseText)
-      } catch {
-        /* non-JSON body */
+    return new Promise<string | null>((resolve) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/.netlify/functions/upload-attachment')
+      xhr.setRequestHeader('content-type', 'application/json')
+      xhr.setRequestHeader('authorization', `Bearer ${accessToken}`)
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setUpload({ kind: 'uploading', progress: (e.loaded / e.total) * 100, name: file.name, size: file.size })
       }
-      if (xhr.status >= 200 && xhr.status < 300 && data.url) {
-        patch({ image_url: data.url })
-        setUpload({ kind: 'idle' })
-      } else {
-        setUpload({ kind: 'error', message: data.error ?? 'Не вдалося завантажити файл' })
+      xhr.onerror = () => {
+        setUpload({ kind: 'error', message: 'Мережева помилка. Спробуйте ще раз' })
+        resolve(null)
       }
+      xhr.onload = () => {
+        let data: { url?: string; error?: string } = {}
+        try {
+          data = JSON.parse(xhr.responseText)
+        } catch {
+          /* non-JSON body */
+        }
+        if (xhr.status >= 200 && xhr.status < 300 && data.url) {
+          setUpload({ kind: 'idle' })
+          resolve(data.url)
+        } else {
+          setUpload({ kind: 'error', message: data.error ?? 'Не вдалося завантажити файл' })
+          resolve(null)
+        }
+      }
+      xhr.send(JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }))
+    })
+  }
+
+  async function onImageFile(file: File) {
+    const url = await uploadImageFile(file)
+    if (url) patch({ image_url: url })
+  }
+
+  // Product carousel: files go up one after another (a single progress bar),
+  // each appended to the gallery as soon as it lands. The first slide is kept
+  // mirrored in image_url so the single-image fallback and old readers agree.
+  async function onGalleryFiles(files: File[]) {
+    for (const file of files) {
+      const url = await uploadImageFile(file)
+      if (!url) return
+      setConfig((c) => {
+        const current = c.product_images.length ? c.product_images : c.image_url ? [c.image_url] : []
+        const next = [...current, url].slice(0, MAX_PRODUCT_IMAGES)
+        return { ...c, product_images: next, image_url: next[0] ?? '' }
+      })
+      setDirty(true)
+      setSaved(false)
     }
-    xhr.send(JSON.stringify({ filename: file.name, contentType: file.type, dataBase64 }))
   }
 
   async function submit(nextStatus: 'draft' | 'published', opts?: { clearToken?: boolean }) {
@@ -239,6 +421,9 @@ export default function LandingPageForm() {
           templateKey,
           status: nextStatus,
           config,
+          // Only when the page has messenger buttons AND a full choice: the
+          // server then updates (or creates) the link that routes them.
+          ...(needsFunnel && funnelId && entryNodeId ? { funnelId, entryNodeId } : {}),
           // undefined keeps the stored token, null clears it.
           metaAccessToken: opts?.clearToken ? null : capiToken.trim() || undefined,
         }),
@@ -281,26 +466,81 @@ export default function LandingPageForm() {
 
   const slugValid = SLUG_RE.test(slug)
   const slugReserved = RESERVED_SLUGS.has(slug)
-  const canSave = !!name.trim() && slugValid && !slugReserved && slugState !== 'taken' && !saving && upload.kind !== 'uploading'
   const hasCta = config.ctas.some((c) => c.enabled)
+  // Messenger buttons exist only when at least one enabled CTA goes through the
+  // funnel (a plain «Лінк» button needs no tunnel).
+  const needsFunnel = config.ctas.some((c) => c.enabled && c.type === 'funnel')
+  const routingHalf = !!funnelId !== !!entryNodeId
+  const routingMissing = needsFunnel && (!funnelId || !entryNodeId)
+  const canSave = !!name.trim() && slugValid && !slugReserved && slugState !== 'taken' && !saving && upload.kind !== 'uploading' && !routingHalf
+  const canPublish = canSave && !!config.headline.trim() && hasCta && !routingMissing
   // Hidden while the slug is someone else's — the link would open their page.
   const publicUrl = slugValid && !slugReserved && slugState !== 'taken' ? `${window.location.origin}/lp/${slug}` : ''
 
   return (
     <div className="page fade-in">
+      <div className="lpe-stickybar">
+        <button type="button" className="btn btn-ghost" onClick={() => navigate('/dashboard/leadgentools?tab=landings')} style={{ paddingLeft: 0 }}>
+          <IconArrowLeft size={15} />
+          До списку
+        </button>
+        {!loading && !notFound && (
+          <div className="lpe-topbar">
+            <div className="lpe-topbar-row">
+              {status === 'published' && (
+                <button type="button" className="lpe-btn lpe-btn-unpublish" disabled={!canSave} onClick={() => submit('draft')}>
+                  Зняти з публікації
+                </button>
+              )}
+              {status === 'published' ? (
+                dirty ? (
+                  <button type="button" className="lpe-btn lpe-btn-warn" disabled={!canPublish} onClick={() => submit('published')} title={routingMissing ? 'Оберіть тунель і точку входу' : undefined}>
+                    {saving ? <IconSpinner size={16} /> : <IconCheckCircle size={16} />}
+                    Зберегти
+                  </button>
+                ) : (
+                  <button type="button" className="lpe-btn lpe-btn-ok" disabled aria-live="polite">
+                    {saving ? <IconSpinner size={16} /> : <IconCheckCircle size={16} />}
+                    Опубліковано
+                  </button>
+                )
+              ) : (
+                <>
+                  <button type="button" className={`lpe-btn ${dirty ? 'lpe-btn-warn' : 'lpe-btn-neutral'}`} disabled={!canSave} onClick={() => submit('draft')}>
+                    {saving ? <IconSpinner size={16} /> : <IconCheckCircle size={16} />}
+                    {dirty || !isEditing ? 'Зберегти чернетку' : 'Чернетку збережено'}
+                  </button>
+                  <button
+                    type="button"
+                    className="lpe-btn lpe-btn-primary"
+                    disabled={!canPublish}
+                    onClick={() => submit('published')}
+                    title={!hasCta ? 'Увімкніть хоча б одну кнопку' : routingMissing ? 'Оберіть тунель і точку входу' : undefined}
+                  >
+                    <IconPlus size={16} />
+                    Опублікувати
+                  </button>
+                </>
+              )}
+            </div>
+            {dirty && <p className="lpe-dirty">Є незбережені зміни</p>}
+          </div>
+        )}
+      </div>
+
       <div className="page-header">
         <div>
-          <button type="button" className="btn btn-ghost" onClick={() => navigate('/dashboard/leadgentools?tab=landings')} style={{ marginBottom: '0.75rem', paddingLeft: 0 }}>
-            <IconArrowLeft size={15} />
-            До списку
-          </button>
           <h1 className="page-title">{isEditing ? 'Редагування лендінга' : 'Новий лендінг'}</h1>
           <p className="page-description">Клікніть на будь-який текст, картинку чи кнопку прямо на макеті — редагується на місці</p>
         </div>
-        {isEditing && (
-          <span className={`badge ${status === 'published' ? 'badge-success' : 'badge-neutral'}`}>{status === 'published' ? 'Опубліковано' : 'Чернетка'}</span>
-        )}
       </div>
+
+      {error && (
+        <div className="alert alert-error">
+          <IconAlert size={16} />
+          <span>{error}</span>
+        </div>
+      )}
 
       {loading ? (
         <p style={{ color: 'var(--fg-muted)' }}>Завантаження…</p>
@@ -315,11 +555,12 @@ export default function LandingPageForm() {
             <div className={`lpe-phone-glow ${config.theme}`} />
             <div className="lpe-phone">
               <span className="btnL" /><span className="btnL2" /><span className="btnR" />
-              <div className="lpe-screen">
+              <div className="lpe-screen" ref={screenRef}>
                 <div className="lpe-island" />
-                <LandingTemplate templateKey={templateKey} config={config} ctaHref={() => '#'} edit={{ onChange: patch, onImageFile, upload }} />
+                <LandingTemplate templateKey={templateKey} config={config} ctaHref={() => '#'} edit={{ onChange: patch, onImageFile, onGalleryFiles, upload }} />
               </div>
             </div>
+            <PhoneScrollbar screenRef={screenRef} />
           </div>
 
           <aside className="lpe-side">
@@ -413,6 +654,63 @@ export default function LandingPageForm() {
                     </select>
                     <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>{TEMPLATE_META[templateKey].hint}</p>
                   </div>
+                  {needsFunnel && (
+                    <div className="field lpe-routing">
+                      <label htmlFor="lpe-funnel">Куди ведуть кнопки месенджерів</label>
+                      <select
+                        id="lpe-funnel"
+                        className="input"
+                        value={funnelId}
+                        onChange={(e) => {
+                          setFunnelId(e.target.value)
+                          // The old entry point belonged to a different funnel.
+                          setEntryNodeId('')
+                          setDirty(true)
+                          setSaved(false)
+                        }}
+                      >
+                        <option value="">Оберіть тунель</option>
+                        {funnels.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        id="lpe-entry-node"
+                        className="input"
+                        style={{ marginTop: '0.5rem' }}
+                        value={entryNodeId}
+                        disabled={!funnelId || entryNodesLoading}
+                        onChange={(e) => {
+                          setEntryNodeId(e.target.value)
+                          setDirty(true)
+                          setSaved(false)
+                        }}
+                        aria-label="Точка входу"
+                      >
+                        <option value="">{!funnelId ? 'Спершу оберіть тунель' : entryNodesLoading ? 'Завантаження…' : 'Оберіть точку входу'}</option>
+                        {entryNodes.map((n) => (
+                          <option key={n.id} value={n.id}>
+                            {n.label}
+                          </option>
+                        ))}
+                      </select>
+                      {funnelId && !entryNodesLoading && entryNodes.length === 0 && (
+                        <p className="flow-node-hint" style={{ margin: '0.25rem 0 0', color: 'var(--danger)' }}>
+                          У цьому тунелі немає жодної точки входу — додайте вузол «Точка входу» в редакторі тунелю.
+                        </p>
+                      )}
+                      {routingMissing && funnelId === '' && (
+                        <p className="flow-node-hint" style={{ margin: '0.25rem 0 0', color: 'var(--warning)' }}>
+                          Без тунелю й точки входу опублікувати сторінку не вийде — кнопки нікуди б не вели.
+                        </p>
+                      )}
+                      <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
+                        Один тунель на всю сторінку. Під капотом це посилання лідогенерації — воно створюється й оновлюється автоматично при збереженні.
+                      </p>
+                    </div>
+                  )}
                   <div className="field">
                     <label>Тема</label>
                     <div className="lpe-seg">
@@ -464,6 +762,58 @@ export default function LandingPageForm() {
                           : config.countdown_mode === 'cycle'
                             ? 'Щоразу відраховує заново; цикл 24 год скидається опівночі за часом відвідувача.'
                             : 'Показується під ціною. Підпис редагується прямо на макеті.'}
+                      </p>
+                    </div>
+                  )}
+                  {hasCta && (
+                    <div className="field lpe-orb-panel">
+                      <label>Кулька месенджера</label>
+                      <div className="lpe-orb-row">
+                        <span className="lpe-orb-k">Колір</span>
+                        <div className="lpe-swatches">
+                          <button
+                            type="button"
+                            className={`lpe-sw-default${config.orb_color === '' ? ' on' : ''}`}
+                            onClick={() => patch({ orb_color: '' })}
+                            aria-label="Типовий колір теми"
+                            title="Типовий (скло)"
+                          />
+                          {ACCENT_SWATCHES.map((c) => (
+                            <button key={c} type="button" className={config.orb_color === c ? 'on' : ''} style={{ background: c }} onClick={() => patch({ orb_color: c })} aria-label={c} />
+                          ))}
+                          <input type="color" value={config.orb_color || '#ffc061'} onChange={(e) => patch({ orb_color: e.target.value })} aria-label="Свій колір кульки" />
+                        </div>
+                      </div>
+                      <div className="lpe-orb-row">
+                        <span className="lpe-orb-k">Розмір</span>
+                        <div className="lpe-seg">
+                          {ORB_SIZES.map((sz) => (
+                            <button key={sz} type="button" className={config.orb_size === sz ? 'on' : ''} onClick={() => patch({ orb_size: sz })}>
+                              {ORB_SIZE_LABEL[sz]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="lpe-orb-row">
+                        <span className="lpe-orb-k">Анімація</span>
+                        <div className="lpe-seg wrap">
+                          {ORB_ANIMATIONS.map((an) => (
+                            <button key={an} type="button" className={config.orb_animation === an ? 'on' : ''} onClick={() => patch({ orb_animation: an })}>
+                              {ORB_ANIMATION_LABEL[an]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
+                        Перетягніть кульку прямо на макеті — позиція збережеться.
+                        {config.orb_position && (
+                          <>
+                            {' '}
+                            <button type="button" className="lpe-link-btn lpe-link-neutral" onClick={() => patch({ orb_position: null })}>
+                              Скинути позицію
+                            </button>
+                          </>
+                        )}
                       </p>
                     </div>
                   )}
@@ -568,7 +918,7 @@ export default function LandingPageForm() {
                     </div>
                   </Acc>
 
-                  <Acc title="Privacy" filled={!!config.privacy_url}>
+                  <Acc title="Політика конфіденційності" filled={!!config.privacy_url}>
                     <div className="field">
                       <label htmlFor="lpe-priv">Посилання на політику конфіденційності</label>
                       <input id="lpe-priv" className="input" value={config.privacy_url} onChange={(e) => patch({ privacy_url: e.target.value.trim() })} placeholder="https://…" />
@@ -593,41 +943,14 @@ export default function LandingPageForm() {
                 </div>
               )}
 
-              <div className="lpe-actions">
-                <button type="button" className="btn btn-secondary" disabled={!canSave} onClick={() => submit(status)}>
-                  {saving ? <IconSpinner size={16} /> : <IconCheckCircle size={16} />}
-                  {status === 'published' ? 'Зберегти' : 'Зберегти чернетку'}
-                </button>
-                {status === 'published' ? (
-                  <button type="button" className="btn btn-ghost" disabled={!canSave} onClick={() => submit('draft')}>
-                    Зняти з публікації
-                  </button>
-                ) : (
-                  <button type="button" className="btn btn-primary" disabled={!canSave || !config.headline.trim() || !hasCta} onClick={() => submit('published')} title={!hasCta ? 'Увімкніть хоча б одну кнопку' : undefined}>
-                    <IconPlus size={16} />
-                    Опублікувати
-                  </button>
-                )}
-                {isEditing && (
-                  <button type="button" className="btn-icon-ghost" onClick={handleDelete} disabled={deleting} aria-label="Видалити лендінг" title="Видалити" style={{ marginLeft: 'auto' }}>
+              {isEditing && (
+                <div className="lpe-actions">
+                  <button type="button" className="btn btn-ghost lpe-delete" onClick={handleDelete} disabled={deleting}>
                     {deleting ? <IconSpinner size={14} /> : <IconTrash size={14} />}
+                    Видалити лендінг
                   </button>
-                )}
-              </div>
-
-              {error && (
-                <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
-                  <IconAlert size={16} />
-                  <span>{error}</span>
                 </div>
               )}
-              {saved && !error && (
-                <div className="alert" style={{ marginTop: '0.75rem', background: 'var(--success-soft)', color: 'var(--success)', borderColor: 'transparent' }}>
-                  <IconCheckCircle size={16} />
-                  <span>Збережено</span>
-                </div>
-              )}
-              {dirty && !saved && <p className="lpe-dirty">Є незбережені зміни</p>}
             </div>
 
             <div className="card lpe-hints">

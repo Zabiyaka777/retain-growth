@@ -30,12 +30,6 @@ interface ExistingLink {
   // leaves the server, and this UUID reference doesn't expose it either.
   meta_access_token_secret_id: string | null
   meta_test_event_code: string | null
-  landing_page_id: string | null
-}
-
-interface LandingOption {
-  id: string
-  name: string
 }
 
 export default function LeadGenLinkForm() {
@@ -62,8 +56,6 @@ export default function LeadGenLinkForm() {
   const [tokenCheck, setTokenCheck] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
   const [tokenCheckError, setTokenCheckError] = useState<string | null>(null)
   const [metaTestEventCode, setMetaTestEventCode] = useState('')
-  const [landings, setLandings] = useState<LandingOption[]>([])
-  const [landingPageId, setLandingPageId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -74,18 +66,14 @@ export default function LeadGenLinkForm() {
       setLoading(true)
       setSaved(false)
       setError(null)
-      const [{ data: funnelsData }, { data: landingsData }] = await Promise.all([
-        supabase.from('funnels').select('id, name').order('name'),
-        supabase.from('landing_pages').select('id, name').eq('status', 'published').order('name'),
-      ])
+      const { data: funnelsData } = await supabase.from('funnels').select('id, name').order('name')
       if (cancelled) return
       setFunnels((funnelsData ?? []) as FunnelOption[])
-      setLandings((landingsData ?? []) as LandingOption[])
 
       if (linkId) {
         const { data } = await supabase
           .from('lead_gen_links')
-          .select('id, name, ref_token, funnel_id, entry_node_id, pixel_id, meta_access_token_secret_id, meta_test_event_code, landing_page_id')
+          .select('id, name, ref_token, funnel_id, entry_node_id, pixel_id, meta_access_token_secret_id, meta_test_event_code')
           .eq('id', linkId)
           .maybeSingle()
         if (cancelled) return
@@ -99,7 +87,6 @@ export default function LeadGenLinkForm() {
           setPixelId(existing.pixel_id ?? '')
           setHasMetaToken(!!existing.meta_access_token_secret_id)
           setMetaTestEventCode(existing.meta_test_event_code ?? '')
-          setLandingPageId(existing.landing_page_id ?? '')
           setRefToken(existing.ref_token)
         }
       }
@@ -232,8 +219,6 @@ export default function LeadGenLinkForm() {
           pixelId: pixelId.trim() || undefined,
           metaAccessToken: metaAccessToken.trim() || undefined,
           metaTestEventCode: metaTestEventCode.trim() || undefined,
-          // null (not undefined) clears the page on an edit — see save-leadgen-link.ts
-          landingPageId: landingPageId || null,
         }),
       })
       const data = await res.json()
@@ -345,22 +330,6 @@ export default function LeadGenLinkForm() {
                   У цьому тунелі немає жодної точки входу — додайте вузол «Точка входу» в редакторі тунелю.
                 </p>
               )}
-            </div>
-            <div className="field">
-              <label htmlFor="lgl-landing">Лендінг перед месенджером (опційно)</label>
-              <select id="lgl-landing" className="input" value={landingPageId} onChange={(e) => setLandingPageId(e.target.value)}>
-                <option value="">Без лендінга — одразу в месенджер</option>
-                {landings.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-              <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
-                {landings.length === 0
-                  ? 'Тут з’являться опубліковані лендінги з вкладки «Лендінги».'
-                  : 'Відвідувач спершу побачить цю сторінку, а кнопка на ній поведе в месенджер із тим самим click_id.'}
-              </p>
             </div>
             <div className="field">
               <label htmlFor="lgl-pixel">Pixel ID (опційно)</label>

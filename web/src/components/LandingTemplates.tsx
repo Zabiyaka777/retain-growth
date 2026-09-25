@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 
 // The fixed landing templates. Rendered three times: on the public /lp/:slug
 // page for the visitor, inside the dashboard editor where the very same markup
@@ -33,6 +33,12 @@ export const CHANNEL_META: Record<CtaChannel, { name: string; cls: string; color
 }
 export const IMAGE_ASPECTS = ['square', 'portrait'] as const
 export type ImageAspect = (typeof IMAGE_ASPECTS)[number]
+export const ORB_SIZES = ['sm', 'md', 'lg'] as const
+export type OrbSize = (typeof ORB_SIZES)[number]
+export const ORB_ANIMATIONS = ['none', 'pulse', 'bounce'] as const
+export type OrbAnimation = (typeof ORB_ANIMATIONS)[number]
+export const ORB_SIZE_PX: Record<OrbSize, number> = { sm: 34, md: 40, lg: 52 }
+export const MAX_PRODUCT_IMAGES = 8
 export const COUNTDOWN_MODES = ['off', 'deadline', 'cycle'] as const
 export type CountdownMode = (typeof COUNTDOWN_MODES)[number]
 
@@ -89,6 +95,14 @@ export interface LandingConfig {
   show_urgency: boolean
   advantages: LandingAdvantage[]
   price_highlight: string
+  /* product only: carousel photos; empty = the single image_url */
+  product_images: string[]
+  /* messenger orb: centre in % of the screen; null = default spot on the right edge */
+  orb_position: { x: number; y: number } | null
+  /* '' = the theme's own glass look */
+  orb_color: string
+  orb_size: OrbSize
+  orb_animation: OrbAnimation
   countdown_mode: CountdownMode
   /* ISO timestamp for 'deadline' */
   countdown_deadline_at: string
@@ -125,6 +139,11 @@ export const EMPTY_CONFIG: LandingConfig = {
   show_urgency: false,
   advantages: [],
   price_highlight: '',
+  product_images: [],
+  orb_position: null,
+  orb_color: '',
+  orb_size: 'md',
+  orb_animation: 'none',
   countdown_mode: 'off',
   countdown_deadline_at: '',
   countdown_cycle_hours: 24,
@@ -151,6 +170,7 @@ export function withConfigDefaults(raw: Partial<LandingConfig> | null | undefine
     ctas: EMPTY_CONFIG.ctas.map((d) => ({ ...d, ...(ctas.find((c) => c.channel === d.channel) ?? {}) })),
     advantages: Array.isArray(r.advantages) ? r.advantages : [],
     bullets: Array.isArray(r.bullets) ? r.bullets : [],
+    product_images: Array.isArray(r.product_images) ? r.product_images : [],
     texts: { ...EMPTY_CONFIG.texts, ...(r.texts ?? {}) },
   }
 }
@@ -163,6 +183,8 @@ export type ImageUploadState =
 export interface EditApi {
   onChange: (patch: Partial<LandingConfig>) => void
   onImageFile: (file: File) => void
+  /* product carousel: appends every file to product_images, one upload at a time */
+  onGalleryFiles: (files: File[]) => void
   upload: ImageUploadState
 }
 
@@ -475,6 +497,123 @@ function HeroImage({ config, edit, className }: { config: LandingConfig; edit?: 
   )
 }
 
+/* ---------- product carousel ----------
+   Native scroll-snap: swipe on touch, wheel/trackpad on desktop, dots and
+   arrows for the mouse. In the editor the same strip carries the upload,
+   reorder and delete controls. Empty gallery falls back to the plain drop
+   zone, whose single upload seeds the first slide. */
+export function productSlides(config: LandingConfig): string[] {
+  return config.product_images.length ? config.product_images : config.image_url ? [config.image_url] : []
+}
+
+function ProductCarousel({ config, edit, className }: { config: LandingConfig; edit?: EditApi; className: string }) {
+  const slides = productSlides(config)
+  const track = useRef<HTMLDivElement>(null)
+  const addInput = useRef<HTMLInputElement>(null)
+  const [active, setActive] = useState(0)
+  const aspect = `ar-${config.image_aspect === 'portrait' ? 'portrait' : 'square'}`
+  const current = Math.min(active, Math.max(0, slides.length - 1))
+
+  if (slides.length === 0) return <HeroImage config={config} edit={edit} className={className} />
+  if (!edit && slides.length === 1) return <HeroImage config={config} className={className} />
+
+  function go(i: number) {
+    const el = track.current
+    if (!el) return
+    const next = Math.max(0, Math.min(slides.length - 1, i))
+    el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' })
+    setActive(next)
+  }
+  function commit(next: string[]) {
+    edit?.onChange({ product_images: next, image_url: next[0] ?? '' })
+  }
+  function move(from: number, to: number) {
+    if (to < 0 || to >= slides.length) return
+    const next = slides.slice()
+    ;[next[from], next[to]] = [next[to], next[from]]
+    commit(next)
+    requestAnimationFrame(() => go(to))
+  }
+  const up = edit?.upload
+
+  return (
+    <div className={`lp-hero-img lp-car ${className} ${aspect}`}>
+      <div
+        ref={track}
+        className="lp-car-track"
+        onScroll={(e) => {
+          const el = e.currentTarget
+          if (el.clientWidth > 0) setActive(Math.round(el.scrollLeft / el.clientWidth))
+        }}
+      >
+        {slides.map((url, i) => (
+          <div className="lp-car-slide" key={`${url}-${i}`}>
+            <img src={url} alt="" decoding="async" loading={i === 0 ? 'eager' : 'lazy'} />
+          </div>
+        ))}
+      </div>
+
+      {slides.length > 1 && (
+        <>
+          <button type="button" className="lp-car-arrow prev" onClick={() => go(current - 1)} disabled={current === 0} aria-label="Попереднє фото">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+          </button>
+          <button type="button" className="lp-car-arrow next" onClick={() => go(current + 1)} disabled={current === slides.length - 1} aria-label="Наступне фото">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+          </button>
+          <div className="lp-car-dots" role="tablist" aria-label="Фото товару">
+            {slides.map((_, i) => (
+              <button key={i} type="button" role="tab" aria-selected={i === current} aria-label={`Фото ${i + 1} з ${slides.length}`} className={i === current ? 'on' : ''} onClick={() => go(i)} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {edit && (
+        <>
+          <input
+            ref={addInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            hidden
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? [])
+              if (files.length) edit.onGalleryFiles(files)
+              e.target.value = ''
+            }}
+          />
+          <div className="lp-ar" role="group" aria-label="Співвідношення сторін">
+            {IMAGE_ASPECTS.map((a) => (
+              <button key={a} type="button" className={config.image_aspect === a ? 'on' : ''} onClick={() => edit.onChange({ image_aspect: a })}>
+                {a === 'square' ? '1:1' : '2:3'}
+              </button>
+            ))}
+          </div>
+          <div className="lp-car-tools">
+            <span className="lp-car-count">
+              {current + 1} / {slides.length}
+            </span>
+            <button type="button" onClick={() => move(current, current - 1)} disabled={current === 0} aria-label="Перемістити фото лівіше" title="Лівіше">
+              ←
+            </button>
+            <button type="button" onClick={() => move(current, current + 1)} disabled={current === slides.length - 1} aria-label="Перемістити фото правіше" title="Правіше">
+              →
+            </button>
+            <button type="button" className="danger" onClick={() => commit(slides.filter((_, i) => i !== current))} aria-label="Видалити це фото" title="Видалити фото">
+              ✕
+            </button>
+            <button type="button" className="p" onClick={() => addInput.current?.click()} disabled={slides.length >= MAX_PRODUCT_IMAGES || up?.kind === 'uploading'}>
+              {up?.kind === 'uploading' ? `Завантажуємо… ${Math.round(up.progress)}%` : slides.length >= MAX_PRODUCT_IMAGES ? `Макс. ${MAX_PRODUCT_IMAGES}` : '+ Фото'}
+            </button>
+          </div>
+          {up?.kind === 'error' && <div className="lp-car-err">{up.message}</div>}
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ---------- native CTA buttons ---------- */
 function ctaHost(url: string) {
   try {
@@ -704,6 +843,11 @@ function Foot({ config, edit, def }: { config: LandingConfig; edit?: EditApi; de
 function OrbMenu({ config, ctaHref, onCta, edit }: { config: LandingConfig; ctaHref: Props['ctaHref']; onCta?: Props['onCta']; edit?: EditApi }) {
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
+  // Editor drag: startX/Y are the press point; the orb only counts as moved
+  // past a few px, so a plain click still opens the menu.
+  const drag = useRef<{ startX: number; startY: number; moved: boolean; rect: DOMRect } | null>(null)
+  const swallowClick = useRef(false)
+  const raf = useRef(0)
   useEffect(() => {
     if (!open) return
     const onDown = (e: PointerEvent) => {
@@ -717,11 +861,85 @@ function OrbMenu({ config, ctaHref, onCta, edit }: { config: LandingConfig; ctaH
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
+  useEffect(() => () => cancelAnimationFrame(raf.current), [])
   const list = config.ctas.filter((c) => c.enabled)
   if (list.length === 0) return null
+
+  const pos = config.orb_position
+  const px = ORB_SIZE_PX[config.orb_size] ?? ORB_SIZE_PX.md
+  const solid = /^#[0-9a-f]{6}$/i.test(config.orb_color)
+  // Where the menu opens so it never runs off the screen: toward the middle
+  // horizontally, and upward once the orb sits low.
+  const menuH = (pos?.x ?? 96) > 50 ? 'r' : 'l'
+  const menuV = (pos?.y ?? 50) > 62 ? 'up' : 'down'
+  const style: CSSProperties = { width: px, height: px }
+  if (pos) {
+    style.left = `${pos.x}%`
+    style.top = `${pos.y}%`
+    style.right = 'auto'
+    style.transform = 'translate(-50%, -50%)'
+  }
+  if (solid) {
+    ;(style as Record<string, string>)['--orb'] = config.orb_color
+    ;(style as Record<string, string>)['--orb-ink'] = isLight(config.orb_color) ? '#0c0f14' : '#ffffff'
+  }
+
+  function onOrbDown(e: ReactPointerEvent<HTMLButtonElement>) {
+    const host = wrap.current?.parentElement
+    if (!edit || !host) return
+    // Capture keeps the drag alive outside the button; it can throw when the
+    // pointer is already gone, which must not cancel the drag itself.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      /* not capturable — the drag still tracks via the moves on the button */
+    }
+    drag.current = { startX: e.clientX, startY: e.clientY, moved: false, rect: host.getBoundingClientRect() }
+  }
+  function onOrbMove(e: ReactPointerEvent<HTMLButtonElement>) {
+    const d = drag.current
+    if (!d || !edit) return
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 5) return
+    d.moved = true
+    setOpen(false)
+    const clamp = (v: number) => Math.round(Math.min(94, Math.max(6, v)) * 10) / 10
+    const x = clamp(((e.clientX - d.rect.left) / d.rect.width) * 100)
+    const y = clamp(((e.clientY - d.rect.top) / d.rect.height) * 100)
+    cancelAnimationFrame(raf.current)
+    raf.current = requestAnimationFrame(() => edit.onChange({ orb_position: { x, y } }))
+  }
+  function onOrbUp(e: ReactPointerEvent<HTMLButtonElement>) {
+    if (drag.current?.moved) swallowClick.current = true
+    drag.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
   return (
-    <div ref={wrap} className={`lp-orb-wrap${open ? ' open' : ''}`}>
-      <button type="button" className="lp-orb" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={config.texts.orb_title || TEXT_DEFAULTS.orb_title}>
+    <div
+      ref={wrap}
+      className={`lp-orb-wrap${open ? ' open' : ''}${pos ? ' has-pos' : ''}${solid ? ' orb-solid' : ''} orb-${config.orb_animation}${edit ? ' orb-edit' : ''}`}
+      style={style}
+      data-h={menuH}
+      data-v={menuV}
+    >
+      <button
+        type="button"
+        className="lp-orb"
+        onClick={() => {
+          if (swallowClick.current) {
+            swallowClick.current = false
+            return
+          }
+          setOpen((v) => !v)
+        }}
+        onPointerDown={onOrbDown}
+        onPointerMove={onOrbMove}
+        onPointerUp={onOrbUp}
+        onPointerCancel={onOrbUp}
+        title={edit ? 'Перетягніть, щоб змінити позицію' : undefined}
+        aria-expanded={open}
+        aria-label={config.texts.orb_title || TEXT_DEFAULTS.orb_title}
+      >
         {open ? ICO.x : ICO.chat}
       </button>
       <div className="lp-orb-menu" role="menu" aria-hidden={!open}>
@@ -923,7 +1141,7 @@ export function LandingTemplate({ templateKey, config, ctaHref, onCta, edit, sta
           {templateKey === 'product' && (
             <section className="lp-tpl">
               <div className="lp-cover">
-                <HeroImage config={config} edit={edit} className="lp-cover-img" />
+                <ProductCarousel config={config} edit={edit} className="lp-cover-img" />
                 <div className="lp-cover-scrim" aria-hidden="true" />
                 <div className="lp-cover-copy">
                   <H config={config} edit={edit} big placeholder="Назва товару" />

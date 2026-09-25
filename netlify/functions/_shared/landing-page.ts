@@ -34,6 +34,11 @@ export type ImageAspect = (typeof IMAGE_ASPECTS)[number];
 export const COUNTDOWN_MODES = ["off", "deadline", "cycle"] as const;
 export type CountdownMode = (typeof COUNTDOWN_MODES)[number];
 
+export const ORB_SIZES = ["sm", "md", "lg"] as const;
+export type OrbSize = (typeof ORB_SIZES)[number];
+export const ORB_ANIMATIONS = ["none", "pulse", "bounce"] as const;
+export type OrbAnimation = (typeof ORB_ANIMATIONS)[number];
+
 export interface LandingAdvantage {
   title: string;
   text: string;
@@ -57,6 +62,15 @@ export interface LandingConfig {
   advantages: LandingAdvantage[];
   /* product only */
   price_highlight: string;
+  /* product only: gallery for the carousel; empty = the single image_url */
+  product_images: string[];
+  /* messenger orb: where the visitor sees it (centre, % of the screen);
+     null = the default spot on the right edge */
+  orb_position: { x: number; y: number } | null;
+  /* '' = the theme's own glass look */
+  orb_color: string;
+  orb_size: OrbSize;
+  orb_animation: OrbAnimation;
   /* product only: countdown under the price */
   countdown_mode: CountdownMode;
   countdown_deadline_at: string;
@@ -117,6 +131,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 // public page injects, so they must never carry anything script-shaped.
 export const PIXEL_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
 const MAX_BULLETS = 8;
+const MAX_PRODUCT_IMAGES = 8;
 const MAX_ADVANTAGES = 6;
 const MAX_CODE = 8000;
 const MAX_CYCLE_HOURS = 24 * 7;
@@ -184,6 +199,17 @@ export function normalizeLandingConfig(raw: unknown): LandingConfig {
     return { channel, label: DEFAULT_CTA_LABELS[channel], enabled: false, type: "funnel", url: "", color: "", sub: "" };
   });
 
+  const productImages = Array.isArray(src.product_images)
+    ? src.product_images.map(httpUrl).filter(Boolean).slice(0, MAX_PRODUCT_IMAGES)
+    : [];
+  const rawPos = src.orb_position && typeof src.orb_position === "object" ? (src.orb_position as Record<string, unknown>) : null;
+  const pct = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.round(Math.min(100, Math.max(0, n)) * 10) / 10 : null;
+  };
+  const orbX = rawPos ? pct(rawPos.x) : null;
+  const orbY = rawPos ? pct(rawPos.y) : null;
+
   const rawTexts = (src.texts && typeof src.texts === "object" ? src.texts : {}) as Record<string, unknown>;
   const texts = Object.fromEntries(TEXT_KEYS.map((k) => [k, str(rawTexts[k], 120)])) as LandingTexts;
 
@@ -204,6 +230,11 @@ export function normalizeLandingConfig(raw: unknown): LandingConfig {
     urgency_text: str(src.urgency_text, 200),
     show_urgency: src.show_urgency === true,
     advantages,
+    product_images: productImages,
+    orb_position: orbX !== null && orbY !== null ? { x: orbX, y: orbY } : null,
+    orb_color: hex(src.orb_color),
+    orb_size: ORB_SIZES.includes(src.orb_size as OrbSize) ? (src.orb_size as OrbSize) : "md",
+    orb_animation: ORB_ANIMATIONS.includes(src.orb_animation as OrbAnimation) ? (src.orb_animation as OrbAnimation) : "none",
     price_highlight: str(src.price_highlight, 60),
     countdown_mode: COUNTDOWN_MODES.includes(src.countdown_mode as CountdownMode) ? (src.countdown_mode as CountdownMode) : "off",
     countdown_deadline_at: Number.isFinite(deadlineMs) ? new Date(deadlineMs).toISOString() : "",

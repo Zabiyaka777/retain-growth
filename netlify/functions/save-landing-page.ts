@@ -11,6 +11,7 @@ import {
   normalizeLandingConfig,
   type LandingTemplateKey,
 } from "./_shared/landing-page";
+import { generateRefToken, MAX_REF_TOKEN_ATTEMPTS } from "./_shared/ref-token";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -54,6 +55,11 @@ export const handler: Handler = async (event) => {
   const metaAccessToken =
     typeof body.metaAccessToken === "string" && body.metaAccessToken.trim() ? body.metaAccessToken.trim() : undefined;
   const clearMetaToken = body.metaAccessToken === null;
+  // Where the page's messenger buttons lead. Absent from the body = leave the
+  // stored choice alone; both null = clear it.
+  const routingSent = "funnelId" in body || "entryNodeId" in body;
+  const funnelId = typeof body.funnelId === "string" && body.funnelId ? body.funnelId : null;
+  const entryNodeId = typeof body.entryNodeId === "string" && body.entryNodeId ? body.entryNodeId : null;
 
   if (!deleteId) {
     if (!name) return jsonResponse(400, { error: "Вкажіть назву" });
@@ -62,6 +68,9 @@ export const handler: Handler = async (event) => {
       return jsonResponse(400, { error: "Адреса: 3–60 символів, лише латинські літери в нижньому регістрі, цифри та дефіс" });
     }
     if (RESERVED_SLUGS.has(slug)) return jsonResponse(400, { error: RESERVED_SLUG_ERROR });
+    if (routingSent && !!funnelId !== !!entryNodeId) {
+      return jsonResponse(400, { error: "Оберіть тунель і точку входу разом" });
+    }
     if (metaAccessToken && !/^[A-Za-z0-9]{40,300}$/.test(metaAccessToken)) {
       return jsonResponse(400, {
         error: "Токен доступу має бути одним рядком з латинських літер і цифр, без пробілів, переносів рядків чи іншого тексту",
@@ -103,6 +112,42 @@ export const handler: Handler = async (event) => {
   }
 
   const config = normalizeLandingConfig(body.config);
+
+  // Must be this org's funnel, and the node one of ITS entry points — a stray
+  // id from another org (or a non-entry node) would misroute every lead.
+  if (funnelId && entryNodeId) {
+    const { data: funnel } = await supabase.from("funnels").select("id").eq("id", funnelId).eq("org_id", orgId).maybeSingle();
+    if (!funnel) return jsonResponse(404, { error: "Воронку не знайдено" });
+    const { data: entryNode } = await supabase
+      .from("funnel_nodes")
+      .select("id")
+      .eq("id", entryNodeId)
+      .eq("funnel_id", funnelId)
+      .eq("type", "entry")
+      .maybeSingle();
+    if (!entryNode) return jsonResponse(404, { error: "Точку входу не знайдено в обраному тунелі" });
+  }
+
+  const hasFunnelCta = config.ctas.some((c) => c.enabled && c.type === "funnel");
+  if (status === "published" && hasFunnelCta && !funnelId) {
+    // Legacy pages already wired to a link (made through the old link-form
+    // field) keep working without re-picking anything.
+    let alreadyBound = false;
+    if (id) {
+      const { data: bound } = await supabase
+        .from("lead_gen_links")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("landing_page_id", id)
+        .limit(1)
+        .maybeSingle();
+      alreadyBound = !!bound;
+    }
+    if (!alreadyBound) {
+      return jsonResponse(400, { error: "Оберіть тунель і точку входу — інакше кнопки месенджерів нікуди не ведуть" });
+    }
+  }
+
   if (status === "published" && !config.headline) {
     return jsonResponse(400, { error: "Опублікувати можна лише лендінг із заголовком" });
   }
@@ -161,6 +206,10 @@ export const handler: Handler = async (event) => {
     config,
     updated_at: new Date().toISOString(),
   };
+  if (routingSent) {
+    payload.funnel_id = funnelId;
+    payload.entry_node_id = entryNodeId;
+  }
   if (newTokenSecretId) payload.meta_access_token_secret_id = newTokenSecretId;
   else if (clearMetaToken) payload.meta_access_token_secret_id = null;
 
@@ -179,7 +228,7 @@ export const handler: Handler = async (event) => {
     ? supabase.from("landing_pages").update(payload).eq("id", id).eq("org_id", orgId)
     : supabase.from("landing_pages").insert({ ...payload, org_id: orgId });
 
-  const { data, error } = await query.select("id, name, template_key, slug, status, config, meta_access_token_secret_id").maybeSingle();
+  const { data, error } = await query.select("id, name, template_key, slug, status, config, meta_access_token_secret_id, funnel_id, entry_node_id").maybeSingle();
 
   if (error) {
     // UNIQUE(slug) is global, so this can be another org's page — the message
@@ -193,6 +242,53 @@ export const handler: Handler = async (event) => {
   if (oldTokenSecretId && oldTokenSecretId !== data.meta_access_token_secret_id) {
     const { error: vaultError } = await supabase.rpc("vault_delete_secret", { secret_id: oldTokenSecretId });
     if (vaultError) console.error("save-landing-page: vault_delete_secret (old token) failed", vaultError);
+  }
+
+  // The page's choice is mirrored onto the lead-gen link that routes its
+  // visitors (the one landing-page-config hands out as fallbackRef): updated
+  // if the page already has one, created otherwise.
+  if (funnelId && entryNodeId) {
+    const { data: link } = await supabase
+      .from("lead_gen_links")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("landing_page_id", data.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    let linkError: { message: string } | null = null;
+    if (link) {
+      const { error: updateError } = await supabase
+        .from("lead_gen_links")
+        .update({ funnel_id: funnelId, entry_node_id: entryNodeId })
+        .eq("id", link.id)
+        .eq("org_id", orgId);
+      linkError = updateError;
+    } else {
+      linkError = { message: "insert not attempted" };
+      for (let attempt = 0; attempt < MAX_REF_TOKEN_ATTEMPTS; attempt++) {
+        const { error: insertError } = await supabase.from("lead_gen_links").insert({
+          org_id: orgId,
+          name: name.slice(0, 120),
+          funnel_id: funnelId,
+          entry_node_id: entryNodeId,
+          landing_page_id: data.id,
+          ref_token: generateRefToken(),
+        });
+        if (!insertError) {
+          linkError = null;
+          break;
+        }
+        linkError = insertError;
+        if (insertError.code !== UNIQUE_VIOLATION) break;
+        // ref_token collision (astronomically unlikely at 8 chars) — retry.
+      }
+    }
+    if (linkError) {
+      console.error("save-landing-page: lead_gen_link sync failed", linkError);
+      return jsonResponse(500, { error: "Лендінг збережено, але не вдалося оновити посилання на тунель. Спробуйте зберегти ще раз" });
+    }
   }
 
   // The token itself never travels back — only whether one is stored.

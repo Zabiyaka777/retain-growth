@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
-import { customAlphabet } from "nanoid";
+import { generateRefToken, MAX_REF_TOKEN_ATTEMPTS as MAX_TOKEN_ATTEMPTS } from "./_shared/ref-token";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -13,10 +13,6 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const UNIQUE_VIOLATION = "23505";
-// Unambiguous alphabet (no 0/O/1/I/l) — these tokens end up in short links
-// people read/type/click, so avoid characters that are easy to misread.
-const generateRefToken = customAlphabet("23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ", 8);
-const MAX_TOKEN_ATTEMPTS = 5;
 
 function jsonResponse(statusCode: number, body: unknown) {
   return {
@@ -49,8 +45,6 @@ export const handler: Handler = async (event) => {
   // touches the stored secret.
   let metaAccessToken: string | undefined;
   let metaTestEventCode: string | null = null;
-  // null clears the page, undefined/absent leaves the column as-is on an edit.
-  let landingPageId: string | null | undefined;
   try {
     const body = JSON.parse(event.body || "{}");
     name = typeof body.name === "string" ? body.name.trim() : undefined;
@@ -59,7 +53,6 @@ export const handler: Handler = async (event) => {
     pixelId = typeof body.pixelId === "string" && body.pixelId.trim() ? body.pixelId.trim() : null;
     metaAccessToken = typeof body.metaAccessToken === "string" && body.metaAccessToken.trim() ? body.metaAccessToken.trim() : undefined;
     metaTestEventCode = typeof body.metaTestEventCode === "string" && body.metaTestEventCode.trim() ? body.metaTestEventCode.trim() : null;
-    landingPageId = body.landingPageId === null ? null : typeof body.landingPageId === "string" && body.landingPageId ? body.landingPageId : undefined;
     id = typeof body.id === "string" ? body.id : undefined;
     deleteId = body.delete === true && typeof body.id === "string" ? body.id : undefined;
   } catch {
@@ -142,13 +135,6 @@ export const handler: Handler = async (event) => {
     return jsonResponse(404, { error: "Точку входу не знайдено в обраному тунелі" });
   }
 
-  // Must be this org's page — an id from another org would otherwise let one
-  // tenant route its leads through someone else's landing.
-  if (landingPageId) {
-    const { data: page } = await supabase.from("landing_pages").select("id").eq("id", landingPageId).eq("org_id", orgId).maybeSingle();
-    if (!page) return jsonResponse(404, { error: "Лендінг не знайдено" });
-  }
-
   // vault.secrets.name is uniquely indexed and is only a human-readable label
   // (lookups always go through lead_gen_links.meta_access_token_secret_id) —
   // the timestamp suffix keeps a token replacement from colliding with the
@@ -168,7 +154,7 @@ export const handler: Handler = async (event) => {
     newTokenSecretId = secretId;
   }
 
-  let link: { id: string; ref_token: string; meta_access_token_secret_id: string | null; landing_page_id: string | null } | null = null;
+  let link: { id: string; ref_token: string; meta_access_token_secret_id: string | null } | null = null;
 
   if (id) {
     // Update: name/funnel/tag can change, ref_token never does — the links
@@ -191,7 +177,6 @@ export const handler: Handler = async (event) => {
       pixel_id: pixelId,
       meta_test_event_code: metaTestEventCode,
     };
-    if (landingPageId !== undefined) updatePayload.landing_page_id = landingPageId;
     // Omitted entirely (not set to null) when no new token was submitted —
     // see the metaAccessToken comment above for why blank must never clear it.
     if (newTokenSecretId) updatePayload.meta_access_token_secret_id = newTokenSecretId;
@@ -201,7 +186,7 @@ export const handler: Handler = async (event) => {
       .update(updatePayload)
       .eq("id", id)
       .eq("org_id", orgId)
-      .select("id, ref_token, meta_access_token_secret_id, landing_page_id")
+      .select("id, ref_token, meta_access_token_secret_id")
       .maybeSingle();
 
     if (updateError) {
@@ -232,10 +217,9 @@ export const handler: Handler = async (event) => {
           pixel_id: pixelId,
           meta_access_token_secret_id: newTokenSecretId ?? null,
           meta_test_event_code: metaTestEventCode,
-          landing_page_id: landingPageId ?? null,
           ref_token: refToken,
         })
-        .select("id, ref_token, meta_access_token_secret_id, landing_page_id")
+        .select("id, ref_token, meta_access_token_secret_id")
         .single();
 
       if (!insertError) {
@@ -272,7 +256,6 @@ export const handler: Handler = async (event) => {
       pixelId,
       metaTestEventCode,
       hasMetaToken: !!link.meta_access_token_secret_id,
-      landingPageId: link.landing_page_id,
       refToken: link.ref_token,
     },
     urls,
