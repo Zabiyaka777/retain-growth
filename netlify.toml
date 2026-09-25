@@ -1,5 +1,5 @@
 [build]
-  command = "npm --prefix web install && npm --prefix web run build"
+  command = "npm --prefix web install && npm --prefix web run build && cp netlify/_headers web/dist/_headers"
   publish = "web/dist"
   functions = "netlify/functions"
 
@@ -50,66 +50,10 @@
   to = "/.netlify/functions/redirect"
   status = 200
 
-# ---------------------------------------------------------------------------
-# Security headers.
-# Netlify merges every [[headers]] rule that matches a path, and two
-# Content-Security-Policy headers are BOTH enforced by the browser (the
-# stricter wins). So the CSP is never in the catch-all "/*" rule: the app
-# routes get the strict one, /lp/* its own looser one, and "/*" carries only
-# the headers that are identical everywhere.
-# ---------------------------------------------------------------------------
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    # microphone: voice notes recorded in the funnel builder.
-    Permissions-Policy = "camera=(), geolocation=(), payment=(), usb=(), microphone=(self)"
-
-# The app itself: only its own bundle may run. Everything it talks to is
-# listed — Supabase (REST + realtime), openrouter.ai (public model list in the
-# funnel builder), Google Fonts. Images/media are any https because
-# attachments and landing images are user-supplied URLs; they can't execute.
-[[headers]]
-  for = "/"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-[[headers]]
-  for = "/login"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-[[headers]]
-  for = "/dashboard"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-[[headers]]
-  for = "/dashboard/*"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-[[headers]]
-  for = "/admin"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-[[headers]]
-  for = "/admin/*"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-
-# Public landing pages: same base, plus what the page legitimately injects —
-# the Meta / TikTok / Google pixels an operator configures (their bootstrap
-# snippets are inline, hence 'unsafe-inline' here and only here). The
-# operator's custom code runs in a srcdoc iframe, which inherits this policy,
-# so it too can only load scripts from these vendors. Still no framing of
-# the page by anyone else.
-# *.run.app / *.on.aws: Meta's pixel config script (connect.facebook.net/
-# signals/config/<pixel>) posts to Meta endpoints hosted on Cloud Run and AWS
-# (seen: mpc-prod-…us-central1.run.app/events, …ecs.us-east-1.on.aws/events),
-# with host names that vary — hence the wildcards, on /lp only.
-[[headers]]
-  for = "/lp/*"
-  [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://analytics.tiktok.com https://*.tiktok.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://*.facebook.com https://*.facebook.net https://*.tiktok.com https://*.tiktokw.us https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.doubleclick.net https://www.google.com https://*.run.app https://*.on.aws; frame-src https://*.facebook.com https://*.doubleclick.net https://www.googletagmanager.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+# Security headers (CSP, X-Frame-Options, nosniff, …) live in netlify/_headers,
+# copied into the publish dir by the build command above. Not here: Netlify
+# applies netlify.toml [[headers]] in `netlify dev` too, where the strict CSP
+# blocks Vite's inline Fast Refresh preamble and the page renders black.
 
 # React Router client-side routes (e.g. /login, /dashboard) must fall back to index.html.
 [[redirects]]
@@ -120,6 +64,13 @@
 [dev]
   command = "npm --prefix web run dev -- --port 5183 --strictPort"
   targetPort = 5183
-  publish = "web/dist"
+  # Not web/dist: netlify dev applies _headers from this dir, and web/dist
+  # carries the production CSP after any local build (see netlify/_headers).
+  publish = "web/public"
   functions = "netlify/functions"
   framework = "#custom"
+
+# Same reason, one level up: netlify dev also merges <build.publish>/_headers
+# into its config, so in the dev context build.publish must not be web/dist.
+[context.dev]
+  publish = "web/public"
