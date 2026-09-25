@@ -7,6 +7,7 @@ import {
   RESERVED_SLUG_ERROR,
   SLUG_RE,
   TAKEN_SLUG_ERROR,
+  findClickFixSigns,
   normalizeLandingConfig,
   type LandingTemplateKey,
 } from "./_shared/landing-page";
@@ -111,6 +112,29 @@ export const handler: Handler = async (event) => {
   // A link button with no destination would render as a dead control.
   if (status === "published" && config.ctas.some((c) => c.enabled && c.type === "link" && !c.url)) {
     return jsonResponse(400, { error: "Вкажіть посилання (https://…) для кожної кнопки типу «Лінк» або вимкніть її" });
+  }
+
+  // Publishing is where a page becomes public on our domain, so that's where
+  // the ClickFix guard sits (see _shared/landing-page.ts). A draft may still
+  // be saved — it's invisible to visitors — so a false positive never costs
+  // the operator their work. Every refusal is recorded for /admin/security.
+  if (status === "published") {
+    const signs = findClickFixSigns(config);
+    if (signs.length > 0) {
+      const { error: eventError } = await supabase.from("events").insert({
+        org_id: orgId,
+        type: "landing_publish_blocked",
+        level: "warn",
+        payload: { landing_page_id: id ?? null, slug, name, signs, user_id: userData.user.id },
+      });
+      if (eventError) console.error("save-landing-page: events insert failed", eventError);
+      return jsonResponse(422, {
+        error:
+          `Публікацію заблоковано: на сторінці є фрази, типові для шахрайських «перевірок» (${signs.map((x) => x.replace(/^«|»$/g, "")).join(", ")}). ` +
+          "Такі сторінки просять відвідувача запустити команду на своєму компʼютері. Приберіть ці фрази й опублікуйте знову — як чернетку сторінку зберегти можна. Якщо це помилка, напишіть у підтримку.",
+        signs,
+      });
+    }
   }
 
   // Created before touching the row so a failure here never leaves the row

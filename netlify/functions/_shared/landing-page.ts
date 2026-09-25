@@ -220,3 +220,59 @@ export function normalizeLandingConfig(raw: unknown): LandingConfig {
     google_tag_id: pixel(src.google_tag_id),
   };
 }
+
+/* ---------- ClickFix guard ----------
+   The "fake Cloudflare check" attack: a page tells the visitor to press
+   Win+R (or open Terminal on a Mac), paste what's been put on their
+   clipboard and hit Enter — which runs the attacker's command. Our /lp pages
+   sit on our own trusted domain, so a tenant could publish exactly that
+   page without any script at all, just with text. This is the net for it:
+   save-landing-page.ts refuses to publish a match, and admin-landing-review
+   lists already-published matches so an admin can take them down.
+
+   Each rule is one tell-tale of the attack (run dialog, shell, LOLBins,
+   "paste this into the terminal", "verify you're human" bait). A legitimate
+   marketing page has no reason to contain any of them. Cyrillic word endings
+   use an explicit class — JS \w is ASCII-only and never matches them. */
+const CLICKFIX_RULES: { label: string; re: RegExp }[] = [
+  { label: "Win+R", re: /\bwin(?:dows)?\s*(?:key\s*)?\+\s*r\b|⊞\s*\+?\s*r\b/i },
+  { label: "клавіша Windows", re: /клавіш[уаі]\s+windows|windows[\s-]+key|клавиш[уаи]\s+windows/i },
+  { label: "PowerShell", re: /\bpowershell\b|\bpwsh\b/i },
+  { label: "mshta", re: /\bmshta\b/i },
+  { label: "cmd /c", re: /\bcmd(?:\.exe)?\s+\/[ck]\b/i },
+  { label: "системні утиліти Windows", re: /\b(?:rundll32|regsvr32|certutil|bitsadmin|wscript|cscript)\b/i },
+  { label: "PowerShell-команди", re: /\biex\b\s*\(|invoke-expression|invoke-webrequest|downloadstring|-encodedcommand\b/i },
+  { label: "curl | bash", re: /\b(?:curl|wget)\b[^|\n]{0,200}\|\s*(?:ba|z)?sh\b/i },
+  { label: "osascript", re: /\bosascript\b/i },
+  { label: "«вставте в термінал»", re: /встав(?:те|ити|ь|ьте)\s+(?:(?:це|її|його|скопійован[а-яёіїєґʼ'-]*)\s+)?(?:у|в)\s+термінал|вставьте\s+(?:(?:это|её|его)\s+)?в\s+терминал|paste\s+(?:it\s+|this\s+)?in(?:to)?\s+(?:the\s+)?(?:terminal|run\s+box|command)/i },
+  { label: "«відкрийте термінал»", re: /відкрийте\s+(?:програму\s+)?термінал|откройте\s+терминал|open\s+(?:the\s+)?terminal/i },
+  { label: "«скопіюйте команду»", re: /скопіюйте\s+(?:цю\s+|наступну\s+)?команду|скопируйте\s+(?:эту\s+)?команду|copy\s+(?:the|this)\s+command/i },
+  { label: "«вставте скопійований текст»", re: /вставте\s+скопійован|вставьте\s+скопированн|paste\s+the\s+copied/i },
+  { label: "Ctrl+V → Enter", re: /(?:ctrl|cmd|⌘)\s*\+\s*v[\s\S]{0,60}(?:enter|return|↵)/i },
+  { label: "«вікно Виконати»", re: /вікн[а-яёіїєґʼ'-]*\s+[«"]?виконати|окн[а-яёіїєґʼ'-]*\s+[«"]?выполнить|\brun\s+dialog\b/i },
+  { label: "фейкова перевірка «ви людина»", re: /підтверд[а-яёіїєґʼ'-]*,?\s+що\s+ви\s+(?:людина|не\s+робот)|подтверд[а-яёіїєґʼ'-]*,?\s+что\s+вы\s+(?:человек|не\s+робот)|verify\s+(?:that\s+)?you(?:'re|\s+are)\s+(?:a\s+)?human/i },
+];
+// Custom code runs in a sandboxed, clipboard-less frame, but a snippet that
+// tries to fill the visitor's clipboard is the attack's mechanism, not an
+// accident — flagged on its own.
+const CLICKFIX_CODE_RULES: { label: string; re: RegExp }[] = [
+  { label: "запис у буфер обміну", re: /navigator\s*\.\s*clipboard\s*\.\s*write|execCommand\s*\(\s*['"]copy/i },
+];
+
+function collectText(value: unknown, out: string[]): void {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) value.forEach((v) => collectText(v, out));
+  else if (value && typeof value === "object") Object.values(value as Record<string, unknown>).forEach((v) => collectText(v, out));
+}
+
+/** Labels of every ClickFix tell found in a landing page's config; empty = clean. */
+export function findClickFixSigns(config: LandingConfig): string[] {
+  const texts: string[] = [];
+  collectText(config, texts);
+  const all = texts.join("\n");
+  const code = `${config.head_code}\n${config.body_code}`;
+  const hits = new Set<string>();
+  for (const r of CLICKFIX_RULES) if (r.re.test(all)) hits.add(r.label);
+  for (const r of CLICKFIX_CODE_RULES) if (r.re.test(code)) hits.add(r.label);
+  return [...hits];
+}

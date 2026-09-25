@@ -56,3 +56,17 @@
   to = "https://app.retain-growth.ai/admin/:splat"
   status = 301
   force = true
+
+# Security headers. The page is one self-contained file: its script and styles
+# are inline (hence 'unsafe-inline' — there is no user content on this site),
+# and the only third party is Google Fonts. The point of the policy is what it
+# forbids: any script, frame or connection to another origin — which is what a
+# "fake Cloudflare check" injected into a hacked site would need.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"

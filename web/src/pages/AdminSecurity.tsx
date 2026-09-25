@@ -57,6 +57,142 @@ async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null
 }
 
+interface FlaggedLanding {
+  id: string
+  orgId: string
+  orgName: string | null
+  name: string
+  slug: string
+  updatedAt: string
+  signs: string[]
+}
+
+/**
+ * Published landing pages that the ClickFix filter flags (the "fake
+ * Cloudflare check" that makes visitors run a command) — pages that went
+ * public before the filter could stop them. One click sends a page back to
+ * draft; see admin-landing-review.ts.
+ */
+function SuspiciousLandings({ onChanged }: { onChanged: () => void }) {
+  const [items, setItems] = useState<FlaggedLanding[] | null>(null)
+  const [scanned, setScanned] = useState(0)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const call = useCallback(async (body: Record<string, unknown>) => {
+    const accessToken = await getAccessToken()
+    if (!accessToken) throw new Error('Сесія недійсна, увійдіть знову')
+    const res = await fetch('/.netlify/functions/admin-landing-review', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? 'Запит не вдався')
+    return data
+  }, [])
+
+  const load = useCallback(async () => {
+    setErr(null)
+    try {
+      const data = await call({ action: 'list' })
+      setItems((data.flagged ?? []) as FlaggedLanding[])
+      setScanned(data.scanned ?? 0)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Запит не вдався')
+    }
+  }, [call])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  async function unpublish(item: FlaggedLanding) {
+    if (!window.confirm(`Зняти з публікації /lp/${item.slug}${item.orgName ? ` (${item.orgName})` : ''}? Сторінка стане чернеткою й перестане відкриватися, лінки на неї поведуть одразу в месенджер.`)) return
+    setBusyId(item.id)
+    setErr(null)
+    try {
+      await call({ action: 'unpublish', id: item.id })
+      setItems((prev) => (prev ?? []).filter((x) => x.id !== item.id))
+      onChanged()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Запит не вдався')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="card card-tight admin-landing-review">
+      <div className="admin-landing-review-head">
+        <div>
+          <h3>Підозрілі лендінги</h3>
+          <p className="settings-row-hint" style={{ margin: 0 }}>
+            Опубліковані сторінки з фразами фейкових «перевірок» (Win+R, PowerShell, «вставте в термінал»…). Нові такі сторінки
+            опублікувати не можна — тут ті, що стали публічними раніше.
+          </p>
+        </div>
+        <button type="button" className="btn btn-secondary" onClick={() => void load()} disabled={items === null}>
+          <IconSync size={15} />
+          Перевірити
+        </button>
+      </div>
+      {err && (
+        <div className="alert alert-error">
+          <IconAlert size={16} />
+          <span>{err}</span>
+        </div>
+      )}
+      {items === null ? (
+        <p className="settings-row-hint">Перевіряємо…</p>
+      ) : items.length === 0 ? (
+        <p className="settings-row-hint">Серед {scanned} опублікованих лендінгів підозрілих немає.</p>
+      ) : (
+        <div className="crm-table-wrap">
+          <table className="crm-table">
+            <thead>
+              <tr>
+                <th>Сторінка</th>
+                <th>Організація</th>
+                <th>Що знайдено</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id}>
+                  <td>
+                    <a href={`/lp/${it.slug}`} target="_blank" rel="noopener noreferrer nofollow" className="admin-landing-link">
+                      /lp/{it.slug}
+                    </a>
+                    <span className="admin-event-type">{it.name}</span>
+                  </td>
+                  <td className="crm-cell-muted">{it.orgName ?? it.orgId.slice(0, 8)}</td>
+                  <td>
+                    <span className="admin-landing-signs">
+                      {it.signs.map((s) => (
+                        <span key={s} className="badge badge-warning">
+                          {s}
+                        </span>
+                      ))}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button type="button" className="btn btn-danger-ghost" onClick={() => void unpublish(it)} disabled={busyId !== null}>
+                      {busyId === it.id ? <IconSpinner size={14} /> : null}
+                      Зняти з публікації
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminSecurity() {
   const [events, setEvents] = useState<AdminEvent[]>([])
   const [types, setTypes] = useState<string[]>([])
@@ -192,6 +328,13 @@ export default function AdminSecurity() {
           )}
         </div>
       )}
+
+      <SuspiciousLandings
+        onChanged={() => {
+          void load()
+          void loadSummary()
+        }}
+      />
 
       <div className="analytics-filter-row">
         <select className="input" value={type} onChange={(e) => setType(e.target.value)} aria-label="Тип події">

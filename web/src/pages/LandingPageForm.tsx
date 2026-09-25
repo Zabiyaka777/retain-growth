@@ -585,9 +585,8 @@ export default function LandingPageForm() {
                       <label htmlFor="lpe-body">Код у &lt;body&gt;</label>
                       <textarea id="lpe-body" className="input textarea lpe-code" rows={4} value={config.body_code} onChange={(e) => patch({ body_code: e.target.value })} maxLength={8000} spellCheck={false} />
                       <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
-                        Виконується в ізольованому фреймі (sandbox), без доступу до сторінки, cookies і сесії. Тому скрипти,
-                        яким потрібні first-party cookies, можуть працювати обмежено — для Meta, TikTok і Google
-                        використовуйте поля вище.
+                        Виконується в ізольованому фреймі (sandbox), без доступу до сторінки, cookies і сесії. Зовнішні
+                        скрипти дозволені лише з доменів Meta, TikTok і Google — для них краще використовувати поля вище.
                       </p>
                     </div>
                   </Acc>
