@@ -130,7 +130,7 @@ export const handler: Handler = async (event) => {
       if (eventError) console.error("save-landing-page: events insert failed", eventError);
       return jsonResponse(422, {
         error:
-          `Публікацію заблоковано: на сторінці є фрази, типові для шахрайських «перевірок» (${signs.map((x) => x.replace(/^«|»$/g, "")).join(", ")}). ` +
+          `Публікацію заблоковано: на сторінці є фрази, типові для шахрайських «перевірок» (${signs.map((x) => (x.startsWith("«") && x.endsWith("»") ? x.slice(1, -1) : x)).join(", ")}). ` +
           "Такі сторінки просять відвідувача запустити команду на своєму компʼютері. Приберіть ці фрази й опублікуйте знову — як чернетку сторінку зберегти можна. Якщо це помилка, напишіть у підтримку.",
         signs,
       });
