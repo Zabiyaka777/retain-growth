@@ -223,6 +223,10 @@ function activityText(entry: ActivityRow): string {
       const where = d.funnel_name ? ` (${quoted(d.funnel_name)}${d.node_label ? ` → ${quoted(d.node_label)}` : ''})` : ''
       return `AI увімкнено${where}${d.replied ? ' — з відповіддю на останнє повідомлення' : ''}`
     }
+    case 'bot_blocked':
+      return 'Користувач заблокував бота'
+    case 'bot_unblocked':
+      return 'Користувач розблокував бота'
     default:
       return entry.action_type
   }
@@ -238,13 +242,14 @@ function activityActor(entry: ActivityRow): string {
 // Colour groups the action families so the timeline is scannable without
 // reading every line: green for progress, red for removals, amber for tasks.
 function activityTone(actionType: string): string {
-  if (actionType === 'stage_changed' || actionType === 'tag_added' || actionType === 'funnel_connected' || actionType === 'ai_resumed_by_manager') return 'is-positive'
+  if (actionType === 'stage_changed' || actionType === 'tag_added' || actionType === 'funnel_connected' || actionType === 'ai_resumed_by_manager' || actionType === 'bot_unblocked') return 'is-positive'
   if (
     actionType === 'tag_removed' ||
     actionType === 'funnel_stopped' ||
     actionType === 'funnel_auto_stopped' ||
     actionType === 'task_deleted' ||
-    actionType === 'ai_paused_by_manager'
+    actionType === 'ai_paused_by_manager' ||
+    actionType === 'bot_blocked'
   )
     return 'is-negative'
   if (actionType.startsWith('task_')) return 'is-task'

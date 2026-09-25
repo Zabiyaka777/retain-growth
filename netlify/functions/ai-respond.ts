@@ -3,6 +3,7 @@ import { WebSocket as NodeWebSocket } from "ws";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { processGraphState, resolveNextNode } from "./_shared/funnel-graph";
 import { startTypingIndicator } from "./_shared/typing-indicator";
+import { markBotBlocked } from "./_shared/bot-block";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -1021,7 +1022,20 @@ export const handler: Handler = async (event) => {
   });
 
   if (!sendRes.ok) {
-    console.error("ai-respond: sendMessage failed", await sendRes.text());
+    const failureText = await sendRes.text();
+    console.error("ai-respond: sendMessage failed", failureText);
+    // Third send path with the same 403 fallback as send-message.ts and
+    // funnel-graph.ts: "bot was blocked by the user" flags the lead even if
+    // the my_chat_member webhook never arrived.
+    let errorCode: number | undefined;
+    try {
+      errorCode = (JSON.parse(failureText) as { error_code?: number }).error_code;
+    } catch {
+      // Non-JSON body (proxy error page) — fall back to the HTTP status below.
+    }
+    if ((errorCode ?? sendRes.status) === 403) {
+      await markBotBlocked(supabase, orgId, leadId, true);
+    }
     return jsonResponse(502, { error: "Не вдалося надіслати повідомлення" });
   }
 
