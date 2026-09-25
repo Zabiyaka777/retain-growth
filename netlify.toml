@@ -102,10 +102,14 @@
 # operator's custom code runs in a srcdoc iframe, which inherits this policy,
 # so it too can only load scripts from these vendors. Still no framing of
 # the page by anyone else.
+# *.run.app / *.on.aws: Meta's pixel config script (connect.facebook.net/
+# signals/config/<pixel>) posts to Meta endpoints hosted on Cloud Run and AWS
+# (seen: mpc-prod-…us-central1.run.app/events, …ecs.us-east-1.on.aws/events),
+# with host names that vary — hence the wildcards, on /lp only.
 [[headers]]
   for = "/lp/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://analytics.tiktok.com https://*.tiktok.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://*.facebook.com https://*.facebook.net https://*.tiktok.com https://*.tiktokw.us https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.doubleclick.net https://www.google.com; frame-src https://*.facebook.com https://*.doubleclick.net https://www.googletagmanager.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://analytics.tiktok.com https://*.tiktok.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://*.facebook.com https://*.facebook.net https://*.tiktok.com https://*.tiktokw.us https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.doubleclick.net https://www.google.com https://*.run.app https://*.on.aws; frame-src https://*.facebook.com https://*.doubleclick.net https://www.googletagmanager.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 # React Router client-side routes (e.g. /login, /dashboard) must fall back to index.html.
 [[redirects]]
