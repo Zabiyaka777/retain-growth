@@ -5,7 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "netlify dev",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "deploy:landing": "node scripts/deploy-landing.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.45.4",
