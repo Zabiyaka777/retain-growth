@@ -41,7 +41,7 @@ export const handler: Handler = async (event) => {
 
   const { data, error } = await supabase
     .from("landing_pages")
-    .select("id, org_id, template_key, config, meta_access_token_secret_id")
+    .select("id, org_id, template_key, config, meta_access_token_secret_id, funnel_id, entry_node_id")
     .eq("slug", slug)
     .eq("status", "published")
     .maybeSingle();
@@ -51,30 +51,12 @@ export const handler: Handler = async (event) => {
 
   const config = normalizeLandingConfig(data.config);
 
-  // Opened without ?ref — i.e. the shareable /lp/:slug link the dashboard
-  // hands out, which is deliberately not tied to one /r/ token. Without a ref
-  // the page has no /r/ hop to send the visitor through and every funnel CTA
-  // renders as a dead '#', so fall back to any lead-gen link that points at
-  // this page. redirect.ts still owns the deep link and mints the click_id on
-  // that hop, exactly as in the normal flow — nothing is resolved here.
-  let fallbackRef: string | null = null;
-  if (!params.ref) {
-    const { data: link, error: linkError } = await supabase
-      .from("lead_gen_links")
-      .select("ref_token")
-      .eq("org_id", data.org_id)
-      .eq("landing_page_id", data.id)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (linkError) console.error("landing-page-config: fallback link lookup failed", linkError);
-    fallbackRef = (link?.ref_token as string | undefined) ?? null;
-  }
-
   return jsonResponse(200, {
     templateKey: data.template_key,
     config,
-    fallbackRef,
+    // The page routes its own visitors (landing-go.ts) — it only needs to know
+    // whether a tunnel is set, never which one.
+    routable: !!data.funnel_id && !!data.entry_node_id,
     // Tells the page whether to also report the view server-side; the token
     // itself never leaves the server.
     capi: !!data.meta_access_token_secret_id && !!config.fb_pixel_id,

@@ -216,7 +216,7 @@ export default function LandingPageForm() {
   const [, setSaved] = useState(false)
   const [dirty, setDirty] = useState(false)
   const screenRef = useRef<HTMLDivElement>(null)
-  // Where the page's messenger buttons lead — mirrored onto its lead-gen link on save.
+  // Where the page's messenger buttons lead — the page's own tunnel, independent of any lead-gen link.
   const [funnels, setFunnels] = useState<FunnelOption[]>([])
   const [funnelId, setFunnelId] = useState('')
   const [entryNodes, setEntryNodes] = useState<EntryNodeOption[]>([])
@@ -236,16 +236,6 @@ export default function LandingPageForm() {
           .select('id, org_id, name, template_key, slug, status, config, meta_access_token_secret_id, funnel_id, entry_node_id')
           .eq('id', pageId)
           .maybeSingle()
-        // The link that actually routes this page's visitors is the source of
-        // truth (it may have been made through the old link-form field, or
-        // edited there since) — the page's own columns are the fallback.
-        const { data: boundLink } = await supabase
-          .from('lead_gen_links')
-          .select('funnel_id, entry_node_id')
-          .eq('landing_page_id', pageId)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle()
         if (cancelled) return
         const p = data as ExistingPage | null
         if (!p) setNotFound(true)
@@ -258,8 +248,8 @@ export default function LandingPageForm() {
           setStatus(p.status)
           setHasCapiToken(!!p.meta_access_token_secret_id)
           setConfig(withConfigDefaults(p.config))
-          setFunnelId(boundLink?.funnel_id ?? p.funnel_id ?? '')
-          setEntryNodeId(boundLink?.entry_node_id ?? p.entry_node_id ?? '')
+          setFunnelId(p.funnel_id ?? '')
+          setEntryNodeId(p.entry_node_id ?? '')
         }
       }
       setLoading(false)
@@ -421,8 +411,7 @@ export default function LandingPageForm() {
           templateKey,
           status: nextStatus,
           config,
-          // Only when the page has messenger buttons AND a full choice: the
-          // server then updates (or creates) the link that routes them.
+          // Only when the page has messenger buttons AND a full choice.
           ...(needsFunnel && funnelId && entryNodeId ? { funnelId, entryNodeId } : {}),
           // undefined keeps the stored token, null clears it.
           metaAccessToken: opts?.clearToken ? null : capiToken.trim() || undefined,
@@ -448,7 +437,7 @@ export default function LandingPageForm() {
   }
 
   async function handleDelete() {
-    if (!pageId || !window.confirm(`Видалити лендінг «${name}»? Лінки, що його використовують, знову вестимуть одразу в месенджер.`)) return
+    if (!pageId || !window.confirm(`Видалити лендінг «${name}»? Сторінка стане недоступною за своєю адресою.`)) return
     setDeleting(true)
     const accessToken = await getAccessToken()
     if (!accessToken) {
@@ -707,7 +696,7 @@ export default function LandingPageForm() {
                         </p>
                       )}
                       <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
-                        Один тунель на всю сторінку. Під капотом це посилання лідогенерації — воно створюється й оновлюється автоматично при збереженні.
+                        Один тунель на всю сторінку. Лендінг веде відвідувачів у месенджер сам — не через посилання лідогенерації.
                       </p>
                     </div>
                   )}
@@ -854,8 +843,8 @@ export default function LandingPageForm() {
                         data-1p-ignore="true"
                       />
                       <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
-                        Піксель самого лендінга: PageView при відкритті й Lead при кліку на кнопку. Працює незалежно від того,
-                        чи прикріплений лендінг до лінка лідогенерації, і не змішується з його конверсіями.
+                        Піксель самого лендінга: PageView при відкритті й Lead при кліку на кнопку. Працює незалежно від
+                        посилань лідогенерації і не змішується з їхніми конверсіями.
                       </p>
                     </div>
                     <div className="field">

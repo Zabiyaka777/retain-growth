@@ -41,7 +41,7 @@ export const handler: Handler = async (event) => {
 
   const { data: link, error: linkError } = await supabase
     .from("lead_gen_links")
-    .select("id, org_id, landing_pages ( slug, status )")
+    .select("id, org_id")
     .eq("ref_token", refToken)
     .maybeSingle();
 
@@ -50,68 +50,33 @@ export const handler: Handler = async (event) => {
     return textResponse(404, "Link not found");
   }
 
-  // Second hop from a landing page: /r/:token?ch=…&click=<id>. The click was
-  // already logged on the first hop, and its id is what the /start payload,
-  // link_clicks row and meta-capi-send.ts attribution all hang on — so it's
-  // reused verbatim, never re-minted. Must belong to this very link, otherwise
-  // a guessed id could attach someone else's fbclid to this conversion.
-  let clickId: string | null = null;
-  if (params.click) {
-    const { data: existingClick } = await supabase
-      .from("link_clicks")
-      .select("click_id")
-      .eq("click_id", params.click)
-      .eq("link_id", link.id)
-      .maybeSingle();
-    clickId = existingClick?.click_id ?? null;
-  }
+  // Identifies this one visit, not the link itself (ref_token can be clicked
+  // many times) — carries its own fbclid/IP/UA so telegram-webhook.ts and
+  // meta-capi-send.ts can build Meta's fbc parameter for this specific click.
+  // Default nanoid's alphabet (A-Za-z0-9_-) is also what Telegram accepts in
+  // a /start deep-link payload.
+  const clickId = nanoid(16);
 
-  if (!clickId) {
-    // Identifies this one visit, not the link itself (ref_token can be clicked
-    // many times) — carries its own fbclid/IP/UA so telegram-webhook.ts and
-    // meta-capi-send.ts can build Meta's fbc parameter for this specific click.
-    // Default nanoid's alphabet (A-Za-z0-9_-) is also what Telegram accepts in
-    // a /start deep-link payload.
-    clickId = nanoid(16);
+  // x-forwarded-for can carry a client-IP,proxy-IP,... chain — the first hop
+  // is the visitor. Netlify always sets this, so no other header is checked.
+  const forwardedFor = event.headers["x-forwarded-for"] ?? event.headers["X-Forwarded-For"];
+  const ip = forwardedFor?.split(",")[0]?.trim() || null;
+  const userAgent = event.headers["user-agent"] ?? event.headers["User-Agent"] ?? null;
+  const fbclid = params.fbclid ?? null;
 
-    // x-forwarded-for can carry a client-IP,proxy-IP,... chain — the first hop
-    // is the visitor. Netlify always sets this, so no other header is checked.
-    const forwardedFor = event.headers["x-forwarded-for"] ?? event.headers["X-Forwarded-For"];
-    const ip = forwardedFor?.split(",")[0]?.trim() || null;
-    const userAgent = event.headers["user-agent"] ?? event.headers["User-Agent"] ?? null;
-    const fbclid = params.fbclid ?? null;
-
-    const { error: clickError } = await supabase.from("link_clicks").insert({
-      link_id: link.id,
-      org_id: link.org_id,
-      click_id: clickId,
-      captured_params: params,
-      fbclid,
-      ip,
-      user_agent: userAgent,
-    });
-    if (clickError) console.error("redirect: failed to log click", clickError);
-  }
+  const { error: clickError } = await supabase.from("link_clicks").insert({
+    link_id: link.id,
+    org_id: link.org_id,
+    click_id: clickId,
+    captured_params: params,
+    fbclid,
+    ip,
+    user_agent: userAgent,
+  });
+  if (clickError) console.error("redirect: failed to log click", clickError);
 
   if (!channel || !CHANNELS.includes(channel)) {
     return textResponse(400, "Invalid or missing channel parameter");
-  }
-
-  // Optional warm-up page before the messenger. Only on the first hop (a
-  // second hop carries ?click=, or ?lp=1 when the visitor opened the page
-  // directly via its shareable link and so never had a click_id to carry —
-  // without that flag the button would bounce them straight back onto the
-  // page they just clicked from), only when the page is still published — a
-  // link whose page went back to draft or was deleted behaves exactly like a
-  // link that never had one. The public /lp route takes it from here and
-  // sends the visitor back through /r/ with the same click_id.
-  const landing = (link as unknown as { landing_pages: { slug: string; status: string } | null }).landing_pages;
-  if (!params.click && !params.lp && landing?.status === "published") {
-    const q = new URLSearchParams({ click: clickId, ch: channel, ref: refToken });
-    // The page reports its own PageView/Lead to Meta and needs the ad click id
-    // for fbc — it is otherwise only in link_clicks, which the page can't read.
-    if (params.fbclid) q.set("fbclid", params.fbclid);
-    return { statusCode: 302, headers: { Location: `/lp/${landing.slug}?${q.toString()}` }, body: "" };
   }
 
   if (channel !== "telegram") {

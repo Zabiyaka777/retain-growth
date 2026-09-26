@@ -626,24 +626,81 @@ export const handler: Handler = async (event) => {
       leadGenLink = directLink as LeadGenLinkRow | null;
     }
 
-    if (leadGenLink) {
+    // A landing page routes its own visitors, independently of lead-gen
+    // links: landing-go.ts logged this click in landing_clicks and put its id
+    // in the /start payload, and the funnel + entry point come straight off
+    // the landing itself.
+    type LandingRow = {
+      id: string;
+      name: string;
+      funnel_id: string | null;
+      entry_node_id: string | null;
+      funnels: { name: string } | null;
+    };
+    let landing: LandingRow | null = null;
+    if (!leadGenLink) {
+      const { data: landingClick, error: landingClickError } = await supabase
+        .from("landing_clicks")
+        .select("landing_pages ( id, name, funnel_id, entry_node_id, funnels ( name ) )")
+        .eq("click_id", startPayload)
+        .eq("org_id", orgId)
+        .maybeSingle();
+      if (landingClickError) console.error("telegram-webhook: landing_clicks lookup failed", landingClickError);
+      landing = (landingClick?.landing_pages as unknown as LandingRow | null) ?? null;
+      if (landing) matchedClickId = startPayload;
+    }
+
+    // One shape for both origins below; linkId set = a lead-gen link, landingId set = a landing page.
+    const source = leadGenLink
+      ? {
+          linkId: leadGenLink.id as string | null,
+          landingId: null as string | null,
+          name: leadGenLink.name,
+          funnel_id: leadGenLink.funnel_id as string | null,
+          entry_node_id: leadGenLink.entry_node_id,
+          funnels: leadGenLink.funnels,
+        }
+      : landing
+        ? {
+            linkId: null as string | null,
+            landingId: landing.id as string | null,
+            name: landing.name,
+            funnel_id: landing.funnel_id,
+            entry_node_id: landing.entry_node_id,
+            funnels: landing.funnels,
+          }
+        : null;
+
+    if (source) {
       // First-touch attribution: only set once, so a returning lead's later
       // click through the same or a different link never overwrites the
       // original source shown on their profile.
-      const { data: attributed, error: sourceLinkError } = await supabase
-        .from("leads")
-        .update({ source_link_id: leadGenLink.id, source_click_id: matchedClickId })
-        .eq("id", lead.id)
-        .is("source_link_id", null)
-        .select("id");
-      if (sourceLinkError) console.error("telegram-webhook: source_link_id update failed", sourceLinkError);
+      // A landing page's visitor is attributed to the landing instead
+      // (source_landing_id), and only if no first touch of either kind exists.
+      const { data: attributed, error: sourceLinkError } = await (source.linkId
+        ? supabase
+            .from("leads")
+            .update({ source_link_id: source.linkId, source_click_id: matchedClickId })
+            .eq("id", lead.id)
+            .is("source_link_id", null)
+            .select("id")
+        : supabase
+            .from("leads")
+            .update({ source_landing_id: source.landingId, source_click_id: matchedClickId })
+            .eq("id", lead.id)
+            .is("source_link_id", null)
+            .is("source_landing_id", null)
+            .select("id"));
+      if (sourceLinkError) console.error("telegram-webhook: lead source attribution update failed", sourceLinkError);
 
       // The leads insert trigger already wrote the «Підписка» stage entry,
       // but at that moment the lead had no source link yet — so the send is
       // dispatched here, the first point where attribution exists. Only on
       // the update that actually set it, so a returning lead's later click
       // doesn't re-fire a conversion for a subscription they already had.
-      if (attributed && attributed.length > 0) {
+      // Link-only: the conversion send reads the link's own pixel + token. A
+      // landing reports to its own pixel from the page (landing-page-view.ts).
+      if (attributed && attributed.length > 0 && source.linkId) {
         await dispatchInitialStageConversion(supabase, orgId, lead.id);
       }
 
@@ -653,19 +710,31 @@ export const handler: Handler = async (event) => {
       // logInitialSubscribeEvent above gets its link_id filled in; anyone
       // else (almost always a returning lead) gets a brand new event for
       // this click.
-      if (initialSubscribeEventId) {
-        await patchInitialSubscribeLink(supabase, initialSubscribeEventId, leadGenLink.id);
-      } else {
-        await logRepeatSubscribeEvent(supabase, orgId, lead.id, leadGenLink.id, "telegram");
+      // Per-link report only: a landing-origin lead keeps the initial event
+      // with no link_id, and repeat clicks aren't logged against a link.
+      if (source.linkId) {
+        if (initialSubscribeEventId) {
+          await patchInitialSubscribeLink(supabase, initialSubscribeEventId, source.linkId);
+        } else {
+          await logRepeatSubscribeEvent(supabase, orgId, lead.id, source.linkId, "telegram");
+        }
       }
 
       // Label the raw "/start <token>" so the chat can render it as a system
       // block ("came in via <link> → <funnel>") instead of gibberish text.
       if (inboundMessage) {
-        const funnelName = leadGenLink.funnels?.name ?? null;
+        const funnelName = source.funnels?.name ?? null;
         const { error: metaError } = await supabase
           .from("messages")
-          .update({ meta: { type: "lgt_start", link_name: leadGenLink.name, funnel_name: funnelName } })
+          .update({
+            meta: {
+              type: "lgt_start",
+              link_name: source.name,
+              funnel_name: funnelName,
+              // Lets the chat say "landing" instead of "link".
+              ...(source.landingId ? { source_kind: "landing" } : {}),
+            },
+          })
           .eq("id", inboundMessage.id);
         if (metaError) console.error("telegram-webhook: message meta update failed", metaError);
       }
@@ -676,7 +745,7 @@ export const handler: Handler = async (event) => {
       // since deleted (ON DELETE SET NULL) — nothing to enroll into, so this
       // falls through to the AI/canned-reply path below like a funnel with
       // no matching link at all.
-      if (leadGenLink.entry_node_id) {
+      if (source.entry_node_id && source.funnel_id) {
         // Restart semantics: a link click always begins the funnel again, so
         // an existing row for this (thread, funnel) is reset to the entry
         // node rather than left mid-flow. ai_progress is cleared with it —
@@ -685,7 +754,7 @@ export const handler: Handler = async (event) => {
         const { data: entryNode, error: entryNodeError } = await supabase
           .from("funnel_nodes")
           .select("config")
-          .eq("id", leadGenLink.entry_node_id)
+          .eq("id", source.entry_node_id)
           .maybeSingle();
         if (entryNodeError) console.error("telegram-webhook: entry node config lookup failed", entryNodeError);
 
@@ -696,7 +765,7 @@ export const handler: Handler = async (event) => {
             .from("funnel_states")
             .select("status")
             .eq("thread_id", thread.id)
-            .eq("funnel_id", leadGenLink.funnel_id)
+            .eq("funnel_id", source.funnel_id)
             .maybeSingle();
           if (existingStateError) console.error("telegram-webhook: existing funnel_states lookup failed", existingStateError);
 
@@ -715,8 +784,8 @@ export const handler: Handler = async (event) => {
             {
               thread_id: thread.id,
               org_id: orgId,
-              funnel_id: leadGenLink.funnel_id,
-              funnel_node_id: leadGenLink.entry_node_id,
+              funnel_id: source.funnel_id,
+              funnel_node_id: source.entry_node_id,
               status: "active",
               current_step: 0,
               waiting_until: new Date().toISOString(),
@@ -744,7 +813,8 @@ export const handler: Handler = async (event) => {
               // so telegram-webhook.ts stays ignorant of Meta CAPI specifics.
               body: JSON.stringify({
                 stateId: state.id,
-                enrollment: { linkId: leadGenLink.id, clickId: matchedClickId },
+                // Meta conversion enrollment is link-only (per-link pixel + token).
+                enrollment: source.linkId ? { linkId: source.linkId, clickId: matchedClickId } : undefined,
                 // Just enrolled onto the link's entry node — which may be a
                 // delay (lead_gen_links.entry_node_id can be any node).
                 freshPlacement: true,

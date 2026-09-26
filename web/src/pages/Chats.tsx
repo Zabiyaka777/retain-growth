@@ -52,6 +52,8 @@ interface MessageButton {
 interface MessageMeta {
   type?: string
   link_name?: string
+  /** 'landing' when the /start came from a landing page rather than a lead-gen link. */
+  source_kind?: string
   funnel_name?: string
   label?: string
   attachments?: MessageAttachment[]
@@ -1702,7 +1704,7 @@ export default function Chats() {
                               <div className="feed-system-block">
                                 <IconLink size={13} aria-hidden="true" />
                                 <span>
-                                  Перейшов за посиланням <strong>{meta.link_name ?? '—'}</strong>
+                                  {meta.source_kind === 'landing' ? 'Перейшов з лендінгу' : 'Перейшов за посиланням'} <strong>{meta.link_name ?? '—'}</strong>
                                   {meta.funnel_name ? <> → воронка <strong>{meta.funnel_name}</strong></> : null}
                                 </span>
                                 <span className="message-time">{formatMessageTime(message.created_at)}</span>

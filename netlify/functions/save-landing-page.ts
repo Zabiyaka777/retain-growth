@@ -11,7 +11,6 @@ import {
   normalizeLandingConfig,
   type LandingTemplateKey,
 } from "./_shared/landing-page";
-import { generateRefToken, MAX_REF_TOKEN_ATTEMPTS } from "./_shared/ref-token";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -30,6 +29,8 @@ function jsonResponse(statusCode: number, body: unknown) {
 // Create / update / delete a landing page. landing_pages is SELECT-only under
 // RLS, so every write comes through here with the service role, scoped to the
 // caller's org resolved from their session (see CLAUDE.md: org_id scoping).
+// A landing is self-contained: it carries its own tunnel + entry point and
+// routes its own visitors (landing-go.ts) — no lead-gen link is involved.
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
 
@@ -88,8 +89,6 @@ export const handler: Handler = async (event) => {
   const orgId = profile.org_id as string;
 
   if (deleteId) {
-    // lead_gen_links.landing_page_id is ON DELETE SET NULL, so links that used
-    // this page silently fall back to the direct-to-messenger flow.
     const { data: gone } = await supabase
       .from("landing_pages")
       .select("meta_access_token_secret_id")
@@ -130,22 +129,7 @@ export const handler: Handler = async (event) => {
 
   const hasFunnelCta = config.ctas.some((c) => c.enabled && c.type === "funnel");
   if (status === "published" && hasFunnelCta && !funnelId) {
-    // Legacy pages already wired to a link (made through the old link-form
-    // field) keep working without re-picking anything.
-    let alreadyBound = false;
-    if (id) {
-      const { data: bound } = await supabase
-        .from("lead_gen_links")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("landing_page_id", id)
-        .limit(1)
-        .maybeSingle();
-      alreadyBound = !!bound;
-    }
-    if (!alreadyBound) {
-      return jsonResponse(400, { error: "Оберіть тунель і точку входу — інакше кнопки месенджерів нікуди не ведуть" });
-    }
+    return jsonResponse(400, { error: "Оберіть тунель і точку входу — інакше кнопки месенджерів нікуди не ведуть" });
   }
 
   if (status === "published" && !config.headline) {
@@ -242,53 +226,6 @@ export const handler: Handler = async (event) => {
   if (oldTokenSecretId && oldTokenSecretId !== data.meta_access_token_secret_id) {
     const { error: vaultError } = await supabase.rpc("vault_delete_secret", { secret_id: oldTokenSecretId });
     if (vaultError) console.error("save-landing-page: vault_delete_secret (old token) failed", vaultError);
-  }
-
-  // The page's choice is mirrored onto the lead-gen link that routes its
-  // visitors (the one landing-page-config hands out as fallbackRef): updated
-  // if the page already has one, created otherwise.
-  if (funnelId && entryNodeId) {
-    const { data: link } = await supabase
-      .from("lead_gen_links")
-      .select("id")
-      .eq("org_id", orgId)
-      .eq("landing_page_id", data.id)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    let linkError: { message: string } | null = null;
-    if (link) {
-      const { error: updateError } = await supabase
-        .from("lead_gen_links")
-        .update({ funnel_id: funnelId, entry_node_id: entryNodeId })
-        .eq("id", link.id)
-        .eq("org_id", orgId);
-      linkError = updateError;
-    } else {
-      linkError = { message: "insert not attempted" };
-      for (let attempt = 0; attempt < MAX_REF_TOKEN_ATTEMPTS; attempt++) {
-        const { error: insertError } = await supabase.from("lead_gen_links").insert({
-          org_id: orgId,
-          name: name.slice(0, 120),
-          funnel_id: funnelId,
-          entry_node_id: entryNodeId,
-          landing_page_id: data.id,
-          ref_token: generateRefToken(),
-        });
-        if (!insertError) {
-          linkError = null;
-          break;
-        }
-        linkError = insertError;
-        if (insertError.code !== UNIQUE_VIOLATION) break;
-        // ref_token collision (astronomically unlikely at 8 chars) — retry.
-      }
-    }
-    if (linkError) {
-      console.error("save-landing-page: lead_gen_link sync failed", linkError);
-      return jsonResponse(500, { error: "Лендінг збережено, але не вдалося оновити посилання на тунель. Спробуйте зберегти ще раз" });
-    }
   }
 
   // The token itself never travels back — only whether one is stored.

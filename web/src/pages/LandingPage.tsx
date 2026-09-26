@@ -60,21 +60,15 @@ function setMeta(name: string, content: string, sink: Node[]) {
   sink.push(m)
 }
 
-// Public warm-up page: /lp/:slug?click=…&ch=…&ref=…
-// (slug is globally unique; links shared earlier also carry ?org=, ignored)
-// redirect.ts sends the visitor here instead of straight into the messenger.
+// Public landing page: /lp/:slug (any ad params — fbclid, utm_* — ride along).
 // Sits outside DashboardLayout on purpose, so its auth guard never applies.
-// Every CTA goes *back through* /r/ with the same click_id — redirect.ts owns
-// the deep-link construction and reuses that id, so attribution in
-// meta-capi-send.ts stays intact. Nothing is minted or resolved here; the
-// visitor just picks the messenger (ch) on the button.
+// A landing is self-contained: its messenger buttons go to landing-go.ts,
+// which logs the click and sends the visitor into the org's bot — the page
+// carries its own funnel + entry point and never touches lead-gen links.
 export default function LandingPage() {
   const { slug = '' } = useParams<{ slug: string }>()
   const [params] = useSearchParams()
-  const click = params.get('click') ?? ''
-  const ref = params.get('ref') ?? ''
-
-  const [state, setState] = useState<{ templateKey: LandingTemplateKey; config: LandingConfig; capi: boolean; fallbackRef: string } | null | 'error'>(null)
+  const [state, setState] = useState<{ templateKey: LandingTemplateKey; config: LandingConfig; capi: boolean; routable: boolean } | null | 'error'>(null)
   const injected = useRef<Node[]>([])
 
   useEffect(() => {
@@ -87,14 +81,11 @@ export default function LandingPage() {
 
   useEffect(() => {
     let cancelled = false
-    const q = new URLSearchParams({ slug })
-    // Presence only: it tells the function whether to look up a fallback link.
-    if (ref) q.set('ref', ref)
-    fetch(`/.netlify/functions/landing-page-config?${q.toString()}`)
+    fetch(`/.netlify/functions/landing-page-config?${new URLSearchParams({ slug }).toString()}`)
       .then(async (r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((data) => {
         if (cancelled) return
-        setState({ templateKey: data.templateKey, config: withConfigDefaults(data.config), capi: !!data.capi, fallbackRef: data.fallbackRef ?? '' })
+        setState({ templateKey: data.templateKey, config: withConfigDefaults(data.config), capi: !!data.capi, routable: !!data.routable })
       })
       .catch(() => {
         if (!cancelled) setState('error')
@@ -102,7 +93,7 @@ export default function LandingPage() {
     return () => {
       cancelled = true
     }
-  }, [slug, ref])
+  }, [slug])
 
   // Everything the operator configured under "Технічні": SEO tags, analytics
   // snippets and their own head/body code. Runs once per loaded page and is
@@ -177,7 +168,7 @@ export default function LandingPage() {
   }
 
   // The landing page's own conversion: a click on any of its CTAs is a Lead
-  // on the page's pixel, whether or not the page sits behind a lead-gen link.
+  // on the page's own pixel.
   // Browser and server share the event id so Meta counts it once.
   function onCta(cta: LandingCta) {
     if (!state || state === 'error' || !state.config.fb_pixel_id) return
@@ -187,26 +178,22 @@ export default function LandingPage() {
     if (state.capi) reportCapi('Lead', eventId)
   }
 
-  // Missing pieces (someone opened /lp directly, or followed the shareable
-  // link that carries no ?ref) still get a working button: the config call
-  // hands back fallbackRef — the lead-gen link attached to this page — and
-  // /r/ without ?click just logs a fresh click and continues as normal. Only
-  // a page with no attached link at all is left with a dead '#'.
+  // The button goes to landing-go with the ad params this page was opened
+  // with (fbclid, utm_*), which it stores as the click's captured params. A
+  // page with no tunnel set (yet) gets a dead '#' rather than a broken hop.
   const ctaHref = (channel: CtaChannel) => {
-    const token = ref || (state && state !== 'error' ? state.fallbackRef : '')
-    if (!token) return '#'
-    const q = new URLSearchParams({ ch: channel })
-    if (click) q.set('click', click)
-    // No click_id to carry (the shareable link has none): tell redirect.ts the
-    // visitor already came through the landing page, so it mints the click and
-    // goes on to the messenger instead of sending them back here.
-    else q.set('lp', '1')
-    return `/r/${token}?${q.toString()}`
+    if (!state || state === 'error' || !state.routable) return '#'
+    const q = new URLSearchParams()
+    params.forEach((value, key) => {
+      if (key !== 'slug' && key !== 'ch') q.set(key, value)
+    })
+    q.set('slug', slug)
+    q.set('ch', channel)
+    return `/.netlify/functions/landing-go?${q.toString()}`
   }
 
   if (state === null) return <div className="lp-state" aria-busy="true" />
-  // 404 only when the page itself could not be loaded. A missing ?ref is not
-  // an error: the shareable /lp/:slug link is meant to render.
+  // 404 only when the page itself could not be loaded.
   if (state === 'error') {
     return (
       <NotFound

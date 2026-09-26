@@ -29,7 +29,9 @@ interface LandingRow {
   slug: string
   status: 'draft' | 'published'
   config: Partial<LandingConfig> | null
-  lead_gen_links: { count: number }[]
+  funnel_id: string | null
+  entry_node_id: string | null
+  funnels: { name: string } | null
 }
 
 // The thumbnail renders the real template at phone width and shrinks it to
@@ -79,11 +81,10 @@ export default function LeadGenTools() {
       })
   }
 
-  // Reverse FK count: how many links currently route through each page.
   function loadLandings() {
     return supabase
       .from('landing_pages')
-      .select('id, org_id, name, template_key, slug, status, config, lead_gen_links ( count )')
+      .select('id, org_id, name, template_key, slug, status, config, funnel_id, entry_node_id, funnels ( name )')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setLandings((data ?? []) as unknown as LandingRow[])
@@ -189,6 +190,8 @@ export default function LeadGenTools() {
             // not a second live page the moment it's created.
             status: 'draft',
             config: lp.config ?? {},
+            // The copy routes to the same tunnel until it is changed in its editor.
+            ...(lp.funnel_id && lp.entry_node_id ? { funnelId: lp.funnel_id, entryNodeId: lp.entry_node_id } : {}),
           }),
         })
         const data = await res.json()
@@ -216,9 +219,7 @@ export default function LeadGenTools() {
   }
 
   async function handleDeleteLanding(lp: LandingRow) {
-    const used = lp.lead_gen_links?.[0]?.count ?? 0
-    const usageNote = used > 0 ? ` Посилання, що зараз ведуть через нього (${used}), перейдуть одразу в месенджер.` : ''
-    if (!window.confirm(`Видалити лендінг «${lp.name}»?${usageNote}`)) return
+    if (!window.confirm(`Видалити лендінг «${lp.name}»? Сторінка стане недоступною за своєю адресою.`)) return
     setDeletingLandingId(lp.id)
     setError(null)
 
@@ -298,7 +299,6 @@ export default function LeadGenTools() {
         ) : (
           <div className="lp-grid">
             {landings.map((lp) => {
-              const used = lp.lead_gen_links?.[0]?.count ?? 0
               const cfg: LandingConfig = withConfigDefaults(lp.config)
               const publicUrl = `${window.location.origin}/lp/${lp.slug}`
               return (
@@ -330,7 +330,7 @@ export default function LeadGenTools() {
                     </a>
                     <div className="lp-card-row sub">
                       <span>{TEMPLATE_META[lp.template_key]?.label ?? lp.template_key}</span>
-                      <span>{used === 0 ? 'не використовується' : `на ${used} ${used === 1 ? 'лінку' : 'лінках'}`}</span>
+                      <span>{lp.funnels?.name ? `Тунель: ${lp.funnels.name}` : 'тунель не обрано'}</span>
                     </div>
                     <div className="lp-card-row" style={{ justifyContent: 'flex-end', gap: '0.25rem' }}>
                       <button
