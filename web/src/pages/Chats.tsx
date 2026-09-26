@@ -227,6 +227,16 @@ function activityText(entry: ActivityRow): string {
       return 'Користувач заблокував бота'
     case 'bot_unblocked':
       return 'Користувач розблокував бота'
+    case 'ai_reply_failed': {
+      const reason = d.reason === 'credential_missing'
+        ? 'не підключено ключ AI'
+        : d.reason === 'empty_reply'
+          ? 'модель повернула порожню відповідь'
+          : d.status === 402
+            ? 'на рахунку OpenRouter закінчились кредити'
+            : 'збій AI-провайдера'
+      return `AI не відповів на повідомлення — ${reason}`
+    }
     default:
       return entry.action_type
   }
@@ -249,7 +259,8 @@ function activityTone(actionType: string): string {
     actionType === 'funnel_auto_stopped' ||
     actionType === 'task_deleted' ||
     actionType === 'ai_paused_by_manager' ||
-    actionType === 'bot_blocked'
+    actionType === 'bot_blocked' ||
+    actionType === 'ai_reply_failed'
   )
     return 'is-negative'
   if (actionType.startsWith('task_')) return 'is-task'

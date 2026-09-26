@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { processGraphState, resolveNextNode } from "./_shared/funnel-graph";
 import { startTypingIndicator } from "./_shared/typing-indicator";
 import { markBotBlocked } from "./_shared/bot-block";
+import { logLeadActivity } from "./_shared/activity-log";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -285,6 +286,68 @@ function isInternalCall(event: Parameters<Handler>[0]): boolean {
   return !!provided && provided === serviceRoleKey;
 }
 
+// A provider failure used to end the turn on the first attempt, leaving the
+// lead in silence. Transient ones (rate limit, 5xx, a dropped connection, and
+// OpenRouter's 402 "in_flight_budget_exhausted", which clears by itself once
+// in-flight requests settle) are retried, but only as far as this invocation's
+// own time budget allows: the -background function has minutes, the sync one
+// (WhatsApp, funnel opening) has seconds and so effectively gets one quick
+// retry at most. A plain 402 (out of credits) or 4xx is permanent — no retry.
+export interface RetryBudget {
+  /** Epoch ms after which no further wait is started. */
+  deadline: number;
+}
+
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 2_000;
+const BACKGROUND_RETRY_BUDGET_MS = 200_000;
+const SYNC_RETRY_BUDGET_MS = 8_000;
+
+export class OpenRouterError extends Error {
+  constructor(
+    public status: number,
+    public body: string,
+    public retryAfterMs: number | null,
+  ) {
+    super(`OpenRouter ${status}: ${body}`);
+  }
+}
+
+export function isTransientOpenRouterError(status: number, body: string): boolean {
+  if (status === 429 || status >= 500) return true;
+  return status === 402 && body.includes("in_flight_budget_exhausted");
+}
+
+async function fetchWithRetry(url: string, init: RequestInit, retry: RetryBudget): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    let failure: OpenRouterError | Error;
+    let waitMs = RETRY_BASE_DELAY_MS * attempt;
+    try {
+      const res = await fetch(url, init);
+      if (res.ok) return res;
+      const body = await res.text();
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const retryAfterMs = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : null;
+      failure = new OpenRouterError(res.status, body, retryAfterMs);
+      if (!isTransientOpenRouterError(res.status, body)) throw failure;
+      if (retryAfterMs) waitMs = retryAfterMs;
+    } catch (err) {
+      // A non-transient OpenRouterError is final; anything else is a network
+      // failure (fetch itself threw) and counts as transient.
+      if (err instanceof OpenRouterError) {
+        if (!isTransientOpenRouterError(err.status, err.body)) throw err;
+        failure = err;
+      } else {
+        failure = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+
+    if (attempt >= RETRY_MAX_ATTEMPTS || Date.now() + waitMs > retry.deadline) throw failure;
+    console.warn(`ai-respond: OpenRouter attempt ${attempt} failed, retrying in ${waitMs}ms`, failure.message);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
+
 // OpenRouter speaks the OpenAI chat-completions format, where the system
 // prompt is just the first message instead of a separate field. Returns the
 // whole assistant message, since with tools enabled the useful part may be
@@ -294,25 +357,26 @@ async function callOpenRouter(
   model: string,
   messages: ChatMessage[],
   tools: unknown[] | undefined,
+  retry: RetryBudget,
 ): Promise<{ content: string; toolCalls: ToolCall[] }> {
-  const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-      "X-Title": "Retain Growth",
+  const res = await fetchWithRetry(
+    `${OPENROUTER_BASE_URL}/chat/completions`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        "X-Title": "Retain Growth",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: MAX_TOKENS,
+        messages,
+        ...(tools ? { tools } : {}),
+      }),
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: MAX_TOKENS,
-      messages,
-      ...(tools ? { tools } : {}),
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
-  }
+    retry,
+  );
 
   const data = (await res.json()) as {
     choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[];
@@ -498,6 +562,11 @@ export const handler: Handler = async (event) => {
   // resume-ai.ts: answer the thread as it stands — the lead's last message is
   // already in the history, so there is no userText to log.
   let resume = false;
+  // -background invocations get minutes, sync ones seconds — see RetryBudget.
+  const retry: RetryBudget = {
+    deadline:
+      Date.now() + (event.path?.includes("ai-respond-background") ? BACKGROUND_RETRY_BUDGET_MS : SYNC_RETRY_BUDGET_MS),
+  };
   try {
     const body = JSON.parse(event.body || "{}");
     threadId = typeof body.threadId === "string" ? body.threadId : undefined;
@@ -731,6 +800,13 @@ export const handler: Handler = async (event) => {
       payload: { thread_id: threadId, funnel_state_id: state.id, funnel_node_id: state.funnel_node_id },
     });
     if (eventError) console.error("ai-respond: events insert failed", eventError);
+    await logLeadActivity(supabase, {
+      orgId,
+      leadId: thread.lead_id as string,
+      actionType: "ai_reply_failed",
+      actorType: "system",
+      details: { reason: "credential_missing" },
+    });
     return jsonResponse(200, { ok: false, reason: "ai_credential_missing" });
   }
 
@@ -828,7 +904,7 @@ export const handler: Handler = async (event) => {
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const allDone = tasks.length > 0 && tasks.every((t) => newlyCompleted.has(t.id));
-      const result = await callOpenRouter(apiKey as string, model, messages, buildTools(tasks, allDone));
+      const result = await callOpenRouter(apiKey as string, model, messages, buildTools(tasks, allDone), retry);
 
       if (result.toolCalls.length === 0) {
         // Only overwrite when this round actually said something. A model
@@ -931,9 +1007,23 @@ export const handler: Handler = async (event) => {
       org_id: orgId,
       type: "ai_provider_error",
       level: "error",
-      payload: { model, thread_id: threadId, message: err instanceof Error ? err.message : String(err) },
+      payload: {
+        model,
+        thread_id: threadId,
+        message: err instanceof Error ? err.message : String(err),
+        status: err instanceof OpenRouterError ? err.status : null,
+      },
     });
     if (eventError) console.error("ai-respond: events insert failed", eventError);
+    // /admin/security is for the platform operator; the manager looking at
+    // this chat needs to see why the lead got no answer.
+    await logLeadActivity(supabase, {
+      orgId,
+      leadId,
+      actionType: "ai_reply_failed",
+      actorType: "system",
+      details: { reason: "provider_error", status: err instanceof OpenRouterError ? err.status : null },
+    });
     return jsonResponse(200, { ok: false, reason: "ai_provider_error" });
   }
   stopTyping();
@@ -946,9 +1036,21 @@ export const handler: Handler = async (event) => {
   // Written as one object, so bumping the attempt counter can't drop the
   // completed-task list (or vice versa).
   if (tasksChanged || attemptsChanged) {
+    // Two rapid messages can run two invocations at once, each holding the
+    // snapshot it read at the start. Writing that snapshot back would erase
+    // what the other one just recorded, so merge into a fresh read instead:
+    // tasks only ever get completed and the attempt counter only ever grows
+    // within a node visit, so union + max can't lose either.
+    const { data: fresh } = await supabase.from("funnel_states").select("ai_progress").eq("id", state.id).maybeSingle();
+    const freshProgress = (fresh?.ai_progress ?? {}) as AiProgress;
+    const mergedTaskIds = [...new Set([...(freshProgress.completed_task_ids ?? []), ...completedNow])];
+    const mergedAttempts = Math.max(
+      failedAttemptsNow,
+      typeof freshProgress.failed_attempts === "number" ? freshProgress.failed_attempts : 0,
+    );
     const { error: progressError } = await supabase
       .from("funnel_states")
-      .update({ ai_progress: { completed_task_ids: completedNow, failed_attempts: failedAttemptsNow } })
+      .update({ ai_progress: { completed_task_ids: mergedTaskIds, failed_attempts: mergedAttempts } })
       .eq("id", state.id);
     if (progressError) console.error("ai-respond: ai_progress update failed", progressError);
   }
@@ -967,7 +1069,7 @@ export const handler: Handler = async (event) => {
   // One more call with tools withheld, so the model has to answer in words.
   if (!replyText && !exitRequested) {
     try {
-      const forced = await callOpenRouter(apiKey as string, model, messages, undefined);
+      const forced = await callOpenRouter(apiKey as string, model, messages, undefined, retry);
       replyText = forced.content;
     } catch (err) {
       console.error("ai-respond: forced text completion failed", err);
@@ -989,6 +1091,13 @@ export const handler: Handler = async (event) => {
       payload: { model, thread_id: threadId },
     });
     if (eventError) console.error("ai-respond: events insert failed", eventError);
+    await logLeadActivity(supabase, {
+      orgId,
+      leadId,
+      actionType: "ai_reply_failed",
+      actorType: "system",
+      details: { reason: "empty_reply" },
+    });
     return jsonResponse(200, { ok: false, reason: "ai_empty_reply" });
   }
 
