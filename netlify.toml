@@ -50,6 +50,11 @@
 [functions."system-notifications-check"]
   schedule = "0 8 * * *"
 
+# Once a day: charges every subscription (recurring offer) whose
+# next_charge_at is due, via Monobank's saved-card wallet payment.
+[functions."charge-subscriptions"]
+  schedule = "0 5 * * *"
+
 # netlify/edge-functions/custom-domain.ts (tenant landing pages on their own
 # custom domain) is registered declaratively — its own `export const config`
 # carries path/excludedPath — not with an [[edge_functions]] block here, so

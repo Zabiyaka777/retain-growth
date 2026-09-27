@@ -2,7 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { getWebhookPubkey, readOrgMonoToken, verifyMonoSignature, type MonoInvoiceState } from "./_shared/monobank";
-import { PAYMENT_COLUMNS, applyInvoiceState, maybeStoreWalletToken, type PaymentRow } from "./_shared/payments";
+import { PAYMENT_COLUMNS, applyInvoiceState, applySubscriptionRenewalOutcome, maybeStoreWalletToken, type PaymentRow } from "./_shared/payments";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -98,7 +98,7 @@ export const handler: Handler = async (event) => {
 
   const row = payment as PaymentRow;
   const wasSuccess = row.status === "success";
-  await Promise.all([applyInvoiceState(supabase, row, state, "webhook"), maybeStoreWalletToken(supabase, row, state)]);
+  await Promise.all([applyInvoiceState(supabase, row, state, "webhook"), maybeStoreWalletToken(supabase, row, state), applySubscriptionRenewalOutcome(supabase, row, state.status)]);
 
   // A funnel's 'offer' node parked here waiting for exactly this — resume it
   // the same way a button tap or the AI hand-off does elsewhere: hand the

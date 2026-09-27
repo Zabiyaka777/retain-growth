@@ -125,7 +125,7 @@ export interface WalletChargeInput {
   webHookUrl?: string;
   // 'merchant' = we're charging on a schedule, the customer isn't present
   // (a subscription renewal). 'client' = the customer is actively paying
-  // right now from a saved card. charge-subscriptions-background.ts always
+  // right now from a saved card. charge-subscriptions.ts always
   // uses 'merchant'.
   initiationKind: "merchant" | "client";
 }
@@ -133,7 +133,7 @@ export interface WalletChargeInput {
 export interface WalletChargeResult {
   invoiceId: string;
   tdsUrl?: string;
-  status: MonoInvoiceStatus | "processing";
+  status: MonoInvoiceStatus;
   failureReason?: string;
   amount: number;
   ccy: number;

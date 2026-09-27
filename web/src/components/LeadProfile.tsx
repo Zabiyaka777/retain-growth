@@ -7,7 +7,7 @@ import { usePayments } from '../lib/payments'
 import { leadDisplayName, leadInitial } from '../lib/leadDisplayName'
 import LeadAvatar from './LeadAvatar'
 import { useLeadAvatars } from '../hooks/useLeadAvatars'
-import { IconArchiveBox, IconBan, IconBell, IconBellOff, IconCheckCircle, IconClose, IconInbox, IconSpinner, IconTrash } from './icons'
+import { IconAlert, IconArchiveBox, IconBan, IconBell, IconBellOff, IconCheckCircle, IconClose, IconInbox, IconSpinner, IconTrash } from './icons'
 
 type LeadStatus = 'active' | 'blocked' | 'archived'
 type ThreadStatus = 'open' | 'closed'
@@ -1501,6 +1501,7 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
       </section>
 
       <LeadPayments leadId={leadId} />
+      <LeadSubscriptions leadId={leadId} />
 
       <section className="profile-section">
         <h4>Теги</h4>
@@ -1745,6 +1746,107 @@ function LeadPayments({ leadId }: { leadId: string }) {
         )}
       </h4>
       <PaymentList payments={payments} onChanged={reload} />
+    </section>
+  )
+}
+
+const SUBSCRIPTION_STATUS: Record<string, { label: string; tone: string }> = {
+  awaiting_card: { label: 'Очікує картку', tone: 'wait' },
+  active: { label: 'Активна', tone: 'ok' },
+  past_due: { label: 'Прострочена', tone: 'bad' },
+  canceled: { label: 'Скасована', tone: 'muted' },
+}
+const SUB_INTERVAL_LABEL: Record<string, string> = { week: 'тиждень', month: 'місяць', year: 'рік' }
+
+interface SubscriptionRow {
+  id: string
+  status: keyof typeof SUBSCRIPTION_STATUS
+  amount: number
+  interval: 'week' | 'month' | 'year'
+  next_charge_at: string | null
+  offers: { name: string } | null
+}
+
+// Recurring offers this lead is on — hidden entirely when there are none,
+// same "don't show an empty section" rule LeadPayments follows.
+function LeadSubscriptions({ leadId }: { leadId: string }) {
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([])
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('id, status, amount, interval, next_charge_at, offers ( name )')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+    setSubscriptions((data ?? []) as unknown as SubscriptionRow[])
+  }, [leadId])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  if (subscriptions.length === 0) return null
+
+  async function cancel(id: string) {
+    if (!window.confirm('Скасувати цю підписку? Наступні списання зупиняться.')) return
+    setBusyId(id)
+    setError(null)
+    try {
+      const accessToken = await getAccessToken()
+      if (!accessToken) throw new Error('Сесія недійсна, увійдіть знову')
+      const res = await fetch('/.netlify/functions/save-subscription', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ subscriptionId: id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'Не вдалося скасувати підписку')
+      await load()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <section className="profile-section">
+      <h4>Підписки</h4>
+      {error && (
+        <div className="alert alert-error">
+          <IconAlert size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+      <ul className="pay-list">
+        {subscriptions.map((s) => {
+          const meta = SUBSCRIPTION_STATUS[s.status] ?? { label: s.status, tone: 'muted' }
+          return (
+            <li key={s.id} className={`tone-${meta.tone}`}>
+              <div className="pay-list-main">
+                <b>{(s.amount / 100).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн / {SUB_INTERVAL_LABEL[s.interval] ?? s.interval}</b>
+                <span>{s.offers?.name ?? 'Оффер видалено'}</span>
+              </div>
+              <div className="pay-list-side">
+                <span className="pay-status">
+                  <i />
+                  {meta.label}
+                </span>
+                {s.status !== 'canceled' && (
+                  <button type="button" className="btn btn-danger-ghost btn-icon" disabled={busyId === s.id} onClick={() => void cancel(s.id)} title="Скасувати підписку" aria-label="Скасувати підписку">
+                    {busyId === s.id ? <IconSpinner size={12} /> : <IconClose size={12} />}
+                  </button>
+                )}
+              </div>
+              {s.status === 'active' && s.next_charge_at && (
+                <small className="pay-list-date">Наступне списання: {new Date(s.next_charge_at).toLocaleDateString('uk-UA')}</small>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }

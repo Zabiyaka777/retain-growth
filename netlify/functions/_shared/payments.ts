@@ -13,9 +13,11 @@ export interface PaymentRow {
   provider_modified_at: string | null;
   paid_at: string | null;
   subscription_id: string | null;
+  is_subscription_charge: boolean;
 }
 
-export const PAYMENT_COLUMNS = "id, org_id, lead_id, status, amount, destination, test_mode, provider_modified_at, paid_at, subscription_id";
+export const PAYMENT_COLUMNS =
+  "id, org_id, lead_id, status, amount, destination, test_mode, provider_modified_at, paid_at, subscription_id, is_subscription_charge";
 
 const INTERVAL_MS: Record<"week" | "month" | "year", number> = {
   week: 7 * 24 * 60 * 60 * 1000,
@@ -138,4 +140,59 @@ export async function applyInvoiceState(
     });
   }
   return true;
+}
+
+// Deflects the first N-1 failed renewals back into a retry rather than
+// giving up on the first declined card (an expired-but-about-to-be-replaced
+// card, a momentary bank-side hiccup) — same "don't escalate on the first
+// miss" reasoning ai-respond.ts's report_error threshold uses.
+const MAX_CHARGE_ATTEMPTS = 3;
+
+/**
+ * Only for a renewal charge (payment.is_subscription_charge === true) — the
+ * subscription's own first invoice is handled by maybeStoreWalletToken
+ * instead, which is why this checks the flag rather than just
+ * subscription_id (both kinds of payment carry it). Call this after
+ * applyInvoiceState (or immediately after a synchronous chargeByToken
+ * response) with the same final status.
+ *
+ * Success: advances next_charge_at to the next cycle and clears the retry
+ * counter. Failure: counts the attempt; past MAX_CHARGE_ATTEMPTS the
+ * subscription moves to 'past_due' (stops being picked up by
+ * claim_due_subscriptions) and a manager-visible activity entry is logged —
+ * same pattern as ai-respond.ts's ai_reply_failed, never silent.
+ */
+export async function applySubscriptionRenewalOutcome(supabase: SupabaseClient, payment: PaymentRow, status: MonoInvoiceState["status"]): Promise<void> {
+  if (!payment.is_subscription_charge || !payment.subscription_id) return;
+  if (status !== "success" && status !== "failure" && status !== "reversed") return; // still in flight — wait for the next report
+
+  const { data: subscription } = await supabase.from("subscriptions").select("id, org_id, lead_id, interval, failed_charge_attempts, status").eq("id", payment.subscription_id).maybeSingle();
+  if (!subscription || subscription.status !== "active") return;
+
+  if (status === "success") {
+    const { error } = await supabase
+      .from("subscriptions")
+      .update({ next_charge_at: nextChargeDate(new Date(), subscription.interval as "week" | "month" | "year").toISOString(), failed_charge_attempts: 0 })
+      .eq("id", subscription.id);
+    if (error) console.error("payments: subscription renewal advance failed", error);
+    return;
+  }
+
+  const attempts = (subscription.failed_charge_attempts ?? 0) + 1;
+  const pastDue = attempts >= MAX_CHARGE_ATTEMPTS;
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({ failed_charge_attempts: attempts, status: pastDue ? "past_due" : "active" })
+    .eq("id", subscription.id);
+  if (error) console.error("payments: subscription renewal failure update failed", error);
+
+  if (subscription.lead_id && pastDue) {
+    await logLeadActivity(supabase, {
+      orgId: subscription.org_id,
+      leadId: subscription.lead_id,
+      actionType: "subscription_past_due",
+      actorType: "system",
+      details: { subscription_id: subscription.id, attempts, payment_id: payment.id },
+    });
+  }
 }

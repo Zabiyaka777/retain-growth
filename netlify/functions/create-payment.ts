@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { logLeadActivity } from "./_shared/activity-log";
 import { MonoError, createInvoice, formatUah, getInvoiceStatus, readOrgMonoToken } from "./_shared/monobank";
-import { PAYMENT_COLUMNS, applyInvoiceState, type PaymentRow } from "./_shared/payments";
+import { PAYMENT_COLUMNS, applyInvoiceState, applySubscriptionRenewalOutcome, type PaymentRow } from "./_shared/payments";
 
 const INTERVAL_LABEL: Record<"week" | "month" | "year", string> = { week: "тиждень", month: "місяць", year: "рік" };
 
@@ -72,6 +72,7 @@ export const handler: Handler = async (event) => {
     try {
       const state = await getInvoiceStatus(creds.token, payment.invoice_id as string);
       await applyInvoiceState(supabase, payment as PaymentRow, state, "poll");
+      await applySubscriptionRenewalOutcome(supabase, payment as PaymentRow, state.status);
       const { data: fresh } = await supabase.from("payments").select("*").eq("id", paymentId).single();
       return jsonResponse(200, { ok: true, payment: fresh });
     } catch (err) {
