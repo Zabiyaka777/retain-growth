@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { ChannelCopyButtons } from '../components/LeadGenLinks'
-import { IconAlert, IconBarChart, IconDuplicate, IconEdit, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
+import { IconAlert, IconBarChart, IconDuplicate, IconEdit, IconGlobe, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
 import { LandingAnalyticsModal } from '../components/LandingAnalytics'
 import { LandingTemplate, withConfigDefaults, TEMPLATE_META, type LandingConfig, type LandingTemplateKey } from '../components/LandingTemplates'
 
@@ -20,6 +20,8 @@ interface LeadGenLinkRow {
   created_at: string
   funnels: { name: string } | null
   funnel_nodes: { config: { label?: string } | null } | null
+  custom_domain: string | null
+  custom_domain_status: 'pending' | 'verified' | null
 }
 
 interface LandingRow {
@@ -33,6 +35,30 @@ interface LandingRow {
   funnel_id: string | null
   entry_node_id: string | null
   funnels: { name: string } | null
+  custom_domain: string | null
+  custom_domain_status: 'pending' | 'verified' | null
+}
+
+// A tenant's own domain on a card: green dot once HTTPS actually works there
+// (check-*-domain's TLS handshake), amber while DNS/certificate is pending —
+// in that state the link would fail for a visitor, so it's shown but not
+// offered as the thing to click.
+function DomainChip({ domain, status, className }: { domain: string; status: 'pending' | 'verified' | null; className?: string }) {
+  const verified = status === 'verified'
+  return (
+    <a
+      className={`domain-chip ${verified ? 'is-verified' : 'is-pending'}${className ? ` ${className}` : ''}`}
+      href={`https://${domain}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      title={verified ? 'Свій домен підключено' : 'Свій домен: очікує DNS / сертифікат — натисніть «Перевірити» в налаштуваннях'}
+    >
+      <IconGlobe size={12} />
+      <span className="domain-chip-name">{domain}</span>
+      <span className="domain-chip-dot" aria-label={verified ? 'підключено' : 'очікує'} />
+    </a>
+  )
 }
 
 // The thumbnail renders the real template at phone width and shrinks it to
@@ -75,7 +101,7 @@ export default function LeadGenTools() {
   function load() {
     return supabase
       .from('lead_gen_links')
-      .select('id, name, ref_token, funnel_id, entry_node_id, created_at, funnels ( name ), funnel_nodes ( config )')
+      .select('id, name, ref_token, funnel_id, entry_node_id, created_at, custom_domain, custom_domain_status, funnels ( name ), funnel_nodes ( config )')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setLinks((data ?? []) as unknown as LeadGenLinkRow[])
@@ -86,7 +112,7 @@ export default function LeadGenTools() {
   function loadLandings() {
     return supabase
       .from('landing_pages')
-      .select('id, org_id, name, template_key, slug, status, config, funnel_id, entry_node_id, funnels ( name )')
+      .select('id, org_id, name, template_key, slug, status, config, funnel_id, entry_node_id, custom_domain, custom_domain_status, funnels ( name )')
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         setLandings((data ?? []) as unknown as LandingRow[])
@@ -330,6 +356,7 @@ export default function LeadGenTools() {
                       <IconLink size={12} />
                       /lp/{lp.slug}
                     </a>
+                    {lp.custom_domain && <DomainChip domain={lp.custom_domain} status={lp.custom_domain_status} />}
                     <div className="lp-card-row sub">
                       <span>{TEMPLATE_META[lp.template_key]?.label ?? lp.template_key}</span>
                       <span>{lp.funnels?.name ? `Тунель: ${lp.funnels.name}` : 'тунель не обрано'}</span>
@@ -407,6 +434,7 @@ export default function LeadGenTools() {
                   {link.funnel_nodes?.config?.label && (
                     <span className="badge badge-success">{link.funnel_nodes.config.label}</span>
                   )}
+                  {link.custom_domain && <DomainChip domain={link.custom_domain} status={link.custom_domain_status} />}
                 </div>
               </div>
               <div className="funnel-row-actions" onClick={(e) => e.stopPropagation()} style={{ gap: '1rem' }}>

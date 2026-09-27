@@ -73,33 +73,31 @@ export async function setDomainAliases(token: string, siteId: string, aliases: s
   return true;
 }
 
-export interface NetlifySslState {
-  state?: string;
-  domains?: string[];
-}
-
-/** Best-effort read of the site's TLS certificate state — tolerant of shape drift, never throws. */
-export async function getSslState(token: string, siteId: string): Promise<NetlifySslState | null> {
-  try {
-    const res = await fetch(`${NETLIFY_API}/sites/${siteId}/ssl`, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as NetlifySslState;
-  } catch (err) {
-    console.error("netlify-api: getSslState threw", err);
-    return null;
-  }
-}
-
-/** Asks Netlify to (re)provision the TLS certificate for the site's current domains. */
+/**
+ * Asks Netlify to (re)issue the site's Let's Encrypt certificate so it covers
+ * the current domain aliases. A site that already has a certificate (ours
+ * always does — app.retain-growth.ai) must go through /ssl/renew: plain
+ * POST /ssl on such a site is the *custom*-certificate upload and answers 422
+ * "certificate parameter is required when updating an existing certificate".
+ * Plain /ssl is kept only as the fallback for a site with no certificate yet.
+ * Issuance itself is asynchronous — a 200 here means "started", not "done".
+ */
 export async function provisionSsl(token: string, siteId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${NETLIFY_API}/sites/${siteId}/ssl`, {
+    const renew = await fetch(`${NETLIFY_API}/sites/${siteId}/ssl/renew`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
     });
-    return res.ok;
+    if (renew.ok) return true;
+    const renewBody = await renew.text().catch(() => "");
+    const fresh = await fetch(`${NETLIFY_API}/sites/${siteId}/ssl`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (!fresh.ok) {
+      console.error("netlify-api: provisionSsl failed", renew.status, renewBody, fresh.status, await fresh.text().catch(() => ""));
+    }
+    return fresh.ok;
   } catch (err) {
     console.error("netlify-api: provisionSsl threw", err);
     return false;

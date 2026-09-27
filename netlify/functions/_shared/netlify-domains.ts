@@ -2,7 +2,8 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import dns from "node:dns/promises";
-import { getNetlifyToken, getSite, getSiteId, getSslState, provisionSsl, setDomainAliases } from "./netlify-api";
+import tls from "node:tls";
+import { getNetlifyToken, getSite, getSiteId, provisionSsl, setDomainAliases } from "./netlify-api";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -53,6 +54,25 @@ const DOMAIN_RE = /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/;
 // domain" would either be nonsense or let one tenant hijack traffic meant
 // for the platform itself.
 const RESERVED_SUFFIXES = [".netlify.app", ".retain-growth.ai", "retain-growth.ai", "localhost"];
+
+// Ground truth for "HTTPS works": a real TLS handshake to the domain with
+// normal certificate validation — exactly what the visitor's browser does.
+// Netlify's own /ssl state can't answer this: it reads "issued" for the
+// site's existing certificate long before (or without) the new alias being
+// on it, which is how a domain once showed "Підключено" while Chrome
+// rejected it.
+function tlsValidFor(domain: string, timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = tls.connect({ host: domain, port: 443, servername: domain, timeout: timeoutMs });
+    const done = (ok: boolean) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.once("secureConnect", () => done(socket.authorized));
+    socket.once("timeout", () => done(false));
+    socket.once("error", () => done(false));
+  });
+}
 
 function jsonResponse(statusCode: number, body: unknown) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
@@ -290,15 +310,13 @@ export function makeCheckDomainHandler(entity: DomainEntity): Handler {
       console.error(`${logTag}: DNS lookup failed`, err);
     }
 
-    let sslIssued = false;
-    if (token && siteId) {
-      if (dnsResolved) {
-        // Only worth nudging Netlify to (re)provision once DNS actually points
-        // here — asking earlier just fails the same way every time.
-        await provisionSsl(token, siteId);
-      }
-      const ssl = await getSslState(token, siteId);
-      sslIssued = !!ssl && (ssl.state === "issued" || (Array.isArray(ssl.domains) && ssl.domains.includes(customDomain)));
+    // Only worth checking (and nudging Netlify to reissue the certificate)
+    // once DNS actually points here — earlier, both fail the same way every
+    // time. Reissue only while the handshake still fails: it's a Let's
+    // Encrypt order each time, and they're rate-limited.
+    const sslIssued = dnsResolved ? await tlsValidFor(customDomain) : false;
+    if (dnsResolved && !sslIssued && token && siteId) {
+      await provisionSsl(token, siteId);
     }
 
     const verified = dnsResolved && sslIssued;

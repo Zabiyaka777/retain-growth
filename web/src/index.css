@@ -5683,6 +5683,12 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lp-card-name { font-size: 0.875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp-card-link { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--fg-muted); width: fit-content; max-width: 100%; }
 .lp-card-link:hover { color: var(--accent); text-decoration: underline; }
+.domain-chip { display: inline-flex; align-items: center; gap: 5px; width: fit-content; max-width: 100%; padding: 2px 8px 2px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-subtle); font-size: 0.72rem; font-weight: 500; color: var(--fg); text-decoration: none; line-height: 1.5; }
+.domain-chip:hover { border-color: var(--accent); color: var(--accent); }
+.domain-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.domain-chip-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--warning, #f5a524); }
+.domain-chip.is-verified .domain-chip-dot { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent); }
+.domain-chip.is-pending { color: var(--fg-muted); border-style: dashed; }
 
 /* ---------- editor: settings panel in the right column ---------- */
 /* .lpe-stage itself is defined once, up near .lpe-phone-wrap/.lpe-phone. */
