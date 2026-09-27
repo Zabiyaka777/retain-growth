@@ -165,6 +165,11 @@
 
   .section-head { text-align: center; max-width: 860px; margin: 0 auto clamp(44px, 6vw, 72px); }
   .section-head h2 { font-size: clamp(27px, 4vw, 46px); line-height: 1.14; margin-top: 24px; }
+  .section-head h2 em {
+    font-style: normal; font-weight: 500; color: transparent; -webkit-background-clip: text; background-clip: text;
+    background-image: linear-gradient(100deg, var(--orange) 0%, var(--amber) 55%, #ffe1c4 100%);
+    filter: drop-shadow(0 0 20px rgba(255,107,44,0.4));
+  }
   .section-head .lead-text { margin-top: 22px; margin-inline: auto; max-width: 60ch; }
 
   /* ---------- the one card ---------- */
@@ -382,31 +387,6 @@
   .conclusion-card h3 { font-size: clamp(22px, 3vw, 34px); line-height: 1.2; margin: 24px 0 22px; }
   .conclusion-card .body-text { max-width: 64ch; margin-inline: auto; }
 
-  /* ================= FEATURES ================= */
-  .feature-sec { padding-block: clamp(44px, 6vw, 72px); }
-  .feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(40px, 7vw, 104px); align-items: center; }
-  .feature.rev .feature-copy { order: 2; }
-  @media (max-width: 900px) { .feature { grid-template-columns: 1fr; gap: 40px; } .feature.rev .feature-copy { order: initial; } }
-  .feature-copy h3 { font-size: clamp(23px, 2.7vw, 33px); line-height: 1.2; margin: 22px 0 20px; }
-  .feature-copy .body-text { margin-bottom: 30px; }
-  .feature-list { display: flex; flex-direction: column; padding: 0; margin: 0; }
-  .feature-list li { list-style: none; display: flex; gap: 14px; align-items: flex-start; padding: 15px 0; border-top: 1px solid var(--line); font-size: 15px; font-weight: 400; color: var(--ink); line-height: 1.5; }
-  .feature-list li:last-child { border-bottom: 1px solid var(--line); }
-  .feature-list svg { flex-shrink: 0; margin-top: 3px; width: 15px; height: 15px; color: var(--amber) !important; filter: drop-shadow(0 0 5px var(--orange-glow)); }
-
-  .mock { padding: 22px; border-radius: var(--r-xl); }
-  .mock::before { opacity: 1; left: 18%; right: 18%; }
-  .mock-glow { position: absolute; z-index: -2; inset: 12% 6% -8%; border-radius: 50%; pointer-events: none; filter: blur(50px); opacity: 0.55; background: radial-gradient(closest-side, color-mix(in srgb, var(--c, var(--orange)) 40%, transparent), transparent); }
-  .mock-head { display: flex; align-items: center; gap: 10px; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
-  .mock-head .lights { display: flex; gap: 6px; margin-right: 4px; }
-  .mock-head .lights i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.12); }
-  .mock-head .chip { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
-  .mock-head span.label { font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
-  .mock .chat-bubble { margin-bottom: 10px; }
-  .mock .typing-row { margin-bottom: 10px; }
-  .chat-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 18px; }
-  .chat-btn { font-size: 12.5px; font-weight: 500; padding: 8px 14px; border-radius: var(--r-full); border: 1px solid var(--line-2); color: var(--ink-2); background: var(--glass); }
-
   /* funnel graph mock */
   .fgraph { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
   .fnode {
@@ -436,42 +416,6 @@
   .bars i { flex: 1; height: 6%; border-radius: 4px 4px 1px 1px; background: linear-gradient(180deg, rgba(255,176,112,0.55), rgba(255,107,44,0.06)); border-top: 1px solid rgba(255,176,112,0.7); transition: height 1400ms var(--ease); transition-delay: calc(var(--i, 0) * 70ms + 300ms); }
   .bars i:nth-last-child(2) { background: linear-gradient(180deg, var(--amber), rgba(255,107,44,0.12)); border-top-color: #fff; box-shadow: 0 -6px 24px -2px var(--orange-glow); }
   .reveal.in .bars i { height: var(--h, 60%); }
-
-  /* pipeline mock */
-  .pipeline { display: flex; flex-direction: column; gap: 8px; }
-  .pipe-row { --pc: var(--ink-3); display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--line); transition: border-color 300ms var(--ease-out), background 300ms var(--ease-out); }
-  @media (hover: hover) { .pipe-row:hover { border-color: var(--line-2); background: var(--glass-2); } }
-  .pipe-avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; color: var(--ink-2); background: var(--glass-2); border: 1px solid var(--line-2); }
-  .pipe-name { font-size: 13.5px; font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pipe-chan { color: var(--ink-3); line-height: 0; }
-  .pipe-chan svg { width: 15px; height: 15px; }
-  .pipe-stage { display: inline-flex; align-items: center; gap: 7px; font-size: 11.5px; font-weight: 500; padding: 5px 10px; border-radius: var(--r-full); color: var(--pc); border: 1px solid color-mix(in srgb, var(--pc) 28%, transparent); background: color-mix(in srgb, var(--pc) 8%, transparent); white-space: nowrap; }
-  .pipe-stage::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
-  .pipe-row.moving .pipe-stage::before { animation: blink 1.6s ease-in-out infinite; }
-  @keyframes blink { 50% { opacity: 0.25; } }
-
-  /* ================= JOURNEY ================= */
-  .journey { padding: 40px 28px 36px; border-radius: var(--r-xl); overflow: hidden; }
-  .journey-track { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); }
-  .journey-track::before { content: ""; position: absolute; top: 22px; left: 6.25%; right: 6.25%; height: 1px; background: linear-gradient(90deg, var(--line-2), rgba(255,160,100,0.5) 60%, rgba(74,222,154,0.6)); }
-  .journey-track::after { content: ""; position: absolute; top: 21px; left: 6.25%; width: 90px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, transparent, var(--amber), #fff); filter: drop-shadow(0 0 8px var(--orange)); animation: travel-x 6s var(--ease-out) infinite; }
-  @keyframes travel-x { 0% { left: 4%; opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { left: 88%; opacity: 0; } }
-  .jstep { --jc: var(--amber); position: relative; text-align: center; padding: 0 8px; }
-  .jdot { width: 45px; height: 45px; border-radius: 50%; margin: 0 auto 20px; display: grid; place-items: center; position: relative; z-index: 2; color: var(--jc); border: 1px solid color-mix(in srgb, var(--jc) 40%, transparent); background: radial-gradient(circle at 50% 120%, color-mix(in srgb, var(--jc) 30%, #08090c), #08090c 70%); box-shadow: 0 0 0 6px var(--bg), 0 0 26px -8px var(--jc); }
-  .jdot svg { width: 17px; height: 17px; }
-  .jnum { display: block; font-family: var(--font-display); font-size: 9.5px; font-weight: 500; letter-spacing: 0.16em; color: var(--ink-3); margin-bottom: 8px; }
-  .jstep b { display: block; font-size: 13.5px; font-weight: 500; line-height: 1.3; margin-bottom: 6px; color: var(--ink); text-wrap: balance; }
-  .jstep > span:last-child { display: block; font-size: 12px; color: var(--ink-3); line-height: 1.4; text-wrap: balance; }
-  @media (max-width: 940px) {
-    .journey { padding: 28px 22px; }
-    .journey-track { grid-template-columns: 1fr; gap: 0; }
-    .journey-track::before { top: 22px; bottom: 22px; left: 22px; right: auto; width: 1px; height: auto; background: linear-gradient(180deg, var(--line-2), rgba(255,160,100,0.5) 60%, rgba(74,222,154,0.6)); }
-    .journey-track::after { display: none; }
-    .jstep { display: grid; grid-template-columns: 45px 1fr; column-gap: 18px; text-align: left; padding: 0 0 26px; align-items: start; }
-    .jstep:last-child { padding-bottom: 0; }
-    .jdot { margin: 0; grid-row: 1 / span 3; box-shadow: 0 0 0 5px #08090c, 0 0 26px -8px var(--jc); }
-    .jnum { margin: 3px 0 3px; }
-  }
 
   /* ================= TIME TO VALUE: ascending steps ================= */
   .ttv { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: end; }
@@ -508,7 +452,7 @@
   /* ================= COMPARISON ================= */
   .table-wrap { border-radius: var(--r-xl); padding: 8px; }
   .compare { border-collapse: separate; border-spacing: 0; width: 100%; }
-  .compare th, .compare td { padding: 20px 22px; text-align: left; font-size: 15px; font-weight: 400; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.45; }
+  .compare th, .compare td { padding: 20px 22px; text-align: left; font-size: 15px; font-weight: 400; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.45; transition: background 300ms var(--ease-out); }
   .compare th { font-family: var(--font-display); font-weight: 500; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); padding-block: 18px; }
   .compare tr:last-child td { border-bottom: none; }
   .compare td:first-child { color: var(--ink-3); width: 28%; font-size: 14px; }
@@ -517,19 +461,33 @@
   .compare td.bad svg { color: rgba(255,255,255,0.25); }
   .compare td.good { color: var(--ink); font-weight: 500; }
   .compare td.good svg { color: var(--amber) !important; filter: drop-shadow(0 0 5px var(--orange-glow)); }
-  /* the lit column */
-  .compare th:last-child, .compare td:last-child { background: linear-gradient(90deg, rgba(255,107,44,0.075), rgba(255,107,44,0.03)); border-left: 1px solid rgba(255,150,90,0.28); border-right: 1px solid rgba(255,150,90,0.28); }
-  .compare th:last-child { color: var(--amber); border-top: 1px solid rgba(255,150,90,0.28); border-radius: var(--r-md) var(--r-md) 0 0; box-shadow: 0 -14px 40px -14px var(--orange-glow); }
-  .compare tr:last-child td:last-child { border-bottom: 1px solid rgba(255,150,90,0.28); border-radius: 0 0 var(--r-md) var(--r-md); }
+  @media (hover: hover) {
+    .compare tbody tr:hover td:not(.good) { background: rgba(255,255,255,0.03); }
+    .compare tbody tr:hover td.good { background: linear-gradient(90deg, rgba(255,107,44,0.14), rgba(255,107,44,0.06)); }
+  }
+  /* the lit column — brighter glow, glowing beam as the divider from the "typical approach" column */
+  .compare td.good, .compare th:last-child { position: relative; }
+  .compare td.good::before, .compare th:last-child::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+    background: linear-gradient(180deg, transparent, var(--amber) 15%, var(--amber) 85%, transparent);
+    filter: drop-shadow(0 0 7px var(--orange-glow));
+  }
+  .compare th:last-child, .compare td:last-child { background: linear-gradient(90deg, rgba(255,107,44,0.1), rgba(255,107,44,0.035)); border-left: 1.5px solid rgba(255,150,90,0.4); border-right: 1.5px solid rgba(255,150,90,0.4); }
+  .compare th:last-child { color: var(--amber); border-top: 1.5px solid rgba(255,150,90,0.4); border-radius: var(--r-md) var(--r-md) 0 0; box-shadow: 0 -14px 44px -12px var(--orange-glow), inset 0 -1px 0 rgba(255,192,140,0.2); }
+  .compare tr:last-child td:last-child { border-bottom: 1.5px solid rgba(255,150,90,0.4); border-radius: 0 0 var(--r-md) var(--r-md); }
   @media (max-width: 720px) {
     .table-wrap { padding: 0; border: 0; background: none; box-shadow: none; }
     .table-wrap::before, .table-wrap::after { display: none; }
     .compare thead { display: none; }
     .compare, .compare tbody { display: block; }
-    .compare tr { display: block; border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 12px; overflow: hidden; background: var(--glass); }
+    .compare tr { display: block; border: 1px solid var(--line); border-radius: var(--r-lg); margin-bottom: 12px; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)); box-shadow: 0 24px 44px -30px rgba(0,0,0,0.85); transition: border-color 250ms, box-shadow 250ms; }
+    .compare tr:active { border-color: rgba(255,150,90,0.4); }
     .compare td { display: block; width: auto !important; border: 0 !important; border-radius: 0 !important; padding: 14px 18px; }
     .compare td:first-child { font-family: var(--font-display); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; padding-bottom: 4px; padding-top: 18px; }
-    .compare td.good { border-top: 1px solid rgba(255,150,90,0.28) !important; padding-bottom: 18px; }
+    .compare td.bad svg { color: rgba(255,255,255,0.3); }
+    .compare td.good { position: relative; border-top: 1.5px solid rgba(255,150,90,0.4) !important; background: linear-gradient(90deg, rgba(255,107,44,0.12), rgba(255,107,44,0.02)); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05); padding-bottom: 18px; }
+    .compare td.good::before { left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 1.5px; background: linear-gradient(90deg, transparent, var(--amber) 30%, var(--amber) 70%, transparent); filter: drop-shadow(0 0 6px var(--orange-glow)); }
+    .compare td.good svg { filter: drop-shadow(0 0 7px var(--orange-glow)); }
   }
 
   /* ================= FAQ ================= */
@@ -544,6 +502,50 @@
   .faq-q .chev { flex-shrink: 0; width: 32px; height: 32px; padding: 8px; border-radius: 50%; border: 1px solid var(--line-2); color: var(--ink-2); transition: transform 400ms var(--ease), color 300ms, border-color 300ms, box-shadow 300ms; }
   .faq-item[open] .faq-q .chev { transform: rotate(45deg); color: var(--amber); border-color: rgba(255,150,90,0.45); box-shadow: 0 0 20px -6px var(--orange-glow); }
   .faq-a { padding: 0 60px 28px 2px; font-size: 15.5px; color: var(--ink-2); line-height: 1.7; max-width: 66ch; animation: rise 500ms var(--ease) both; }
+
+  /* ================= NEON DIVIDER ================= */
+  .neon-divide { padding-block: clamp(36px, 6.5vw, 68px); text-align: center; }
+  .neon-divide-inner { display: inline-flex; flex-direction: column; align-items: center; gap: 18px; }
+  .neon-divide-text {
+    position: relative; font-family: var(--font-display); font-size: clamp(28px, 4.6vw, 48px); font-weight: 500; letter-spacing: 0.005em;
+    color: transparent; -webkit-background-clip: text; background-clip: text;
+    background-image: linear-gradient(100deg, var(--orange) 0%, var(--amber) 40%, #fff1de 55%, var(--amber) 70%, var(--orange) 100%);
+    animation: neonFlicker 4s ease-in-out infinite;
+  }
+  .neon-divide-arrow { display: flex; flex-direction: column; align-items: center; }
+  .neon-divide-arrow svg { width: 30px; height: 30px; color: var(--amber); filter: drop-shadow(0 0 12px var(--orange-glow)); animation: neonArrow 1.6s ease-in-out infinite; }
+  .neon-divide-arrow svg:nth-child(2) { margin-top: -13px; opacity: 0.5; animation-delay: 0.16s; }
+  @keyframes neonFlicker {
+    0%, 15%, 100% {
+      opacity: 1; transform: translateX(0);
+      filter: drop-shadow(0 0 6px var(--orange-glow)) drop-shadow(0 0 20px var(--orange-glow)) drop-shadow(0 0 52px rgba(255,107,44,0.5)) drop-shadow(0 0 90px rgba(255,107,44,0.25));
+    }
+    16% { opacity: 0.35; filter: drop-shadow(0 0 2px rgba(255,107,44,0.2)); transform: translateX(-2px); }
+    17% { opacity: 1; transform: translateX(2px); filter: drop-shadow(0 0 10px rgba(77,163,255,0.75)) drop-shadow(0 0 34px rgba(167,155,245,0.6)) drop-shadow(0 0 60px rgba(255,107,44,0.4)); }
+    18.5% { opacity: 0.4; filter: drop-shadow(0 0 2px rgba(255,107,44,0.15)); transform: translateX(-1px); }
+    20%, 46% {
+      opacity: 1; transform: translateX(0);
+      filter: drop-shadow(0 0 6px var(--orange-glow)) drop-shadow(0 0 20px var(--orange-glow)) drop-shadow(0 0 52px rgba(255,107,44,0.5)) drop-shadow(0 0 90px rgba(255,107,44,0.25));
+    }
+    47% { opacity: 0.4; filter: drop-shadow(0 0 3px rgba(255,107,44,0.2)); }
+    48.5% { opacity: 1; filter: drop-shadow(0 0 12px rgba(74,222,154,0.6)) drop-shadow(0 0 30px var(--orange-glow)) drop-shadow(0 0 60px rgba(255,107,44,0.35)); }
+  }
+  @keyframes neonArrow { 0%, 100% { transform: translateY(0); opacity: 0.6; } 50% { transform: translateY(9px); opacity: 1; } }
+
+  /* ================= CTA (mid-page) ================= */
+  .cta-mid { padding-block: clamp(50px, 7vw, 88px); }
+  .cta-mid-card { text-align: center; padding: clamp(44px, 6.5vw, 72px) clamp(22px, 5vw, 54px); overflow: hidden; }
+  .cta-mid-card .glow { position: absolute; z-index: -1; inset: -40% -10% -10%; pointer-events: none; background: radial-gradient(closest-side, rgba(255,107,44,0.22), transparent 70%); }
+  .cta-mid-card h2 { font-size: clamp(24px, 3.6vw, 38px); line-height: 1.16; letter-spacing: -0.03em; max-width: 22ch; margin: 22px auto 16px; }
+  .cta-mid-card .lead-text { max-width: 50ch; margin-inline: auto; }
+  .cta-mid-card .btn-primary { margin-top: 32px; animation: ctaPulse 2.6s ease-in-out infinite; }
+  @media (hover: hover) {
+    .cta-mid-card .btn-primary:hover { animation-play-state: paused; transform: translateY(-2px) scale(1.035); }
+  }
+  @keyframes ctaPulse {
+    0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 1px rgba(255,140,84,0.5), 0 10px 32px -8px var(--orange-glow), 0 0 60px -18px var(--orange-glow); }
+    50% { transform: scale(1.02); box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 0 0 1px rgba(255,170,120,0.85), 0 14px 46px -6px rgba(255,107,44,0.95), 0 0 110px -10px rgba(255,107,44,0.8); }
+  }
 
   /* ================= FINAL CTA ================= */
   .cta-sec { padding-bottom: clamp(40px, 6vw, 80px); }
@@ -754,9 +756,22 @@
   .st-cursor.click { animation: dmClick 260ms var(--ease-out); }
 
   /* ---------- 1. landing builder ---------- */
-  .st-lb { --lbc: #ff6b2c; max-width: 860px; display: grid; grid-template-columns: 280px 1fr; gap: clamp(20px, 3vw, 40px); align-items: center; padding: clamp(18px, 2.4vw, 28px); border-radius: 30px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)); box-shadow: 0 50px 100px -50px rgba(0,0,0,0.9); }
-  .lb-phone { justify-self: center; width: 250px; height: 470px; padding: 9px; border-radius: 38px; background: #0b0c10; box-shadow: 0 0 0 1.5px #2a2e36, 0 0 0 5px #111318, 0 30px 70px -30px rgba(0,0,0,0.9); }
+  .st-lb { --lbc: #ff6b2c; position: relative; max-width: 860px; display: grid; grid-template-columns: 280px 1fr; gap: clamp(20px, 3vw, 40px); align-items: center; padding: clamp(18px, 2.4vw, 28px); border-radius: 30px; border: 1px solid var(--line); background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)); box-shadow: 0 50px 100px -50px rgba(0,0,0,0.9); }
+  .st-lb::before {
+    content: ""; position: absolute; z-index: -1; left: 6%; top: 4%; width: 300px; height: 300px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--lbc) 48%, transparent), transparent 72%);
+    filter: blur(10px); opacity: 0.75; transition: background 600ms;
+  }
+  .lb-phone { position: relative; justify-self: center; width: 250px; height: 470px; padding: 9px; border-radius: 38px; background: #0b0c10;
+    box-shadow: 0 0 0 1.5px #2a2e36, 0 0 0 5px #111318, 0 0 70px -8px color-mix(in srgb, var(--lbc) 60%, transparent), 0 30px 70px -30px rgba(0,0,0,0.9);
+    transition: box-shadow 600ms, transform 450ms var(--ease); }
+  @media (hover: hover) { .st-lb:hover .lb-phone { transform: translateY(-5px) rotate(-0.7deg); } }
   .lb-screen { position: relative; height: 100%; border-radius: 30px; overflow: hidden; background: #f6f5f2; color: #0c0f14; }
+  .lb-screen::after {
+    content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background: linear-gradient(120deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.05) 22%, transparent 45%);
+    mix-blend-mode: overlay; opacity: 0.7;
+  }
   .lb-skel { position: absolute; inset: 0; padding: 42px 18px; display: flex; flex-direction: column; gap: 12px; transition: opacity 500ms; }
   .lb-skel i { display: block; height: 12px; border-radius: 6px; background: #e3e1dc; } .lb-skel i:first-child { height: 120px; border-radius: 16px; } .lb-skel i:nth-child(2) { width: 80%; } .lb-skel i:nth-child(4) { width: 60%; }
   .lb-skel b { margin-top: auto; height: 40px; border-radius: 12px; background: #e3e1dc; }
@@ -768,18 +783,18 @@
   .lb-hero p { font-size: 11.5px; opacity: .9; }
   .lb-list { list-style: none; margin: 0; padding: 14px 16px 0; display: flex; flex-direction: column; gap: 9px; }
   .lb-list li { display: flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 500; }
-  .lb-list li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--lbc); transition: background 600ms; flex: none; }
-  .lb-cta { margin: auto 14px 18px; padding: 12px; border-radius: 13px; text-align: center; font: 600 12.5px/1.2 var(--font-sans); color: #fff; background: var(--lbc); box-shadow: 0 12px 24px -12px var(--lbc); transition: background 600ms, box-shadow 600ms; min-height: 1.2em; }
-  .lb-panel { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 22px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+  .lb-list li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--lbc); box-shadow: 0 0 8px var(--lbc); transition: background 600ms, box-shadow 600ms; flex: none; }
+  .lb-cta { margin: auto 14px 18px; padding: 12px; border-radius: 13px; text-align: center; font: 600 12.5px/1.2 var(--font-sans); color: #fff; background: var(--lbc); box-shadow: 0 14px 30px -10px var(--lbc), 0 0 26px -6px var(--lbc); transition: background 600ms, box-shadow 600ms; min-height: 1.2em; }
+  .lb-panel { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 22px; border: 1px solid color-mix(in srgb, var(--lbc) 20%, var(--line)); background: rgba(255,255,255,0.03); transition: border-color 600ms; }
   .lb-row { display: flex; flex-direction: column; gap: 8px; }
   .lb-row label { font: 600 10.5px/1 var(--font-sans); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
   .lb-tpls { display: flex; flex-wrap: wrap; gap: 6px; }
   .lb-tpls span { padding: 7px 11px; border-radius: 10px; font-size: 12.5px; color: var(--ink-2); border: 1px solid var(--line); background: rgba(255,255,255,0.03); transition: all 250ms; }
-  .lb-tpls span.on { color: var(--ink); border-color: rgba(255,192,97,0.5); background: rgba(255,192,97,0.12); }
+  .lb-tpls span.on { color: var(--ink); border-color: rgba(255,192,97,0.5); background: rgba(255,192,97,0.12); box-shadow: 0 0 16px -6px var(--orange-glow); }
   .lb-tpls span.press, .lb-sw i.press, .lb-save.press { transform: scale(0.94); }
   .lb-sw { display: flex; gap: 9px; }
-  .lb-sw i { width: 24px; height: 24px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px rgba(255,255,255,0.06); transition: box-shadow 250ms, transform 160ms; }
-  .lb-sw i.on { box-shadow: 0 0 0 2px #0b0c10, 0 0 0 4px #fff; }
+  .lb-sw i { width: 24px; height: 24px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 2px rgba(255,255,255,0.06), 0 0 10px -3px var(--c); transition: box-shadow 250ms, transform 160ms; }
+  .lb-sw i.on { box-shadow: 0 0 0 2px #0b0c10, 0 0 0 4px #fff, 0 0 16px -2px var(--c); }
   .lb-input { position: relative; display: flex; align-items: center; min-height: 38px; padding: 9px 12px; border-radius: 11px; border: 1px solid var(--line-2); background: rgba(0,0,0,0.25); font-size: 13px; color: var(--ink); transition: border-color 250ms, box-shadow 250ms; }
   .lb-input.focus { border-color: rgba(255,192,97,0.6); box-shadow: 0 0 0 3px rgba(255,192,97,0.12); }
   .lb-input i { width: 1.5px; height: 15px; margin-left: 1px; background: var(--amber); opacity: 0; }
@@ -949,7 +964,7 @@
     html { scroll-behavior: auto; }
     .reveal { transition: none; opacity: 1; transform: none; filter: none; }
     .hero-copy, .scene, .hero-proof, .faq-a { animation: none; }
-    .core::before, .wire-pulse, .fwire-v::after, .stage-tracker .seg i, .typing-row span, .pulse::after, .ping::after, .journey-track::after, .pipe-row.moving .pipe-stage::before, .snail { animation: none; }
+    .core::before, .wire-pulse, .fwire-v::after, .stage-tracker .seg i, .typing-row span, .pulse::after, .ping::after, .snail, .neon-divide-text, .neon-divide-arrow svg, .cta-mid-card .btn-primary { animation: none; }
     .wire-pulse { display: none; }
     .stage-tracker .seg i { width: 100%; }
     .bars i { transition: none; height: var(--h, 60%); }
@@ -1049,8 +1064,8 @@
 <section class="wrap pain-section chapter">
   <div class="section-head reveal">
     <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.5v3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></span><span data-i18n="pain.eyebrow">Що зазвичай зʼїдає прибуток</span></span>
-    <h2 data-i18n="pain.h2">Кожен біль месенджер-продажів уже закритий вузлом у продукті</h2>
-    <p class="lead-text" data-i18n="pain.p">Не набір фіч під запит, а суцільний ланцюжок: від першого повідомлення ліда до події в рекламному кабінеті.</p>
+    <h2 data-i18n-html="pain.h2">Кожен біль, який ви мали у продажах через месенджери, вже <em>закритий окремим вузлом</em> у продукті</h2>
+    <p class="lead-text" data-i18n="pain.p">Це не прості чат-боти, а набір інструментів для побудови ланцюжка: від реклами в стрічці до повторного продажу з детальною аналітикою.</p>
   </div>
   <div class="pain-grid" data-stagger>
     <div class="node lift pain-card reveal" id="pain-1"></div>
@@ -1070,6 +1085,17 @@
     <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span data-i18n="concl.eyebrow">Висновок</span></span>
     <h3 data-i18n="concl.h">AI не замінює команду — він забирає рутину і повертає час на продажі</h3>
     <p class="body-text" data-i18n="concl.p">Грамотно впроваджений AI не звільняє менеджерів, а знімає з них одноманітну частину роботи: миттєві відповіді, кваліфікацію лідів, нагадування тим, хто мовчить. Люди займаються складними угодами й живим спілкуванням, а швидкість і рутина — на AI. Результат — більше закритих угод тим самим складом команди.</p>
+  </div>
+</section>
+
+<!-- ============ NEON DIVIDER — leads into the product walkthrough ============ -->
+<section class="wrap neon-divide">
+  <div class="neon-divide-inner reveal">
+    <span class="neon-divide-text" data-i18n="neon.text">Ось як це виглядає зсередини</span>
+    <span class="neon-divide-arrow" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </span>
   </div>
 </section>
 
@@ -1261,43 +1287,22 @@
   </div>
 </section>
 
-<!-- ============ D: DESIRE — unified inbox ============ -->
-<section class="wrap feature-sec">
-  <div class="feature rev">
-    <div class="feature-copy reveal">
-      <span class="kicker"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12h-5l-2 3h-4l-2-3H3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M5.5 5h13l2.5 7v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6l2.5-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span data-i18n="f3.tag">ЄДИНИЙ INBOX · CRM</span></span>
-      <h3 data-i18n="f3.h">Один inbox для всіх каналів. Один pipeline для всіх лідів</h3>
-      <p class="body-text" data-i18n="f3.p">Telegram, WhatsApp, Messenger та Instagram зʼїжджаються в один список чатів зі статусами, тегами й історією воронки — CRM в одній вкладці, а не в трьох різних застосунках.</p>
-      <ul class="feature-list">
-        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f3.li1">Видно, на якому вузлі воронки лід зараз стоїть</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f3.li2">Ручна відповідь менеджера й AI ніколи не перекриваються</span></li>
-        <li><svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span data-i18n="f3.li3">Закрив чат — завжди можна відкрити назад, нічого не губиться</span></li>
-      </ul>
-    </div>
-    <div class="node mock reveal">
-      <span class="mock-glow"></span>
-      <div class="mock-head"><span class="lights"><i></i><i></i><i></i></span><span class="chip" style="background:var(--orange);color:var(--orange)"></span><span class="label" data-i18n="f3.mock.head">Pipeline · сьогодні</span></div>
-      <div class="pipeline" id="pipeline-mock"></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ D: DESIRE — journey map ============ -->
-<section class="wrap chapter">
-  <div class="section-head reveal">
-    <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.1" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="12" r="2.1" stroke="currentColor" stroke-width="1.6"/><path d="M7.3 12h3.2M13.5 12h3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="0.5 3.4"/></svg></span><span data-i18n="journey.eyebrow">Шлях одного ліда</span></span>
-    <h2 data-i18n="journey.h2">Від кліку по рекламі до події в Ads Manager — без єдиної ручної дії</h2>
-  </div>
-  <div class="node journey reveal">
-    <div class="journey-track" id="journey-track"></div>
+<!-- ============ CTA — mid-page nudge after retention ============ -->
+<section class="wrap cta-mid">
+  <div class="node brackets cta-mid-card reveal">
+    <i class="bk tl"></i><i class="bk tr"></i><i class="bk bl"></i><i class="bk br"></i><span class="glow"></span>
+    <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span data-i18n="ctamid.tag">ГОТОВО ЗАПУСКАТИ</span></span>
+    <h2 data-i18n="ctamid.h">Усе, що ви щойно побачили, — вже працює. Лишилось підключити ваш акаунт</h2>
+    <p class="lead-text" data-i18n="ctamid.p">14 днів безкоштовно, без картки. Перша воронка — вже сьогодні.</p>
+    <a class="btn btn-primary" href="https://app.retain-growth.ai/login" data-i18n="ctamid.btn">Почати тріал 14 днів</a>
   </div>
 </section>
 
 <!-- ============ D: DESIRE — time to value ============ -->
 <section class="wrap">
   <div class="section-head reveal">
-    <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.6V12l2.8 1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span data-i18n="ttv.eyebrow">14 днів на випробування</span></span>
-    <h2 data-i18n="ttv.h2">Перший автоматичний продаж — на тижні запуску, не через квартал</h2>
+    <span class="eyebrow"><span class="eyebrow-chip"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.6V12l2.8 1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span data-i18n="ttv.eyebrow">Від реєстрації до першого продажу</span></span>
+    <h2 data-i18n="ttv.h2">Перший автоматичний продаж — за 2 години, а не через тиждень</h2>
   </div>
   <div class="ttv reveal" id="ttv-track"></div>
 </section>
@@ -1464,8 +1469,8 @@
     "hero.graph.chat2": ["Скину варіанти за 10 секунд і одразу зʼєднаю з менеджером, якщо треба 👋", "I'll send options in 10 seconds and loop in a manager right away if you need one 👋"],
     "hero.graph.capi": ["Purchase → доставлено в Meta CAPI", "Purchase → delivered to Meta CAPI"],
     "pain.eyebrow": ["Що зазвичай зʼїдає прибуток", "What usually eats your margin"],
-    "pain.h2": ["Кожен біль месенджер-продажів уже закритий вузлом у продукті", "Every messenger-sales pain already has a node that closes it"],
-    "pain.p": ["Не набір фіч під запит, а суцільний ланцюжок: від першого повідомлення ліда до події в рекламному кабінеті.", "Not a pile of feature requests, but one continuous chain — from a lead's first message to the event in the ad account."],
+    "pain.h2": ["Кожен біль, який ви мали у продажах через месенджери, вже <em>закритий окремим вузлом</em> у продукті", "Every pain point you've had selling through messengers is already <em>solved by its own node</em> in the product"],
+    "pain.p": ["Це не прості чат-боти, а набір інструментів для побудови ланцюжка: від реклами в стрічці до повторного продажу з детальною аналітикою.", "Not simple chatbots — a full toolkit for building the chain: from a feed ad to a repeat sale, with analytics on every step."],
     "concl.eyebrow": ["Висновок", "The takeaway"],
     "concl.h": ["AI не замінює команду — він забирає рутину і повертає час на продажі", "AI doesn't replace your team — it removes the routine and gives sales back the time"],
     "concl.p": ["Грамотно впроваджений AI не звільняє менеджерів, а знімає з них одноманітну частину роботи: миттєві відповіді, кваліфікацію лідів, нагадування тим, хто мовчить. Люди займаються складними угодами й живим спілкуванням, а швидкість і рутина — на AI. Результат — більше закритих угод тим самим складом команди.", "Implemented properly, AI doesn't lay managers off — it takes the repetitive part off their plate: instant replies, lead qualification, nudges for leads who've gone quiet. People handle complex deals and real conversation, while AI handles speed and routine. The result: more closed deals with the same team."],
@@ -1487,17 +1492,13 @@
     "f5.li1": ["Наскрізний рух ліда через усі канали в один звіт", "The lead's whole cross-channel movement in one report"],
     "f5.li2": ["AI сам класифікує етап — не потрібен ручний тег", "The AI classifies the stage itself — no manual tagging"],
     "f5.li3": ["CAPI-подія летить у Meta в момент реальної дії, не пізніше", "The CAPI event fires the moment the action happens, never later"],
-    "f3.tag": ["ЄДИНИЙ INBOX · CRM", "UNIFIED INBOX · CRM"],
-    "f3.h": ["Один inbox для всіх каналів. Один pipeline для всіх лідів", "One inbox for every channel. One pipeline for every lead"],
-    "f3.p": ["Telegram, WhatsApp, Messenger та Instagram зʼїжджаються в один список чатів зі статусами, тегами й історією воронки — CRM в одній вкладці, а не в трьох різних застосунках.", "Telegram, WhatsApp, Messenger and Instagram land in one chat list with statuses, tags and funnel history — CRM in one tab, not spread across three apps."],
-    "f3.li1": ["Видно, на якому вузлі воронки лід зараз стоїть", "See exactly which funnel node a lead is sitting on"],
-    "f3.li2": ["Ручна відповідь менеджера й AI ніколи не перекриваються", "A manager's manual reply and the AI never overlap"],
-    "f3.li3": ["Закрив чат — завжди можна відкрити назад, нічого не губиться", "Close a chat and reopen it anytime — nothing gets lost"],
-    "f3.mock.head": ["Pipeline · сьогодні", "Pipeline · today"],
-    "journey.eyebrow": ["Шлях одного ліда", "One lead's journey"],
-    "journey.h2": ["Від кліку по рекламі до події в Ads Manager — без єдиної ручної дії", "From an ad click to an event in Ads Manager — with zero manual steps"],
-    "ttv.eyebrow": ["14 днів на випробування", "14 days to try it"],
-    "ttv.h2": ["Перший автоматичний продаж — на тижні запуску, не через квартал", "Your first automated sale — launch week, not next quarter"],
+    "neon.text": ["Ось як це виглядає зсередини", "Here's what it looks like inside"],
+    "ctamid.tag": ["ГОТОВО ЗАПУСКАТИ", "READY TO LAUNCH"],
+    "ctamid.h": ["Усе, що ви щойно побачили, — вже працює. Лишилось підключити ваш акаунт", "Everything you just saw is already live. All that's left is connecting your account"],
+    "ctamid.p": ["14 днів безкоштовно, без картки. Перша воронка — вже сьогодні.", "14 days free, no card. Your first funnel — today."],
+    "ctamid.btn": ["Почати тріал 14 днів", "Start the 14-day trial"],
+    "ttv.eyebrow": ["Від реєстрації до першого продажу", "From sign-up to your first sale"],
+    "ttv.h2": ["Перший автоматичний продаж — за 2 години, а не через тиждень", "Your first automated sale — in 2 hours, not a week"],
     "spot.eyebrow": ["AI + CAPI наживо, 24/7", "AI + CAPI live, 24/7"],
     "spot.h": ["Поки ви спите — AI веде лідів, а CAPI рахує дохід", "While you sleep, the AI runs your leads and CAPI counts the revenue"],
     "spot.p": ["Жодної паузи між часовими поясами: AI відповідає й кваліфікує, а сервер шле кожну конверсію в Meta без затримок і без вашої участі.", "No pause across time zones: the AI replies and qualifies while the server sends every conversion to Meta instantly, with no one at the keyboard."],
@@ -1599,52 +1600,11 @@
     });
   }
 
-  var PIPELINE = [
-    { name: { ua: "Олена К.", en: "Olena K." }, stage: { ua: "AI кваліфікує", en: "AI qualifying" }, color: "ai", chan: "telegram" },
-    { name: { ua: "Максим П.", en: "Maksym P." }, stage: { ua: "Чекає менеджера", en: "Awaiting manager" }, color: "coral", chan: "instagram" },
-    { name: { ua: "Ірина В.", en: "Iryna V." }, stage: { ua: "Оплата", en: "Payment" }, color: "conversion", chan: "whatsapp" },
-    { name: { ua: "Дмитро С.", en: "Dmytro S." }, stage: { ua: "Пауза 24г", en: "Paused 24h" }, color: "delay", chan: "messenger" }
-  ];
-  function renderPipeline() {
-    var el = document.getElementById("pipeline-mock");
-    if (!el) return;
-    el.innerHTML = PIPELINE.map(function (p, i) {
-      var name = lang === "ua" ? p.name.ua : p.name.en;
-      var stage = lang === "ua" ? p.stage.ua : p.stage.en;
-      var initials = name.split(" ").map(function (w) { return w[0]; }).join("");
-      return '<div class="pipe-row' + (i === 0 ? " moving" : "") + '" style="--pc:var(--' + p.color + ')"><div class="pipe-avatar">' + initials + '</div>' +
-        '<div class="pipe-name">' + name + '</div>' +
-        '<span class="pipe-chan">' + icon(p.chan) + '</span>' +
-        '<div class="pipe-stage">' + stage + '</div></div>';
-    }).join("");
-  }
-
-  var JOURNEY = [
-    { ua: ["Клік", "Реклама в Meta"], en: ["Click", "Meta ad"], color: "coral", icon: "click" },
-    { ua: ["Перше повідомлення", "Telegram / WhatsApp / IG"], en: ["First message", "Telegram / WhatsApp / IG"], color: "coral", icon: "message" },
-    { ua: ["Вхід у воронку", "Автоматично, за лінком"], en: ["Enters the funnel", "Automatically, via the link"], color: "gold", icon: "funnel" },
-    { ua: ["AI кваліфікує", "Питання, класифікація етапу"], en: ["AI qualifies", "Questions, stage classification"], color: "ai", icon: "ai" },
-    { ua: ["Передача менеджеру", "У потрібний момент"], en: ["Handoff to a manager", "At the right moment"], color: "delay", icon: "handoff" },
-    { ua: ["Аналітична воронка", "Оновлює стадію сама"], en: ["Analytics funnel", "Updates the stage itself"], color: "condition", icon: "chart" },
-    { ua: ["Оплата", "Подія Purchase"], en: ["Payment", "Purchase event"], color: "conversion", icon: "card" },
-    { ua: ["CAPI → Meta", "Ads Manager бачить продаж"], en: ["CAPI → Meta", "Ads Manager sees the sale"], color: "conversion", icon: "bolt" }
-  ];
-  function renderJourney() {
-    var el = document.getElementById("journey-track");
-    if (!el) return;
-    el.innerHTML = JOURNEY.map(function (s, i) {
-      var t = lang === "ua" ? s.ua : s.en;
-      var c = s.color === "ai" ? "blue" : s.color === "conversion" ? "green" : "amber";
-      return '<div class="jstep" style="--jc:var(--' + c + ')"><div class="jdot">' + icon(s.icon) + '</div>' +
-        '<span class="jnum">0' + (i + 1) + '</span><b>' + t[0] + '</b><span>' + t[1] + '</span></div>';
-    }).join("");
-  }
-
   var TTV = [
-    { day: { ua: "День 0", en: "Day 0" }, h: { ua: "Підключення каналів", en: "Connect channels" }, p: { ua: "Telegram, WhatsApp, Messenger, Instagram — офіційні API, без сірих ботів", en: "Telegram, WhatsApp, Messenger, Instagram — official APIs, no gray-market bots" } },
-    { day: { ua: "День 1", en: "Day 1" }, h: { ua: "Перша воронка", en: "First funnel" }, p: { ua: "Повідомлення, кнопки, умови — готово за годину, не за тиждень", en: "Messages, buttons, conditions — ready in an hour, not a week" } },
-    { day: { ua: "День 2", en: "Day 2" }, h: { ua: "Pixel і CAPI", en: "Pixel and CAPI" }, p: { ua: "Кожен лінк лідогенерації привʼязаний до свого pixel", en: "Every lead-gen link is tied to its own pixel" } },
-    { day: { ua: "Тиждень 1", en: "Week 1" }, h: { ua: "Перший автоматичний продаж", en: "First automated sale" }, p: { ua: "Видно в дашборді й одразу в Ads Manager — ще всередині тріалу", en: "Visible on the dashboard and in Ads Manager — still inside the trial" } }
+    { day: { ua: "0 хв", en: "0 min" }, h: { ua: "Підключення каналів", en: "Connect channels" }, p: { ua: "Telegram, WhatsApp, Messenger, Instagram — офіційні API, без сірих ботів", en: "Telegram, WhatsApp, Messenger, Instagram — official APIs, no gray-market bots" } },
+    { day: { ua: "30 хв", en: "30 min" }, h: { ua: "Перша воронка", en: "First funnel" }, p: { ua: "Повідомлення, кнопки, умови — збираються на полотні за хвилини", en: "Messages, buttons, conditions — built on the canvas in minutes" } },
+    { day: { ua: "1 год", en: "1 hr" }, h: { ua: "Pixel і CAPI", en: "Pixel and CAPI" }, p: { ua: "Кожен лінк лідогенерації привʼязаний до свого pixel", en: "Every lead-gen link is tied to its own pixel" } },
+    { day: { ua: "2 год", en: "2 hr" }, h: { ua: "Перший автоматичний продаж", en: "First automated sale" }, p: { ua: "Видно в дашборді й одразу в Ads Manager — ще в перший день", en: "Visible on the dashboard and in Ads Manager — on day one" } }
   ];
   function renderTTV() {
     var el = document.getElementById("ttv-track");
@@ -2333,8 +2293,6 @@
   function renderData() {
     renderChannels();
     renderPainPairs();
-    renderPipeline();
-    renderJourney();
     renderTTV();
     renderCmp();
     renderFaq();
