@@ -77,6 +77,8 @@ export default function AdminSettings() {
         </div>
       </div>
 
+      <SupportContactCard />
+
       <PlatformMonoCard />
 
       <div className="card" style={{ maxWidth: 480 }}>
@@ -256,6 +258,114 @@ function PlatformMonoCard() {
               </button>
             )}
           </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+// Support contact behind the sidebar's «Підтримка» item (every org sees it).
+// Plain, non-secret value — platform_config via save-platform-config.ts; the
+// sidebar hides the item while it's empty.
+function SupportContactCard() {
+  const [value, setValue] = useState('')
+  const [saved, setSaved] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [ok, setOk] = useState(false)
+
+  useEffect(() => {
+    supabase
+      .from('platform_config')
+      .select('value')
+      .eq('key', 'support_telegram')
+      .maybeSingle()
+      .then(({ data }) => {
+        const v = (data?.value as string | undefined) ?? null
+        setSaved(v)
+        setValue(v ? `@${v}` : '')
+        setLoading(false)
+      })
+  }, [])
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true)
+    setError(null)
+    setOk(false)
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setError('Сесія недійсна, увійдіть знову')
+      setSaving(false)
+      return
+    }
+    try {
+      const res = await fetch('/.netlify/functions/save-platform-config', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ key: 'support_telegram', value: value.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) setError(data.error ?? 'Не вдалося зберегти')
+      else {
+        setSaved(data.value ?? null)
+        setValue(data.value ? `@${data.value}` : '')
+        setOk(true)
+      }
+    } catch {
+      setError('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 480 }}>
+      <div className="settings-row-label">Підтримка в Telegram</div>
+      <p className="settings-row-hint" style={{ margin: '0.25rem 0 1rem' }}>
+        Нік, на який веде пункт «Підтримка» в сайдбарі кожної організації. Порожнє поле — пункт приховано.
+      </p>
+      {loading ? (
+        <p className="settings-row-hint">Завантаження…</p>
+      ) : (
+        <form className="auth-form" onSubmit={handleSubmit} autoComplete="off">
+          <div className="field">
+            <label htmlFor="admin-support-tg">Telegram-нік</label>
+            <input
+              id="admin-support-tg"
+              className="input"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="@retain_support"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+            />
+            {saved && (
+              <p className="settings-row-hint" style={{ margin: '0.25rem 0 0' }}>
+                Зараз веде на{' '}
+                <a href={`https://t.me/${saved}`} target="_blank" rel="noopener noreferrer">
+                  t.me/{saved}
+                </a>
+              </p>
+            )}
+          </div>
+          {error && (
+            <div className="alert alert-error">
+              <IconAlert size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+          {ok && !error && (
+            <div className="alert alert-info">
+              <IconCheckCircle size={16} />
+              <span>{saved ? 'Збережено' : 'Прибрано — пункт «Підтримка» приховано'}</span>
+            </div>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={saving || value.trim().replace(/^@/, '') === (saved ?? '')} style={{ alignSelf: 'flex-start' }}>
+            {saving ? <IconSpinner size={16} /> : 'Зберегти'}
+          </button>
         </form>
       )}
     </div>

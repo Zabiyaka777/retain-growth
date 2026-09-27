@@ -3,12 +3,14 @@ import { NavLink, Navigate, Outlet } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { useChatNotifications } from '../hooks/useChatNotifications'
+import NotificationsBell from './NotificationsBell'
 import {
   IconChat,
   IconFunnel,
   IconGrid,
   IconLink,
   IconLogout,
+  IconSend,
   IconSettings,
   IconSpinner,
   IconTag,
@@ -66,6 +68,19 @@ export default function DashboardLayout() {
       .select('user_id')
       .maybeSingle()
       .then(({ data }) => setIsAdmin(Boolean(data)))
+  }, [session])
+
+  // Support contact (a Telegram username) — a platform-wide setting admins
+  // set in /admin/settings; the item stays hidden until one exists.
+  const [supportTelegram, setSupportTelegram] = useState<string | null>(null)
+  useEffect(() => {
+    if (!session) return
+    supabase
+      .from('platform_config')
+      .select('value')
+      .eq('key', 'support_telegram')
+      .maybeSingle()
+      .then(({ data }) => setSupportTelegram((data?.value as string | undefined) ?? null))
   }, [session])
 
   useEffect(() => {
@@ -162,6 +177,22 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="sidebar-footer">
+          <NotificationsBell />
+          {supportTelegram && (
+            <a
+              className="sidebar-link"
+              href={`https://t.me/${supportTelegram}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-label="Підтримка"
+              aria-label="Підтримка в Telegram"
+            >
+              <span className="sidebar-icon-wrap">
+                <IconSend size={18} />
+              </span>
+              <span className="sidebar-link-label">Підтримка</span>
+            </a>
+          )}
           <div className="sidebar-user">
             <span className="sidebar-avatar">{initial}</span>
             <span className="sidebar-user-email">{email}</span>

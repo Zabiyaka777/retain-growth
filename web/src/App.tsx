@@ -21,6 +21,7 @@ import LandingPageForm from './pages/LandingPageForm'
 import NotFound from './pages/NotFound'
 import DashboardLayout from './components/DashboardLayout'
 import AdminSettings from './pages/AdminSettings'
+import AdminNotifications from './pages/AdminNotifications'
 
 // netlify/edge-functions/custom-domain.ts resolves a tenant's own custom
 // domain to its landing page's slug and injects it here before the SPA even
@@ -65,6 +66,7 @@ function App() {
         <Route path="organizations" element={<AdminOrganizations />} />
         <Route path="organizations/:orgId" element={<AdminOrganization />} />
         <Route path="security" element={<AdminSecurity />} />
+        <Route path="notifications" element={<AdminNotifications />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
 
