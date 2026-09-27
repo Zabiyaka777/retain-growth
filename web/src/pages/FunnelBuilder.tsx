@@ -163,7 +163,10 @@ type ActionType = 'set_tag' | 'set_variable' | 'subscribe' | 'unsubscribe' | 'op
 interface FunnelButton {
   id: string
   label: string
-  actionType?: 'edge' | 'link'
+  // 'quick_reply' is Instagram-only (see the button editor below) — wired
+  // for graph purposes exactly like 'edge' (netlify/functions/_shared/
+  // funnel-graph.ts's FunnelButton has the same three-way type and comment).
+  actionType?: 'edge' | 'link' | 'quick_reply'
   url?: string
 }
 
@@ -193,7 +196,7 @@ interface AttachmentBlock {
 
 type ContentBlock = TextBlock | AttachmentBlock
 
-type ChannelKey = 'telegram' | 'whatsapp' | 'fbm'
+type ChannelKey = 'telegram' | 'whatsapp' | 'fbm' | 'instagram'
 type FormattingScheme = 'markdown_v2' | 'whatsapp' | 'none'
 
 const TEXT_BLOCK_ID = 'text'
@@ -213,8 +216,11 @@ interface ChannelConfig {
 }
 
 const MESSAGE_CHAR_LIMIT = 4096
-const MESSAGE_CHAR_LIMITS: Record<ChannelKey, number> = { telegram: 4096, whatsapp: 4096, fbm: 2000 }
-const CHANNEL_LABELS: Record<ChannelKey, string> = { telegram: 'Telegram', whatsapp: 'WhatsApp', fbm: 'FB Messenger' }
+// Instagram's DM text limit (1000) is Meta's documented Send API cap — worth
+// re-checking against the real app tomorrow along with everything else in
+// this file's Instagram support.
+const MESSAGE_CHAR_LIMITS: Record<ChannelKey, number> = { telegram: 4096, whatsapp: 4096, fbm: 2000, instagram: 1000 }
+const CHANNEL_LABELS: Record<ChannelKey, string> = { telegram: 'Telegram', whatsapp: 'WhatsApp', fbm: 'FB Messenger', instagram: 'Instagram' }
 
 function defaultFormattingFor(channel: ChannelKey): FormattingScheme {
   return channel === 'telegram' ? 'markdown_v2' : channel === 'whatsapp' ? 'whatsapp' : 'none'
@@ -262,7 +268,7 @@ interface NodeConfig {
   // Human-readable node name, editable on the node itself. Applies to every
   // node type; blank just falls back to the type name as placeholder.
   label?: string
-  channels?: { telegram: ChannelConfig | null; whatsapp: ChannelConfig | null; fbm: ChannelConfig | null }
+  channels?: { telegram: ChannelConfig | null; whatsapp: ChannelConfig | null; fbm: ChannelConfig | null; instagram: ChannelConfig | null }
   buttons?: FunnelButton[]
   // Telegram leaves an inline keyboard tappable forever. Off by default so
   // existing funnels keep behaving exactly as they do today.
@@ -552,6 +558,7 @@ const CHANNEL_TABS: { key: ChannelKey; label: string }[] = [
   { key: 'telegram', label: 'Telegram' },
   { key: 'whatsapp', label: 'WhatsApp' },
   { key: 'fbm', label: 'FB Messenger' },
+  { key: 'instagram', label: 'Instagram' },
 ]
 
 const CHANNEL_FORMAT_MARKS: Record<ChannelKey, { delim: string; label: string; title: string }[]> = {
@@ -568,6 +575,7 @@ const CHANNEL_FORMAT_MARKS: Record<ChannelKey, { delim: string; label: string; t
     { delim: '```', label: '</>', title: 'Моноширинний' },
   ],
   fbm: [],
+  instagram: [],
 }
 
 const ATTACHMENT_TYPES: { type: AttachmentType; label: string; icon: typeof IconImage; color: string }[] = [
@@ -587,6 +595,10 @@ const CHANNEL_ATTACHMENT_TYPES: Record<ChannelKey, AttachmentType[]> = {
   telegram: ['photo', 'video', 'video_note', 'audio', 'animation', 'document', 'voice', 'poll'],
   whatsapp: ['photo', 'video', 'audio', 'document'],
   fbm: ['photo', 'video', 'audio', 'document'],
+  // Funnel-graph send support for Instagram attachments isn't built yet
+  // (instagram-send.ts is text-only today) — listed for the editor's own
+  // per-channel type checks, not a promise the send path honors yet.
+  instagram: ['photo', 'video', 'audio', 'document'],
 }
 
 // Ukrainian noun-plural agreement for "вкладення" (nominative singular AND
@@ -1161,6 +1173,7 @@ function MessageNodeView({ id, data }: NodeProps<NodeData>) {
         telegram: normalizeChannelConfig(config.channels?.telegram, 'markdown_v2'),
         whatsapp: normalizeChannelConfig(config.channels?.whatsapp, 'whatsapp'),
         fbm: normalizeChannelConfig(config.channels?.fbm, 'none'),
+        instagram: normalizeChannelConfig(config.channels?.instagram, 'none'),
         [channel]: { ...current, ...patch },
       },
     })
@@ -1189,6 +1202,7 @@ function MessageNodeView({ id, data }: NodeProps<NodeData>) {
       telegram: normalizeChannelConfig(config.channels?.telegram, 'markdown_v2'),
       whatsapp: normalizeChannelConfig(config.channels?.whatsapp, 'whatsapp'),
       fbm: normalizeChannelConfig(config.channels?.fbm, 'none'),
+      instagram: normalizeChannelConfig(config.channels?.instagram, 'none'),
     }
     const warnings: string[] = []
     for (const target of targets) {
@@ -1267,9 +1281,16 @@ function MessageNodeView({ id, data }: NodeProps<NodeData>) {
         onChange={(patch) => updateChannel(activeChannel, patch)}
       />
 
+      {activeChannel === 'instagram' && buttons.length > 0 && (
+        <div className="flow-node-hint nodrag">
+          Instagram: {buttons.filter((b) => b.actionType !== 'quick_reply').length}/3 базових ·{' '}
+          {buttons.filter((b) => b.actionType === 'quick_reply').length}/10 quick reply
+        </div>
+      )}
       <div className="flow-node-buttons">
         {buttons.map((b) => {
           const isLink = b.actionType === 'link'
+          const isQuickReply = b.actionType === 'quick_reply'
           return (
             <div className="flow-node-button-row" key={b.id}>
               <div className="flow-node-button-main">
@@ -1281,12 +1302,17 @@ function MessageNodeView({ id, data }: NodeProps<NodeData>) {
                 />
                 <select
                   className="input nodrag flow-node-button-type"
-                  value={isLink ? 'link' : 'edge'}
-                  onChange={(e) => updateButton(b.id, { actionType: e.target.value as 'edge' | 'link' })}
+                  value={isLink ? 'link' : isQuickReply ? 'quick_reply' : 'edge'}
+                  onChange={(e) => updateButton(b.id, { actionType: e.target.value as 'edge' | 'link' | 'quick_reply' })}
                   title="Тип кнопки"
                 >
                   <option value="edge">Дія</option>
                   <option value="link">Лінк</option>
+                  {/* Ephemeral, Instagram/Messenger-only — see toInstagramButtons in
+                      _shared/funnel-graph.ts. Offered only on the Instagram tab so a
+                      Telegram/WhatsApp-only funnel can't end up with a button type
+                      those channels don't understand. */}
+                  {activeChannel === 'instagram' && <option value="quick_reply">Quick reply</option>}
                 </select>
                 <button type="button" className="btn-icon-ghost nodrag" onClick={() => removeButton(b.id)} aria-label="Видалити кнопку">
                   <IconTrash size={12} />
@@ -1306,7 +1332,13 @@ function MessageNodeView({ id, data }: NodeProps<NodeData>) {
         })}
       </div>
       <div className="msg-footer nodrag">
-        <button type="button" className="btn btn-ghost flow-node-add-button nodrag" onClick={addButton}>
+        <button
+          type="button"
+          className="btn btn-ghost flow-node-add-button nodrag"
+          onClick={addButton}
+          disabled={activeChannel === 'instagram' && buttons.length >= 13}
+          title={activeChannel === 'instagram' && buttons.length >= 13 ? 'Instagram: максимум 3 базових кнопки + 10 quick reply' : undefined}
+        >
           <IconPlus size={13} />
           Кнопка
         </button>
@@ -3040,6 +3072,7 @@ function FunnelBuilderInner() {
                 telegram: emptyChannelConfig('markdown_v2'),
                 whatsapp: emptyChannelConfig('whatsapp'),
                 fbm: emptyChannelConfig('none'),
+                instagram: emptyChannelConfig('none'),
               },
               buttons: [],
             }

@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { IconBubble, IconCheckCircle, IconLink, IconPhone, IconSend } from './icons'
+import { IconBubble, IconCheckCircle, IconInstagram, IconLink, IconPhone, IconSend } from './icons'
 import { copyText } from './CopyValue'
 
-export const CHANNELS: { key: 'telegram' | 'whatsapp' | 'fbm'; label: string; icon: typeof IconSend }[] = [
+// Wider than buildLeadGenUrls' own channel set on purpose: this list is also
+// the generic channel label/icon lookup Crm.tsx and Chats.tsx read for ANY
+// lead, not just ones that arrived through a lead-gen link. Instagram has no
+// click-to-message link tool yet (see buildLeadGenUrls below), but its leads
+// still need a label and icon here.
+export const CHANNELS: { key: 'telegram' | 'whatsapp' | 'fbm' | 'instagram'; label: string; icon: typeof IconSend }[] = [
   { key: 'telegram', label: 'Telegram', icon: IconSend },
   { key: 'whatsapp', label: 'WhatsApp', icon: IconPhone },
   { key: 'fbm', label: 'FB Messenger', icon: IconBubble },
+  { key: 'instagram', label: 'Instagram', icon: IconInstagram },
 ]
 
 // customDomain: the link's own verified domain (lead_gen_links.custom_domain)
@@ -37,10 +43,12 @@ export function ChannelCopyButtons({
   onCopy?: () => void
 }) {
   const urls = buildLeadGenUrls(refToken, customDomain)
+  // Instagram has no click-to-message link tool yet (see buildLeadGenUrls) —
+  // filtered out here rather than widening CHANNELS' consumers everywhere.
   return (
     <div style={{ display: 'flex', gap: '0.375rem' }}>
-      {CHANNELS.map(({ key, label, icon: Icon }) => (
-        <ChannelCopyIconButton key={key} label={label} icon={Icon} url={urls[key]} onCopy={onCopy} />
+      {CHANNELS.filter((c) => c.key in urls).map(({ key, label, icon: Icon }) => (
+        <ChannelCopyIconButton key={key} label={label} icon={Icon} url={urls[key as keyof typeof urls]} onCopy={onCopy} />
       ))}
     </div>
   )
@@ -142,7 +150,7 @@ export function LeadGenLinkCard({ name, meta, refToken }: { name: string; meta: 
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        {CHANNELS.map(({ key, label, icon: Icon }) => (
+        {CHANNELS.filter((c) => c.key in urls).map(({ key, label, icon: Icon }) => (
           <div
             key={key}
             style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.5rem 0.625rem', borderRadius: 8, background: 'var(--bg-subtle)' }}
@@ -150,9 +158,9 @@ export function LeadGenLinkCard({ name, meta, refToken }: { name: string; meta: 
             <Icon size={16} />
             <span style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', minWidth: 96 }}>{label}</span>
             <code style={{ flex: 1, fontSize: '0.8125rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {urls[key]}
+              {urls[key as keyof typeof urls]}
             </code>
-            <CopyTextButton text={urls[key]} />
+            <CopyTextButton text={urls[key as keyof typeof urls]} />
           </div>
         ))}
       </div>

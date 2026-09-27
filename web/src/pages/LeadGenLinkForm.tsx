@@ -497,10 +497,10 @@ function DomainLinkUrls({ domain, refToken }: { domain: string; refToken: string
   return (
     <div className="lpe-dns-record" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.35rem' }}>
       <span>Посилання на вашому домені:</span>
-      {CHANNELS.map(({ key, label }) => (
+      {CHANNELS.filter((c) => c.key in urls).map(({ key, label }) => (
         <span key={key} className="lpe-dns-value">
-          {label}: <code>{urls[key]}</code>
-          <CopyValue text={urls[key]} />
+          {label}: <code>{urls[key as keyof typeof urls]}</code>
+          <CopyValue text={urls[key as keyof typeof urls]} />
         </span>
       ))}
     </div>
