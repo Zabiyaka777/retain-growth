@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logLeadActivity } from "./activity-log";
+import { maybeSendStageConversion } from "./stage-conversion";
 import { MONO_STATUSES, MonoError, createInvoice, formatUah, readOrgMonoToken, type MonoInvoiceState } from "./monobank";
 
 export interface PaymentRow {
@@ -103,7 +104,6 @@ export async function applyInvoiceState(
   const modifiedAt = state.modifiedDate ? new Date(state.modifiedDate).toISOString() : new Date().toISOString();
   if (payment.provider_modified_at && Date.parse(payment.provider_modified_at) > Date.parse(modifiedAt)) return false;
 
-  const becamePaid = state.status === "success" && payment.status !== "success";
   let query = supabase
     .from("payments")
     .update({
@@ -112,7 +112,6 @@ export async function applyInvoiceState(
       failure_reason: state.failureReason ?? null,
       err_code: state.errCode ? String(state.errCode) : null,
       provider_modified_at: modifiedAt,
-      paid_at: state.status === "success" ? (payment.paid_at ?? modifiedAt) : payment.paid_at,
       updated_at: new Date().toISOString(),
     })
     .eq("id", payment.id);
@@ -124,15 +123,44 @@ export async function applyInvoiceState(
   }
   if (!data || data.length === 0) return false; // a newer report won the race
 
-  if (payment.lead_id && (becamePaid || (state.status === "failure" && payment.status !== "failure") || (state.status === "reversed" && payment.status !== "reversed"))) {
+  const paidAmount = typeof state.finalAmount === "number" && state.finalAmount > 0 ? state.finalAmount : payment.amount;
+
+  // «Paid» happens exactly once per payment, even when monobank delivers the
+  // success twice at the same moment: setting paid_at only where it's still
+  // null is the atomic claim, and only the delivery that wins it logs the
+  // payment and moves the lead.
+  if (state.status === "success") {
+    const { data: claimed } = await supabase
+      .from("payments")
+      .update({ paid_at: modifiedAt })
+      .eq("id", payment.id)
+      .is("paid_at", null)
+      .select("id");
+    if (claimed && claimed.length > 0 && payment.lead_id) {
+      await logLeadActivity(supabase, {
+        orgId: payment.org_id,
+        leadId: payment.lead_id,
+        actionType: "payment_success",
+        actorType: "system",
+        details: { payment_id: payment.id, amount: formatUah(paidAmount), destination: payment.destination, test_mode: payment.test_mode, source },
+      });
+      // A real (non-test) payment is a sale: same path as a manager setting
+      // «Продажа» by hand (save-lead-stage.ts) — history entry with the paid
+      // sum, current stage, activity line and the stage's Meta conversion.
+      if (!payment.test_mode) await moveLeadToSale(supabase, payment, paidAmount, modifiedAt);
+    }
+    return true;
+  }
+
+  if (payment.lead_id && ((state.status === "failure" && payment.status !== "failure") || (state.status === "reversed" && payment.status !== "reversed"))) {
     await logLeadActivity(supabase, {
       orgId: payment.org_id,
       leadId: payment.lead_id,
-      actionType: state.status === "success" ? "payment_success" : state.status === "failure" ? "payment_failed" : "payment_reversed",
+      actionType: state.status === "failure" ? "payment_failed" : "payment_reversed",
       actorType: "system",
       details: {
         payment_id: payment.id,
-        amount: formatUah(typeof state.finalAmount === "number" && state.finalAmount > 0 ? state.finalAmount : payment.amount),
+        amount: formatUah(paidAmount),
         destination: payment.destination,
         test_mode: payment.test_mode,
         failure_reason: state.failureReason ?? null,
@@ -141,6 +169,51 @@ export async function applyInvoiceState(
     });
   }
   return true;
+}
+
+async function moveLeadToSale(supabase: SupabaseClient, payment: PaymentRow, amountMinor: number, paidAt: string): Promise<void> {
+  if (!payment.lead_id) return;
+  const { data: saleStage } = await supabase.from("funnel_stages").select("id, name").is("org_id", null).eq("name", "Продажа").maybeSingle();
+  if (!saleStage) {
+    console.error("payments: built-in «Продажа» stage not found");
+    return;
+  }
+  const { data: lead } = await supabase.from("leads").select("current_stage_id").eq("id", payment.lead_id).eq("org_id", payment.org_id).maybeSingle();
+  if (!lead) return;
+
+  // Stage values are plain sums (the manager types them in UAH-or-base by
+  // hand); monobank invoices are always in hryvnias.
+  const value = Math.round(amountMinor) / 100;
+  const { data: historyRow, error: historyError } = await supabase
+    .from("lead_stage_history")
+    .insert({ org_id: payment.org_id, lead_id: payment.lead_id, stage_id: saleStage.id, value, entered_at: paidAt })
+    .select("id, entered_at")
+    .single();
+  if (historyError || !historyRow) {
+    console.error("payments: sale stage history insert failed", payment.id, historyError);
+    return;
+  }
+  const { error: updateError } = await supabase.from("leads").update({ current_stage_id: saleStage.id }).eq("id", payment.lead_id).eq("org_id", payment.org_id);
+  if (updateError) console.error("payments: current_stage_id update failed", payment.id, updateError);
+
+  const { data: fromStage } = lead.current_stage_id
+    ? await supabase.from("funnel_stages").select("name").eq("id", lead.current_stage_id).maybeSingle()
+    : { data: null };
+  await logLeadActivity(supabase, {
+    orgId: payment.org_id,
+    leadId: payment.lead_id,
+    actionType: "stage_changed",
+    actorType: "system",
+    details: { from_stage: (fromStage?.name as string | undefined) ?? null, to_stage: saleStage.name, value, via: "payment", payment_id: payment.id },
+  });
+  await maybeSendStageConversion(supabase, {
+    historyId: historyRow.id as string,
+    orgId: payment.org_id,
+    leadId: payment.lead_id,
+    stageId: saleStage.id as string,
+    value,
+    enteredAt: historyRow.entered_at as string,
+  });
 }
 
 // Deflects the first N-1 failed renewals back into a retry rather than
