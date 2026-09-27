@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { LeadGenLinkCard, buildLeadGenUrls } from '../components/LeadGenLinks'
 import { IconAlert, IconArrowLeft, IconCheckCircle, IconClose, IconCode, IconLink, IconPlus, IconSpinner } from '../components/icons'
+import CustomDomainPanel, { CopyValue, type DomainStatus } from '../components/CustomDomainPanel'
 
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession()
@@ -30,6 +31,8 @@ interface ExistingLink {
   // leaves the server, and this UUID reference doesn't expose it either.
   meta_access_token_secret_id: string | null
   meta_test_event_code: string | null
+  custom_domain: string | null
+  custom_domain_status: 'pending' | 'verified' | null
 }
 
 export default function LeadGenLinkForm() {
@@ -59,6 +62,8 @@ export default function LeadGenLinkForm() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [customDomain, setCustomDomain] = useState<string | null>(null)
+  const [domainStatus, setDomainStatus] = useState<DomainStatus>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -73,7 +78,7 @@ export default function LeadGenLinkForm() {
       if (linkId) {
         const { data } = await supabase
           .from('lead_gen_links')
-          .select('id, name, ref_token, funnel_id, entry_node_id, pixel_id, meta_access_token_secret_id, meta_test_event_code')
+          .select('id, name, ref_token, funnel_id, entry_node_id, pixel_id, meta_access_token_secret_id, meta_test_event_code, custom_domain, custom_domain_status')
           .eq('id', linkId)
           .maybeSingle()
         if (cancelled) return
@@ -88,6 +93,8 @@ export default function LeadGenLinkForm() {
           setHasMetaToken(!!existing.meta_access_token_secret_id)
           setMetaTestEventCode(existing.meta_test_event_code ?? '')
           setRefToken(existing.ref_token)
+          setCustomDomain(existing.custom_domain)
+          setDomainStatus(existing.custom_domain_status)
         }
       }
       setLoading(false)
@@ -451,9 +458,54 @@ export default function LeadGenLinkForm() {
             />
           )}
 
+          {isEditing && refToken && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div>
+                <div className="settings-row-label">Свій домен</div>
+                <p className="flow-node-hint" style={{ margin: '0.25rem 0 0' }}>
+                  Замість довгого посилання — ваш домен, напр. <code>go.вашдомен.com</code>: відкривши його, людина одразу
+                  потрапляє в месенджер.
+                </p>
+              </div>
+              <CustomDomainPanel
+                entity="link"
+                entityId={linkId!}
+                initialDomain={customDomain}
+                initialStatus={domainStatus}
+                inputId="lgl-domain"
+                label="Домен для цього посилання"
+                lastStep="Поверніться сюди й натисніть «Перевірити». Статус «Підключено» означає, що людина, яка відкрила ваш домен, одразу потрапить у месенджер."
+                verifiedText={(d) => `https://${d} веде одразу в месенджер`}
+                renderAttached={(d) => <DomainLinkUrls domain={d} />}
+              />
+            </div>
+          )}
+
           {refToken && <LandingSnippetCard refToken={refToken} />}
         </div>
       )}
+    </div>
+  )
+}
+
+// The same channel links as LeadGenLinkCard, on the tenant's own domain —
+// edge-functions/custom-domain.ts 302s the root to /r/:ref_token with the
+// query string intact, and a bare domain (no ?ch=) means Telegram.
+function DomainLinkUrls({ domain }: { domain: string }) {
+  const urls = [
+    { label: 'Telegram', url: `https://${domain}` },
+    { label: 'WhatsApp', url: `https://${domain}/?ch=whatsapp` },
+    { label: 'FB Messenger', url: `https://${domain}/?ch=fbm` },
+  ]
+  return (
+    <div className="lpe-dns-record" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.35rem' }}>
+      <span>Посилання на вашому домені:</span>
+      {urls.map(({ label, url }) => (
+        <span key={label} className="lpe-dns-value">
+          {label}: <code>{url}</code>
+          <CopyValue text={url} />
+        </span>
+      ))}
     </div>
   )
 }
