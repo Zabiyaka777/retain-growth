@@ -18,7 +18,10 @@ type Channel = (typeof CHANNELS)[number];
 
 // Params that steer this endpoint itself; everything else the visitor arrived
 // on the landing with (fbclid, utm_*) is kept as the click's captured_params.
-const OWN_PARAMS = new Set(["slug", "ch"]);
+// vid = the landing's own visitor id (LandingPage.tsx), so the stats can
+// count people who pressed a button rather than presses.
+const OWN_PARAMS = new Set(["slug", "ch", "vid"]);
+const VISITOR_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
 function textResponse(statusCode: number, body: string) {
   return { statusCode, headers: { "content-type": "text/plain; charset=utf-8" }, body };
@@ -108,6 +111,7 @@ export const handler: Handler = async (event) => {
     click_id: clickId,
     captured_params: captured,
     fbclid: typeof captured.fbclid === "string" ? captured.fbclid : null,
+    visitor_id: params.vid && VISITOR_ID_RE.test(params.vid) ? params.vid : null,
     ip,
     user_agent: userAgent,
   });

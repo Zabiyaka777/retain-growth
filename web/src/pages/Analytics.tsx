@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import {
-  MAX_PERIOD_DAYS,
   convertSpend,
   costPerSubscriber,
   countSubscribes,
@@ -11,19 +10,19 @@ import {
   listDays,
   pctChange,
   previousPeriod,
-  resolvePeriod,
   roiPercent,
   rowOverlaps,
   summarizeSales,
   subscribesByChannel,
   summarizeSpend,
-  todayUtc,
   type AdSpendSummaryRow,
-  type PeriodPreset,
   type StageHistoryRow,
 } from '../lib/analyticsFinance'
+import { FunnelBars, LandingStats, PeriodPicker } from '../components/LandingAnalytics'
+import { formatMoney, formatPercent, formatPeriodDate, usePeriod } from '../lib/analyticsFormat'
 import {
   IconAlert,
+  IconBarChart,
   IconChevronDown,
   IconChevronUp,
   IconHistory,
@@ -293,10 +292,6 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function formatPeriodDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
-
 function formatPeriod(start: string | null, end: string | null): string {
   if (start && end) return `${formatPeriodDate(start)} – ${formatPeriodDate(end)}`
   if (start) return `з ${formatPeriodDate(start)}`
@@ -416,10 +411,6 @@ function stagesForFunnel(funnelId: string, stages: StageRow[], nodes: Conversion
   return stages.filter((stage) => stage.org_id === null || owned.has(stage.id))
 }
 
-function formatMoney(value: number): string {
-  return value.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 function countRowsByImport(rows: { import_id: string }[]): Map<string, number> {
   const counts = new Map<string, number>()
   for (const row of rows) counts.set(row.import_id, (counts.get(row.import_id) ?? 0) + 1)
@@ -490,10 +481,10 @@ async function getAccessToken(): Promise<string | null> {
 
 export default function Analytics() {
   // One period drives every block on the page.
-  const [preset, setPreset] = useState<PeriodPreset>(30)
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
-  const period = useMemo(() => resolvePeriod(preset, customFrom, customTo), [preset, customFrom, customTo])
+  const periodState = usePeriod(30)
+  const { period } = periodState
+  // '' / null = every landing; the landings block's own picker.
+  const [statsLandingId, setStatsLandingId] = useState<string | null>(null)
 
   const [links, setLinks] = useState<LeadGenLinkRow[]>([])
   const [events, setEvents] = useState<SubscriptionEventRow[]>([])
@@ -538,6 +529,12 @@ export default function Analytics() {
     () => buildLinkStats(links, events, leadSources, period.from, period.to),
     [links, events, leadSources, period.from, period.to],
   )
+  // Busiest source first; the bars share one scale so rows compare at a glance.
+  const sortedRows = useMemo(
+    () => rows.slice().sort((a, b) => b.subscribes - a.subscribes || b.totalLeads - a.totalLeads),
+    [rows],
+  )
+  const maxSourceFlow = useMemo(() => Math.max(1, ...rows.map((r) => r.subscribes + r.unsubscribes)), [rows])
 
   // ---- Ad spend section state — independent of everything above ----
   const [adSpendImports, setAdSpendImports] = useState<AdSpendImportRow[]>([])
@@ -844,14 +841,6 @@ export default function Analytics() {
     return { text: `${formatSigned(change, 1)}%`, tone: change > 0 ? 'up' : change < 0 ? 'down' : 'flat' }
   }
 
-  function selectCustomPeriod() {
-    if (preset !== 'custom' && !customFrom && !customTo) {
-      setCustomFrom(period.from)
-      setCustomTo(period.to)
-    }
-    setPreset('custom')
-  }
-
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -973,68 +962,13 @@ export default function Analytics() {
           <p className="page-description">Продажі, витрати та ROI за обраний період; підписки по джерелах лідогенерації</p>
         </div>
 
-        <div className="period-picker">
-          <div className="period-seg" role="group" aria-label="Період">
-            {([1, 7, 30, 90] as const).map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`period-seg-btn${preset === n ? ' active' : ''}`}
-                onClick={() => setPreset(n)}
-                aria-pressed={preset === n}
-              >
-                {n === 1 ? '1 день' : `${n} днів`}
-              </button>
-            ))}
-            <button
-              type="button"
-              className={`period-seg-btn${preset === 'custom' ? ' active' : ''}`}
-              onClick={selectCustomPeriod}
-              aria-pressed={preset === 'custom'}
-            >
-              Період
-            </button>
-          </div>
-          {preset === 'custom' && (
-            <div className="crm-date-range">
-              <input
-                id="analytics-period-from"
-                type="date"
-                className="input"
-                value={customFrom}
-                max={customTo || todayUtc()}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                aria-label="Початок періоду"
-                autoComplete="off"
-                data-lpignore="true"
-                data-1p-ignore="true"
-              />
-              <span className="crm-date-sep">—</span>
-              <input
-                id="analytics-period-to"
-                type="date"
-                className="input"
-                value={customTo}
-                min={customFrom || undefined}
-                max={todayUtc()}
-                onChange={(e) => setCustomTo(e.target.value)}
-                aria-label="Кінець періоду"
-                autoComplete="off"
-                data-lpignore="true"
-                data-1p-ignore="true"
-              />
-            </div>
-          )}
-          <span className="period-range-note">
-            {formatPeriodDate(period.from)} – {formatPeriodDate(period.to)} · {period.days} дн.
-            {period.clamped ? ` (максимум ${MAX_PERIOD_DAYS})` : ''}
-          </span>
+        <PeriodPicker state={periodState} idPrefix="analytics-period">
           <span className="live-indicator" title="Нові підписки та етапи воронки підтягуються автоматично">
             <i className="live-dot" aria-hidden="true" />
             Наживо
             {lastUpdated && <> · оновлено {lastUpdated.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</>}
           </span>
-        </div>
+        </PeriodPicker>
       </div>
 
       {kpiError && (
@@ -1195,30 +1129,39 @@ export default function Analytics() {
           )}
         </div>
 
-      <div className="card card-tight analytics-live-card analytics-funnel-card" style={{ '--i': 6 } as React.CSSProperties}>
-        <div className="analytics-section-header">
-          <IconTarget size={16} aria-hidden="true" />
-          <h3>Аналітична воронка</h3>
-        </div>
+      </div>
 
-        {stageLoading ? (
-          <p className="settings-row-hint" style={{ padding: '0 1rem 1rem' }}>
-            Завантаження…
-          </p>
-        ) : stageError ? (
-          <div className="alert alert-error" style={{ margin: '0 1rem 1rem' }}>
-            <IconAlert size={16} />
-            <span>{stageError}</span>
+      <section className="card analytics-section ls-section" style={{ '--i': 6 } as React.CSSProperties}>
+        <div className="analytics-section-top">
+          <div className="analytics-section-title">
+            <span className="kpi-icon" aria-hidden="true">
+              <IconBarChart size={16} />
+            </span>
+            <div>
+              <h3>Стата по лендінгах</h3>
+              <p>Відвідувачі, ліди й продажі з ваших лендінгів за обраний угорі період</p>
+            </div>
           </div>
-        ) : stages.length === 0 ? (
-          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
-            <h3>Ще немає етапів продажу</h3>
-            <p>Додайте conversion-вузол у тунель або оберіть етап у профілі ліда.</p>
+        </div>
+        <LandingStats period={period} landingId={statsLandingId} onLandingChange={setStatsLandingId} variant="section" />
+      </section>
+
+      <section className="card analytics-section analytics-funnel-card" style={{ '--i': 7 } as React.CSSProperties}>
+        <div className="analytics-section-top">
+          <div className="analytics-section-title">
+            <span className="kpi-icon" aria-hidden="true">
+              <IconTarget size={16} />
+            </span>
+            <div>
+              <h3>Аналітична воронка</h3>
+              <p>Скільки лідів дійшли до кожного етапу продажу за період</p>
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="analytics-filter-row" title={`Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді сума на етапі по кожному ліду.${selectedFunnelId ? ' Показані лише ліди з посилань цього тунелю — прямі переходи не потрапляють.' : ''}`}>
-              <span className="analytics-filter-label">Тунель:</span>
+          {!stageLoading && !stageError && stages.length > 0 && (
+            <div
+              className="analytics-section-tools"
+              title={`Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді сума на етапі по кожному ліду.${selectedFunnelId ? ' Показані лише ліди з посилань цього тунелю — прямі переходи не потрапляють.' : ''}`}
+            >
               <select
                 className="input stage-funnel-select"
                 value={selectedFunnelId}
@@ -1233,48 +1176,75 @@ export default function Analytics() {
                 ))}
               </select>
             </div>
+          )}
+        </div>
 
-            <div className="stage-funnel">
-              {funnelSteps.map((step, i) => (
-                <div className="stage-funnel-step" key={step.id}>
-                  <div className="stage-funnel-card" style={{ width: `${step.widthPercent}%` }}>
-                    <div className="stage-funnel-card-main">
-                      <span className="stage-funnel-name">{step.name}</span>
-                      <span className="stage-funnel-sum">{formatMoney(step.total)}</span>
-                    </div>
-                    <div className="stage-funnel-card-meta">
-                      <span className="stage-funnel-count">
-                        <AnimatedNumber value={step.leads} format={(n) => String(Math.round(n))} />
-                        <small>лідів</small>
-                      </span>
-                      {step.prevPercent !== null && (
-                        <span className={`stage-funnel-conv${step.prevPercent < 100 ? ' is-drop' : ''}`}>
-                          {step.prevPercent.toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {i < funnelSteps.length - 1 && <span className="stage-funnel-connector" aria-hidden="true" />}
+        {stageLoading ? (
+          <p className="settings-row-hint">Завантаження…</p>
+        ) : stageError ? (
+          <div className="alert alert-error">
+            <IconAlert size={16} />
+            <span>{stageError}</span>
+          </div>
+        ) : stages.length === 0 ? (
+          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
+            <h3>Ще немає етапів продажу</h3>
+            <p>Додайте conversion-вузол у тунель або оберіть етап у профілі ліда.</p>
+          </div>
+        ) : (
+          <div className="stage-funnel-layout">
+            <FunnelBars
+              unit="лідів"
+              steps={funnelSteps.map((step) => ({
+                key: step.id,
+                label: step.name,
+                count: step.leads,
+                note: step.total > 0 ? `${formatMoney(step.total)} ${baseCurrency}` : undefined,
+              }))}
+            />
+            {funnelSteps.length > 1 && (
+              <div className="stage-funnel-summary">
+                <div className="stage-funnel-stat">
+                  <span>Наскрізна конверсія</span>
+                  <b>
+                    {formatPercent(
+                      funnelSteps[0].leads > 0 ? (funnelSteps[funnelSteps.length - 1].leads / funnelSteps[0].leads) * 100 : null,
+                    )}
+                  </b>
+                  <small>
+                    {funnelSteps[0].name} → {funnelSteps[funnelSteps.length - 1].name}
+                  </small>
                 </div>
-              ))}
-            </div>
-          </>
+                <div className="stage-funnel-stat">
+                  <span>Сума на останньому етапі</span>
+                  <b>
+                    {formatMoney(funnelSteps[funnelSteps.length - 1].total)} <small>{baseCurrency}</small>
+                  </b>
+                  <small>{funnelSteps[funnelSteps.length - 1].leads} лідів</small>
+                </div>
+              </div>
+            )}
+          </div>
         )}
-      </div>
-      </div>
+      </section>
 
-      <div className="card card-tight">
-        <div className="analytics-section-header">
-          <IconTrendingUp size={16} aria-hidden="true" />
-          <h3>Підписки за джерелом</h3>
+      <section className="card analytics-section analytics-sources-card" style={{ '--i': 8 } as React.CSSProperties}>
+        <div className="analytics-section-top">
+          <div className="analytics-section-title">
+            <span className="kpi-icon" aria-hidden="true">
+              <IconTrendingUp size={16} />
+            </span>
+            <div>
+              <h3>Підписки за джерелом</h3>
+              <p>Лідогенераційні посилання: хто приводить аудиторію і хто її втрачає</p>
+            </div>
+          </div>
         </div>
 
         {loading ? (
-          <p className="settings-row-hint" style={{ padding: '0 1rem 1rem' }}>
-            Завантаження…
-          </p>
+          <p className="settings-row-hint">Завантаження…</p>
         ) : error ? (
-          <div className="alert alert-error" style={{ margin: '0 1rem 1rem' }}>
+          <div className="alert alert-error">
             <IconAlert size={16} />
             <span>{error}</span>
           </div>
@@ -1284,51 +1254,83 @@ export default function Analytics() {
             <p>Створіть посилання в розділі «Лідогенерація», щоб побачити статистику підписок тут.</p>
           </div>
         ) : (
-          <div className="crm-table-wrap">
-            <table className="crm-table">
-              <thead>
-                <tr>
-                  <th>Посилання</th>
-                  <th>Підписки</th>
-                  <th>Відписки</th>
-                  <th>Чиста аудиторія</th>
-                  <th>Всього лідів</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const expanded = expandedId === row.linkId
-                  return (
-                    <Fragment key={row.linkId}>
-                      <tr className="crm-row" onClick={() => setExpandedId(expanded ? null : row.linkId)}>
-                        <td>
-                          <span className="analytics-link-name">
-                            {expanded ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
-                            {row.name}
-                          </span>
-                        </td>
-                        <td>{row.subscribes}</td>
-                        <td>{row.unsubscribes}</td>
-                        <td className={row.net > 0 ? 'analytics-net-positive' : row.net < 0 ? 'analytics-net-negative' : undefined}>
+          <>
+            <div className="source-summary">
+              <div className="source-chip">
+                <span>Джерел</span>
+                <b>{rows.length}</b>
+              </div>
+              <div className="source-chip is-positive">
+                <span>Підписок</span>
+                <b>+{rows.reduce((n, r) => n + r.subscribes, 0)}</b>
+              </div>
+              <div className="source-chip is-negative">
+                <span>Відписок</span>
+                <b>−{rows.reduce((n, r) => n + r.unsubscribes, 0)}</b>
+              </div>
+              {sortedRows[0] && sortedRows[0].subscribes > 0 && (
+                <div className="source-chip is-leader">
+                  <span>Лідер періоду</span>
+                  <b>{sortedRows[0].name}</b>
+                </div>
+              )}
+            </div>
+
+            <div className="rank">
+              <div className="rank-head source-cols">
+                <span>Посилання</span>
+                <span>Підписки</span>
+                <span>Відписки</span>
+                <span>Чиста аудиторія</span>
+                <span>Всього лідів</span>
+              </div>
+              {sortedRows.map((row) => {
+                const expanded = expandedId === row.linkId
+                return (
+                  <Fragment key={row.linkId}>
+                    <button
+                      type="button"
+                      className={`rank-row source-cols${expanded ? ' is-open' : ''}`}
+                      onClick={() => setExpandedId(expanded ? null : row.linkId)}
+                      aria-expanded={expanded}
+                    >
+                      <span className="rank-name">
+                        <span className="rank-title">
+                          {expanded ? <IconChevronUp size={13} /> : <IconChevronDown size={13} />}
+                          {row.name}
+                        </span>
+                        <span className="rank-bar is-split">
+                          <span style={{ width: `${(row.subscribes / maxSourceFlow) * 100}%` }} />
+                          <span className="is-neg" style={{ width: `${(row.unsubscribes / maxSourceFlow) * 100}%` }} />
+                        </span>
+                      </span>
+                      <span className="rank-num analytics-net-positive" data-label="Підписки">
+                        +{row.subscribes}
+                      </span>
+                      <span className="rank-num analytics-net-negative" data-label="Відписки">
+                        −{row.unsubscribes}
+                      </span>
+                      <span className="rank-num" data-label="Чиста аудиторія">
+                        <span className={`rank-pill${row.net > 0 ? ' is-good' : row.net < 0 ? ' is-bad' : ''}`}>
                           {row.net > 0 ? `+${row.net}` : row.net}
-                        </td>
-                        <td>{row.totalLeads}</td>
-                      </tr>
-                      {expanded && (
-                        <tr className="analytics-expanded-row">
-                          <td colSpan={5}>
-                            <DailyChart days={buildDailyBuckets(events, row.linkId, period.from, period.to)} />
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </span>
+                      </span>
+                      <span className="rank-num" data-label="Всього лідів">
+                        {row.totalLeads}
+                      </span>
+                    </button>
+                    {expanded && (
+                      <div className="rank-expand">
+                        <DailyChart days={buildDailyBuckets(events, row.linkId, period.from, period.to)} />
+                      </div>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </div>
+          </>
         )}
-      </div>
+      </section>
 
       <div className="card card-tight analytics-ad-spend-card">
         <div className="analytics-section-header analytics-ad-spend-header">

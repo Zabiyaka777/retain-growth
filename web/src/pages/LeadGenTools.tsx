@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { ChannelCopyButtons } from '../components/LeadGenLinks'
-import { IconAlert, IconDuplicate, IconEdit, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
+import { IconAlert, IconBarChart, IconDuplicate, IconEdit, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
+import { LandingAnalyticsModal } from '../components/LandingAnalytics'
 import { LandingTemplate, withConfigDefaults, TEMPLATE_META, type LandingConfig, type LandingTemplateKey } from '../components/LandingTemplates'
 
 async function getAccessToken() {
@@ -69,6 +70,7 @@ export default function LeadGenTools() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [duplicatingLandingId, setDuplicatingLandingId] = useState<string | null>(null)
   const [deletingLandingId, setDeletingLandingId] = useState<string | null>(null)
+  const [statsLanding, setStatsLanding] = useState<LandingRow | null>(null)
 
   function load() {
     return supabase
@@ -332,7 +334,12 @@ export default function LeadGenTools() {
                       <span>{TEMPLATE_META[lp.template_key]?.label ?? lp.template_key}</span>
                       <span>{lp.funnels?.name ? `Тунель: ${lp.funnels.name}` : 'тунель не обрано'}</span>
                     </div>
-                    <div className="lp-card-row" style={{ justifyContent: 'flex-end', gap: '0.25rem' }}>
+                    <div className="lp-card-row lp-card-actions">
+                      <button type="button" className="lp-card-stats" onClick={() => setStatsLanding(lp)} title="Відвідувачі, ліди, продажі та конверсія">
+                        <IconBarChart size={14} />
+                        Аналітика
+                      </button>
+                      <span className="lp-card-actions-gap" />
                       <button
                         type="button"
                         className="btn-icon-ghost"
@@ -441,6 +448,7 @@ export default function LeadGenTools() {
           ))}
         </div>
       )}
+      {statsLanding && <LandingAnalyticsModal landing={statsLanding} onClose={() => setStatsLanding(null)} />}
     </div>
   )
 }

@@ -18,6 +18,26 @@ function ensureFbc(fbclid: string) {
   document.cookie = `_fbc=fb.1.${Date.now()}.${encodeURIComponent(fbclid)}; path=/; max-age=${90 * 86400}; SameSite=Lax`
 }
 
+function randomId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(12))
+  return Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('')
+}
+
+// Stable per browser on this landing's origin, so repeat visits count as one
+// unique visitor. Storage can be blocked (private mode) — then every load is
+// a new visitor, which only makes "unique" slightly generous.
+function visitorId() {
+  try {
+    const known = localStorage.getItem('rg_lp_vid')
+    if (known) return known
+    const id = randomId()
+    localStorage.setItem('rg_lp_vid', id)
+    return id
+  } catch {
+    return randomId()
+  }
+}
+
 function newEventId(kind: string, slug: string) {
   return `lp-${kind}-${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -73,6 +93,8 @@ export default function LandingPage() {
   const slug = routeSlug || (typeof window !== 'undefined' ? ((window as { __LP_SLUG__?: string }).__LP_SLUG__ ?? '') : '')
   const [params] = useSearchParams()
   const [state, setState] = useState<{ templateKey: LandingTemplateKey; config: LandingConfig; capi: boolean; routable: boolean } | null | 'error'>(null)
+  // Read once: it also rides along on the CTA links (landing-go's vid).
+  const [vid] = useState(visitorId)
   const injected = useRef<Node[]>([])
 
   useEffect(() => {
@@ -150,6 +172,50 @@ export default function LandingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 
+  // Own visit counter (landing-visit.ts → landing_analytics): one "start" per
+  // load, then the visible time so far every time the page gets hidden — tab
+  // switch, close, or the jump into the messenger. Only visible time counts,
+  // so a tab forgotten in the background doesn't inflate time on page.
+  useEffect(() => {
+    if (!state || state === 'error') return
+    const visitId = randomId()
+    const send = (payload: Record<string, unknown>, beacon: boolean) => {
+      const body = JSON.stringify({ slug, visitId, ...payload })
+      try {
+        if (beacon && navigator.sendBeacon?.('/.netlify/functions/landing-visit', body)) return
+      } catch {
+        /* fall through to fetch */
+      }
+      fetch('/.netlify/functions/landing-visit', { method: 'POST', body, keepalive: true }).catch(() => {
+        /* counting must never break the page */
+      })
+    }
+    send({ type: 'start', visitorId: vid }, false)
+
+    let visibleMs = 0
+    let visibleSince = document.visibilityState === 'visible' ? performance.now() : null
+    const flush = () => {
+      if (visibleSince !== null) {
+        visibleMs += performance.now() - visibleSince
+        visibleSince = null
+      }
+      if (visibleMs > 0) send({ type: 'time', durationMs: Math.round(visibleMs) }, true)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush()
+      else if (visibleSince === null) visibleSince = performance.now()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', flush)
+      flush()
+    }
+    // One visit per loaded page; slug is stable for its lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state])
+
   // Server-side mirror of a browser pixel event (see landing-page-view.ts).
   // keepalive so navigating straight into the messenger doesn't cancel it.
   function reportCapi(eventName: 'PageView' | 'Lead', eventId: string) {
@@ -189,10 +255,11 @@ export default function LandingPage() {
     if (!state || state === 'error' || !state.routable) return '#'
     const q = new URLSearchParams()
     params.forEach((value, key) => {
-      if (key !== 'slug' && key !== 'ch') q.set(key, value)
+      if (key !== 'slug' && key !== 'ch' && key !== 'vid') q.set(key, value)
     })
     q.set('slug', slug)
     q.set('ch', channel)
+    q.set('vid', vid)
     return `/.netlify/functions/landing-go?${q.toString()}`
   }
 
