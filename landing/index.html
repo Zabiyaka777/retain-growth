@@ -422,6 +422,19 @@
   .ttv-step { padding: 26px 24px 28px; border-radius: var(--r-lg); min-height: calc(190px + var(--n, 0) * 34px); display: flex; flex-direction: column; overflow: hidden; }
   .ttv-step::before { top: -1px; bottom: auto; left: 10%; right: 10%; opacity: calc(0.25 + var(--n, 0) * 0.25); }
   .ttv-step .beam { position: absolute; z-index: -1; left: 0; right: 0; top: 0; height: 120px; pointer-events: none; opacity: calc(0.15 + var(--n, 0) * 0.28); background: radial-gradient(60% 100% at 50% 0%, rgba(255,107,44,0.5), transparent 70%); }
+  .ttv-icon {
+    display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-bottom: 16px;
+    color: var(--amber); filter: drop-shadow(0 0 8px var(--orange-glow));
+    opacity: 0; transform: translateY(8px) scale(0.85);
+    transition: opacity 650ms var(--ease), transform 650ms var(--ease), filter 300ms var(--ease-out);
+    transition-delay: calc(var(--n, 0) * 120ms + 150ms);
+  }
+  .ttv-icon svg { width: 100%; height: 100%; }
+  .ttv.reveal.in .ttv-icon { opacity: 1; transform: none; }
+  @media (hover: hover) {
+    .ttv-step:hover .ttv-icon { transition-duration: 300ms; transition-delay: 0ms; }
+    .ttv.reveal.in .ttv-step:hover .ttv-icon { transform: scale(1.14) rotate(-8deg); filter: drop-shadow(0 0 14px var(--orange-glow)) drop-shadow(0 0 28px rgba(255,107,44,0.55)); }
+  }
   .ttv-day { display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-display); font-size: 10.5px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); margin-bottom: auto; padding-bottom: 28px; }
   .ttv-day::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px var(--orange); }
   .ttv-step h4 { font-size: 17px; line-height: 1.25; letter-spacing: -0.025em; margin-bottom: 10px; }
@@ -963,6 +976,7 @@
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     .reveal { transition: none; opacity: 1; transform: none; filter: none; }
+    .ttv-icon { transition: none; opacity: 1; transform: none; }
     .hero-copy, .scene, .hero-proof, .faq-a { animation: none; }
     .core::before, .wire-pulse, .fwire-v::after, .stage-tracker .seg i, .typing-row span, .pulse::after, .ping::after, .snail, .neon-divide-text, .neon-divide-arrow svg, .cta-mid-card .btn-primary { animation: none; }
     .wire-pulse { display: none; }
@@ -1401,6 +1415,8 @@
     warn: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.5v3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg>',
     scatter: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6"/><circle cx="5" cy="18" r="2.2" stroke="currentColor" stroke-width="1.6"/><circle cx="19" cy="18" r="2.2" stroke="currentColor" stroke-width="1.6"/></svg>',
     shield: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    plug: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 2.5v5M15 2.5v5M7 7.5h10v4a5 5 0 0 1-5 5 5 5 0 0 1-5-5v-4Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 16.5v2.7a3 3 0 0 1-3 3H7.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    target: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.3" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4.6" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>',
     telegram: '<svg viewBox="0 0 24 24" fill="none"><path d="M21 4 2.5 11.3c-1 .4-1 1.9.1 2.2l4.2 1.3 1.6 5c.3.9 1.4 1.1 2 .4l2.6-2.8 4.6 3.4c.9.6 2.1.1 2.3-1L21.9 5.2c.2-1-.9-1.7-1.9-1.2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8.8 14.8 18 6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
     whatsapp: '<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-12.4-6.7L4 20l4.9-1.5A8 8 0 0 0 20 12Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.8 8.6c-.2.9.4 2 1.3 3.1 1 1.2 2.3 1.9 3.3 2.1.7.1 1.4-.4 1.5-1l.1-.6-1.9-.9-.5.7c-.7-.2-1.4-.7-1.9-1.3-.5-.6-.8-1.3-.9-2l.7-.4-.7-1.9-.6.1c-.6.1-.4.6-.4 1.1Z" fill="currentColor"/></svg>',
     messenger: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3C6.9 3 3 6.6 3 11.4c0 2.6 1.2 4.9 3.1 6.5V21l2.8-1.6c1 .3 2 .4 3.1.4 5.1 0 9-3.6 9-8.4S17.1 3 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m7 13.4 3-3.2 2.4 1.8 3.4-3.2-3.1 3.4-2.4-1.8-3.3 3Z" fill="currentColor"/></svg>',
@@ -1601,16 +1617,16 @@
   }
 
   var TTV = [
-    { day: { ua: "0 хв", en: "0 min" }, h: { ua: "Підключення каналів", en: "Connect channels" }, p: { ua: "Telegram, WhatsApp, Messenger, Instagram — офіційні API, без сірих ботів", en: "Telegram, WhatsApp, Messenger, Instagram — official APIs, no gray-market bots" } },
-    { day: { ua: "30 хв", en: "30 min" }, h: { ua: "Перша воронка", en: "First funnel" }, p: { ua: "Повідомлення, кнопки, умови — збираються на полотні за хвилини", en: "Messages, buttons, conditions — built on the canvas in minutes" } },
-    { day: { ua: "1 год", en: "1 hr" }, h: { ua: "Pixel і CAPI", en: "Pixel and CAPI" }, p: { ua: "Кожен лінк лідогенерації привʼязаний до свого pixel", en: "Every lead-gen link is tied to its own pixel" } },
-    { day: { ua: "2 год", en: "2 hr" }, h: { ua: "Перший автоматичний продаж", en: "First automated sale" }, p: { ua: "Видно в дашборді й одразу в Ads Manager — ще в перший день", en: "Visible on the dashboard and in Ads Manager — on day one" } }
+    { icon: "plug", day: { ua: "0 хв", en: "0 min" }, h: { ua: "Підключення каналів", en: "Connect channels" }, p: { ua: "Telegram, WhatsApp, Messenger, Instagram — офіційні API, без сірих ботів", en: "Telegram, WhatsApp, Messenger, Instagram — official APIs, no gray-market bots" } },
+    { icon: "funnel", day: { ua: "30 хв", en: "30 min" }, h: { ua: "Перша воронка", en: "First funnel" }, p: { ua: "Повідомлення, кнопки, умови — збираються на полотні за хвилини", en: "Messages, buttons, conditions — built on the canvas in minutes" } },
+    { icon: "target", day: { ua: "1 год", en: "1 hr" }, h: { ua: "Pixel і CAPI", en: "Pixel and CAPI" }, p: { ua: "Кожен лінк лідогенерації привʼязаний до свого pixel", en: "Every lead-gen link is tied to its own pixel" } },
+    { icon: "bolt", day: { ua: "2 год", en: "2 hr" }, h: { ua: "Перший автоматичний продаж", en: "First automated sale" }, p: { ua: "Видно в дашборді й одразу в Ads Manager — ще в перший день", en: "Visible on the dashboard and in Ads Manager — on day one" } }
   ];
   function renderTTV() {
     var el = document.getElementById("ttv-track");
     if (!el) return;
     el.innerHTML = TTV.map(function (s, i) {
-      return '<div class="node lift ttv-step" style="--n:' + i + '"><span class="beam"></span><div class="ttv-day">' + (lang === "ua" ? s.day.ua : s.day.en) + '</div>' +
+      return '<div class="node lift ttv-step" style="--n:' + i + '"><span class="beam"></span><span class="ttv-icon">' + icon(s.icon) + '</span><div class="ttv-day">' + (lang === "ua" ? s.day.ua : s.day.en) + '</div>' +
         '<h4>' + (lang === "ua" ? s.h.ua : s.h.en) + '</h4><p>' + (lang === "ua" ? s.p.ua : s.p.en) + '</p></div>';
     }).join("");
   }
