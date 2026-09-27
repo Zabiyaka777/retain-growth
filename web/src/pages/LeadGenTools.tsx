@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { ChannelCopyButtons } from '../components/LeadGenLinks'
+import { CopyValue } from '../components/CopyValue'
 import { IconAlert, IconBarChart, IconDuplicate, IconEdit, IconGlobe, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
 import { LandingAnalyticsModal } from '../components/LandingAnalytics'
 import { LandingTemplate, withConfigDefaults, TEMPLATE_META, type LandingConfig, type LandingTemplateKey } from '../components/LandingTemplates'
@@ -352,10 +353,28 @@ export default function LeadGenTools() {
                         {lp.status === 'published' ? 'Опубліковано' : 'Чернетка'}
                       </span>
                     </div>
-                    <a className="lp-card-link" href={publicUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                      <IconLink size={12} />
-                      /lp/{lp.slug}
-                    </a>
+                    <span className="lp-card-link-row">
+                      <a className="lp-card-link" href={publicUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                        <IconLink size={12} />
+                        /lp/{lp.slug}
+                      </a>
+                      <CopyValue text={publicUrl} label="Скопіювати посилання" compact />
+                    </span>
+                    {lp.custom_domain && lp.custom_domain_status === 'verified' && (
+                      <span className="lp-card-link-row">
+                        <a
+                          className="lp-card-link"
+                          href={`https://${lp.custom_domain}/`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <IconGlobe size={12} />
+                          <span className="lp-card-link-text">https://{lp.custom_domain}/</span>
+                        </a>
+                        <CopyValue text={`https://${lp.custom_domain}/`} label="Скопіювати посилання" compact />
+                      </span>
+                    )}
                     {lp.custom_domain && <DomainChip domain={lp.custom_domain} status={lp.custom_domain_status} />}
                     <div className="lp-card-row sub">
                       <span>{TEMPLATE_META[lp.template_key]?.label ?? lp.template_key}</span>
@@ -438,7 +457,24 @@ export default function LeadGenTools() {
                 </div>
               </div>
               <div className="funnel-row-actions" onClick={(e) => e.stopPropagation()} style={{ gap: '1rem' }}>
-                <ChannelCopyButtons refToken={link.ref_token} />
+                {link.custom_domain && link.custom_domain_status === 'verified' ? (
+                  // Both addresses side by side, each labelled — the tenant's
+                  // own domain only once it actually serves over HTTPS.
+                  <div className="copy-groups">
+                    <div className="copy-group">
+                      <span className="copy-group-label">Наш домен</span>
+                      <ChannelCopyButtons refToken={link.ref_token} />
+                    </div>
+                    <div className="copy-group">
+                      <span className="copy-group-label" title={link.custom_domain}>
+                        {link.custom_domain}
+                      </span>
+                      <ChannelCopyButtons refToken={link.ref_token} customDomain={link.custom_domain} />
+                    </div>
+                  </div>
+                ) : (
+                  <ChannelCopyButtons refToken={link.ref_token} />
+                )}
                 <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border)' }} />
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
                   <button

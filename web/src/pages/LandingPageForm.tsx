@@ -22,8 +22,9 @@ import {
   type OrbSize,
 } from '../components/LandingTemplates'
 import { RESERVED_SLUGS } from '../lib/reservedSlugs'
-import { IconAlert, IconArrowLeft, IconCheckCircle, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
+import { IconAlert, IconArrowLeft, IconCheckCircle, IconGlobe, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
 import CustomDomainPanel, { type DomainStatus } from '../components/CustomDomainPanel'
+import { CopyValue } from '../components/CopyValue'
 
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession()
@@ -630,11 +631,27 @@ export default function LandingPageForm() {
                       </p>
                     )}
                     {publicUrl && (
-                      <a className="lpe-public-link" href={publicUrl} target="_blank" rel="noopener noreferrer">
-                        <IconLink size={13} />
-                        <span>/lp/{slug}</span>
-                        {status !== 'published' && <i>чернетка — лінк запрацює після публікації</i>}
-                      </a>
+                      <div className="lpe-public-links">
+                        <span className="lpe-public-row">
+                          <a className="lpe-public-link" href={publicUrl} target="_blank" rel="noopener noreferrer">
+                            <IconLink size={13} />
+                            <span>/lp/{slug}</span>
+                          </a>
+                          <CopyValue text={publicUrl} label="Скопіювати посилання" compact />
+                        </span>
+                        {/* Only once verified: a pending domain doesn't reach
+                            us over HTTPS yet, so there's nothing worth copying. */}
+                        {customDomain && domainStatus === 'verified' && (
+                          <span className="lpe-public-row">
+                            <a className="lpe-public-link" href={`https://${customDomain}/`} target="_blank" rel="noopener noreferrer">
+                              <IconGlobe size={13} />
+                              <span>https://{customDomain}/</span>
+                            </a>
+                            <CopyValue text={`https://${customDomain}/`} label="Скопіювати посилання" compact />
+                          </span>
+                        )}
+                        {status !== 'published' && <i className="lpe-public-note">чернетка — лінк запрацює після публікації</i>}
+                      </div>
                     )}
                   </div>
                   <div className="field">
@@ -842,7 +859,10 @@ export default function LandingPageForm() {
                         label="Домен для цього лендінга"
                         lastStep="Поверніться сюди й натисніть «Перевірити». Статус «Підключено» означає, що лендінг вже відкривається на вашому домені."
                         verifiedText={(d) => `Лендінг відкривається за адресою https://${d}`}
-                        onDomainChange={setCustomDomain}
+                        onChange={(d, st) => {
+                          setCustomDomain(d)
+                          setDomainStatus(st)
+                        }}
                       />
                     </Acc>
                   )}

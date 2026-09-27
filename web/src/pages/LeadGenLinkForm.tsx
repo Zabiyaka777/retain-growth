@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { LeadGenLinkCard, buildLeadGenUrls } from '../components/LeadGenLinks'
+import { CHANNELS, LeadGenLinkCard, buildLeadGenUrls } from '../components/LeadGenLinks'
 import { IconAlert, IconArrowLeft, IconCheckCircle, IconClose, IconCode, IconLink, IconPlus, IconSpinner } from '../components/icons'
-import CustomDomainPanel, { CopyValue, type DomainStatus } from '../components/CustomDomainPanel'
+import CustomDomainPanel, { type DomainStatus } from '../components/CustomDomainPanel'
+import { CopyValue } from '../components/CopyValue'
 
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession()
@@ -476,7 +477,7 @@ export default function LeadGenLinkForm() {
                 label="Домен для цього посилання"
                 lastStep="Поверніться сюди й натисніть «Перевірити». Статус «Підключено» означає, що людина, яка відкрила ваш домен, одразу потрапить у месенджер."
                 verifiedText={(d) => `https://${d} веде одразу в месенджер`}
-                renderAttached={(d) => <DomainLinkUrls domain={d} />}
+                renderAttached={(d) => <DomainLinkUrls domain={d} refToken={refToken} />}
               />
             </div>
           )}
@@ -489,21 +490,17 @@ export default function LeadGenLinkForm() {
 }
 
 // The same channel links as LeadGenLinkCard, on the tenant's own domain —
-// edge-functions/custom-domain.ts 302s the root to /r/:ref_token with the
-// query string intact, and a bare domain (no ?ch=) means Telegram.
-function DomainLinkUrls({ domain }: { domain: string }) {
-  const urls = [
-    { label: 'Telegram', url: `https://${domain}` },
-    { label: 'WhatsApp', url: `https://${domain}/?ch=whatsapp` },
-    { label: 'FB Messenger', url: `https://${domain}/?ch=fbm` },
-  ]
+// built by the same buildLeadGenUrls the list's copy buttons use, so the
+// form and the list can never hand out different addresses.
+function DomainLinkUrls({ domain, refToken }: { domain: string; refToken: string }) {
+  const urls = buildLeadGenUrls(refToken, domain)
   return (
     <div className="lpe-dns-record" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.35rem' }}>
       <span>Посилання на вашому домені:</span>
-      {urls.map(({ label, url }) => (
-        <span key={label} className="lpe-dns-value">
-          {label}: <code>{url}</code>
-          <CopyValue text={url} />
+      {CHANNELS.map(({ key, label }) => (
+        <span key={key} className="lpe-dns-value">
+          {label}: <code>{urls[key]}</code>
+          <CopyValue text={urls[key]} />
         </span>
       ))}
     </div>

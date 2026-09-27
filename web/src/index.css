@@ -5683,6 +5683,16 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lp-card-name { font-size: 0.875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp-card-link { display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--fg-muted); width: fit-content; max-width: 100%; }
 .lp-card-link:hover { color: var(--accent); text-decoration: underline; }
+.lp-card-link-row { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; min-width: 0; }
+.lp-card-link-row .lp-card-link { min-width: 0; }
+.lp-card-link-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.copy-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; border-radius: 6px; border: 0; background: transparent; color: var(--fg-subtle); cursor: pointer; transition: color .15s, background .15s; }
+.copy-icon-btn:hover { color: var(--accent); background: var(--bg-subtle); }
+.copy-icon-btn.is-copied { color: var(--success); }
+.copy-groups { display: flex; align-items: flex-end; gap: 0.875rem; }
+.copy-group { display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; min-width: 0; }
+.copy-group-label { font-size: 0.65rem; font-weight: 600; color: var(--fg-subtle); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy-group + .copy-group { padding-left: 0.875rem; border-left: 1px dashed var(--border); }
 .domain-chip { display: inline-flex; align-items: center; gap: 5px; width: fit-content; max-width: 100%; padding: 2px 8px 2px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-subtle); font-size: 0.72rem; font-weight: 500; color: var(--fg); text-decoration: none; line-height: 1.5; }
 .domain-chip:hover { border-color: var(--accent); color: var(--accent); }
 .domain-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -5711,6 +5721,11 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lpe-public-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 0.4rem; font-size: 0.75rem; color: var(--accent); width: fit-content; max-width: 100%; }
 .lpe-public-link:hover { text-decoration: underline; }
 .lpe-public-link i { font-style: normal; color: var(--fg-subtle); }
+.lpe-public-links { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.4rem; min-width: 0; }
+.lpe-public-links .lpe-public-link { margin-top: 0; min-width: 0; }
+.lpe-public-links .lpe-public-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lpe-public-row { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+.lpe-public-note { font-style: normal; font-size: 0.72rem; color: var(--fg-subtle); }
 .lpe-link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--danger); cursor: pointer; text-decoration: underline; }
 .lpe-seg.wrap { flex-wrap: wrap; }
 .lpe-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }

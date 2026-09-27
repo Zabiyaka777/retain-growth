@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IconBubble, IconCheckCircle, IconLink, IconPhone, IconSend } from './icons'
+import { copyText } from './CopyValue'
 
 export const CHANNELS: { key: 'telegram' | 'whatsapp' | 'fbm'; label: string; icon: typeof IconSend }[] = [
   { key: 'telegram', label: 'Telegram', icon: IconSend },
@@ -7,7 +8,15 @@ export const CHANNELS: { key: 'telegram' | 'whatsapp' | 'fbm'; label: string; ic
   { key: 'fbm', label: 'FB Messenger', icon: IconBubble },
 ]
 
-export function buildLeadGenUrls(refToken: string): Record<'telegram' | 'whatsapp' | 'fbm', string> {
+// customDomain: the link's own verified domain (lead_gen_links.custom_domain)
+// — edge-functions/custom-domain.ts 302s its root to /r/:ref_token with the
+// query string intact, so ?ch= (and any fbclid/utm) carries through. Pass it
+// only once verified: before that the domain doesn't reach us over HTTPS.
+export function buildLeadGenUrls(refToken: string, customDomain?: string | null): Record<'telegram' | 'whatsapp' | 'fbm', string> {
+  if (customDomain) {
+    const base = `https://${customDomain}/`
+    return { telegram: `${base}?ch=telegram`, whatsapp: `${base}?ch=whatsapp`, fbm: `${base}?ch=fbm` }
+  }
   const origin = window.location.origin
   return {
     telegram: `${origin}/r/${refToken}?ch=telegram`,
@@ -18,8 +27,16 @@ export function buildLeadGenUrls(refToken: string): Record<'telegram' | 'whatsap
 
 // Small icon-only copy buttons for the list view — click copies straight to
 // the clipboard, no navigation, with a transient "Скопійовано" label.
-export function ChannelCopyButtons({ refToken, onCopy }: { refToken: string; onCopy?: () => void }) {
-  const urls = buildLeadGenUrls(refToken)
+export function ChannelCopyButtons({
+  refToken,
+  customDomain,
+  onCopy,
+}: {
+  refToken: string
+  customDomain?: string | null
+  onCopy?: () => void
+}) {
+  const urls = buildLeadGenUrls(refToken, customDomain)
   return (
     <div style={{ display: 'flex', gap: '0.375rem' }}>
       {CHANNELS.map(({ key, label, icon: Icon }) => (
@@ -45,14 +62,10 @@ function ChannelCopyIconButton({
   async function handleClick(e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    try {
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      onCopy?.()
-      setTimeout(() => setCopied(false), 1400)
-    } catch {
-      // Clipboard API unavailable (e.g. insecure context) — nothing to fall back to.
-    }
+    if (!(await copyText(url))) return
+    setCopied(true)
+    onCopy?.()
+    setTimeout(() => setCopied(false), 1400)
   }
 
   return (
@@ -60,7 +73,7 @@ function ChannelCopyIconButton({
       <button
         type="button"
         onClick={handleClick}
-        title={`Копіювати посилання — ${label}`}
+        title={`Копіювати посилання — ${label}\n${url}`}
         aria-label={`Копіювати посилання ${label}`}
         style={{
           display: 'inline-flex',
@@ -105,13 +118,9 @@ function CopyTextButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard API unavailable (e.g. insecure context) — nothing to fall back to.
-    }
+    if (!(await copyText(text))) return
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   return (

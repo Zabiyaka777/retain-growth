@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { IconCheckCircle, IconDuplicate, IconSpinner } from './icons'
+import { IconSpinner } from './icons'
+import { CopyValue } from './CopyValue'
 
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession()
@@ -22,37 +23,6 @@ function dnsHostFor(domain: string): { host: string; apex: boolean } {
   return { host: labels.slice(0, labels.length - baseLen).join('.'), apex: false }
 }
 
-export function CopyValue({ text, label = 'Скопіювати' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false)
-  async function handleCopy() {
-    let ok = false
-    try {
-      await navigator.clipboard.writeText(text)
-      ok = true
-    } catch {
-      // Clipboard API denied (permissions policy, embedded browser, older
-      // Safari) — the legacy selection copy still works inside a click.
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.setAttribute('readonly', '')
-      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
-      document.body.appendChild(ta)
-      ta.select()
-      ok = document.execCommand('copy')
-      ta.remove()
-    }
-    if (!ok) return
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <button type="button" className="btn btn-ghost lpe-dns-copy" onClick={handleCopy}>
-      {copied ? <IconCheckCircle size={13} /> : <IconDuplicate size={13} />}
-      {copied ? 'Скопійовано' : label}
-    </button>
-  )
-}
-
 interface Props {
   // Which save-*-domain / check-*-domain pair to call (both are wrappers
   // around netlify/functions/_shared/netlify-domains.ts).
@@ -68,7 +38,9 @@ interface Props {
   verifiedText: (domain: string) => ReactNode
   // Extra content once a domain is attached — e.g. a link's ready URLs.
   renderAttached?: (domain: string, status: DomainStatus) => ReactNode
-  onDomainChange?: (domain: string) => void
+  // Every saved/checked change of domain or status — lets the owner show
+  // the domain elsewhere (e.g. next to the public URL) only once verified.
+  onChange?: (domain: string, status: DomainStatus) => void
 }
 
 // The whole "Свій домен" block — how-to, input, bind/unbind/check, status and
@@ -86,7 +58,7 @@ export default function CustomDomainPanel({
   lastStep,
   verifiedText,
   renderAttached,
-  onDomainChange,
+  onChange,
 }: Props) {
   const [customDomain, setCustomDomain] = useState(initialDomain ?? '')
   const [domainInput, setDomainInput] = useState(initialDomain ?? '')
@@ -129,7 +101,7 @@ export default function CustomDomainPanel({
         setDomainInput(data.customDomain ?? '')
         setDomainStatus(data.status ?? null)
         if (data.dnsTarget) setDnsTarget(data.dnsTarget)
-        onDomainChange?.(data.customDomain ?? '')
+        onChange?.(data.customDomain ?? '', data.status ?? null)
       }
     } catch {
       setDomainError('Мережева помилка. Спробуйте ще раз')
@@ -161,6 +133,7 @@ export default function CustomDomainPanel({
       } else {
         setDomainStatus(data.status ?? null)
         if (data.dnsTarget) setDnsTarget(data.dnsTarget)
+        onChange?.(customDomain, data.status ?? null)
         if (silent) return
         if (!data.dnsResolved) setDomainError('DNS ще не вказує на нас — перевірте запис і спробуйте ще раз за кілька хвилин')
         else if (!data.sslIssued) setDomainError('DNS налаштовано, сертифікат ще видається — спробуйте перевірити ще раз за хвилину')
