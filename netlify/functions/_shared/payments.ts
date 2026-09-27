@@ -12,9 +12,76 @@ export interface PaymentRow {
   test_mode: boolean;
   provider_modified_at: string | null;
   paid_at: string | null;
+  subscription_id: string | null;
 }
 
-export const PAYMENT_COLUMNS = "id, org_id, lead_id, status, amount, destination, test_mode, provider_modified_at, paid_at";
+export const PAYMENT_COLUMNS = "id, org_id, lead_id, status, amount, destination, test_mode, provider_modified_at, paid_at, subscription_id";
+
+const INTERVAL_MS: Record<"week" | "month" | "year", number> = {
+  week: 7 * 24 * 60 * 60 * 1000,
+  // Approximated in days rather than calendar months/years — simple, and the
+  // few days of drift per cycle don't matter for a billing reminder cadence.
+  // Revisit with real calendar-month math if that precision ever matters.
+  month: 30 * 24 * 60 * 60 * 1000,
+  year: 365 * 24 * 60 * 60 * 1000,
+};
+
+export function nextChargeDate(from: Date, interval: "week" | "month" | "year"): Date {
+  return new Date(from.getTime() + INTERVAL_MS[interval]);
+}
+
+/**
+ * Reacts to the card-tokenization half of a Monobank webhook/poll report —
+ * independent of the invoice's own payment status (see the docs quote on
+ * CreateInvoiceInput.saveCardData: a card-status change fires its own
+ * webhook delivery, separate from "the invoice was paid"). Only relevant
+ * when this payment belongs to a subscription's first invoice.
+ *
+ * Stores the card token in Vault (same pattern as channel_credentials'
+ * bot_token_secret_id), flips the subscription to 'active', and schedules
+ * the first renewal. Safe to call on every report — a repeat call with the
+ * same cardToken just re-upserts the same secret's replacement, harmless.
+ */
+export async function maybeStoreWalletToken(supabase: SupabaseClient, payment: PaymentRow, state: MonoInvoiceState): Promise<void> {
+  const cardToken = state.walletData?.cardToken;
+  if (!cardToken || !payment.subscription_id) return;
+
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("id, org_id, interval, card_token_secret_id, status")
+    .eq("id", payment.subscription_id)
+    .maybeSingle();
+  if (!subscription || subscription.status === "canceled") return;
+
+  const { data: secretId, error: secretError } = await supabase.rpc("vault_create_secret", {
+    secret: cardToken,
+    name: `mono_card_token_${subscription.id}_${Date.now()}`,
+    description: "Monobank tokenized card (subscription renewal)",
+  });
+  if (secretError || !secretId) {
+    console.error("payments: vault_create_secret (card token) failed", secretError);
+    return;
+  }
+
+  const { error: updateError } = await supabase
+    .from("subscriptions")
+    .update({
+      status: "active",
+      card_token_secret_id: secretId,
+      wallet_id: state.walletData?.walletId ?? null,
+      next_charge_at: nextChargeDate(new Date(), subscription.interval as "week" | "month" | "year").toISOString(),
+    })
+    .eq("id", subscription.id);
+  if (updateError) console.error("payments: subscription activation update failed", updateError);
+
+  // The now-superseded old token (a retry/reconnect scenario) is released
+  // only after the row stops pointing at it — same FK-safe ordering
+  // connect-telegram.ts uses for bot_token_secret_id.
+  if (subscription.card_token_secret_id) {
+    const { error } = await supabase.rpc("vault_delete_secret", { secret_id: subscription.card_token_secret_id });
+    if (error) console.error("payments: vault_delete_secret (old card token) failed", error);
+  }
+}
 
 /**
  * Applies one gateway report (webhook or a status poll) to a payments row.

@@ -106,13 +106,28 @@ export function PaymentLinkButton({ threadId, onInsert }: { threadId: string; on
   )
 }
 
+const INTERVAL_LABEL: Record<'week' | 'month' | 'year', string> = { week: 'тиждень', month: 'місяць', year: 'рік' }
+
+interface OfferOption {
+  id: string
+  name: string
+  price_amount: number
+  kind: 'one_time' | 'recurring'
+  interval: 'week' | 'month' | 'year' | null
+}
+
 function PaymentLinkModal({ threadId, onClose, onCreated }: { threadId: string; onClose: () => void; onCreated: (text: string) => void }) {
   const [account, setAccount] = useState<{ test_mode: boolean; merchant_name: string | null } | null | undefined>(undefined)
+  const [offers, setOffers] = useState<OfferOption[]>([])
+  // '' = "довільна сума" (today's behaviour); otherwise an offers.id.
+  const [offerId, setOfferId] = useState('')
   const [amount, setAmount] = useState('')
   const [destination, setDestination] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { payments, reload } = usePayments({ threadId })
+
+  const selectedOffer = offers.find((o) => o.id === offerId) ?? null
 
   useEffect(() => {
     void supabase
@@ -121,6 +136,12 @@ function PaymentLinkModal({ threadId, onClose, onCreated }: { threadId: string; 
       .eq('provider', 'monobank')
       .maybeSingle()
       .then(({ data }) => setAccount(data ?? null))
+    void supabase
+      .from('offers')
+      .select('id, name, price_amount, kind, interval')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => setOffers((data ?? []) as OfferOption[]))
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
@@ -128,17 +149,30 @@ function PaymentLinkModal({ threadId, onClose, onCreated }: { threadId: string; 
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  // Selecting an offer prefills name/price for display — the server derives
+  // the actual charged amount from the offers row itself regardless of what
+  // these fields show, so there's nothing to keep in sync here beyond copy.
+  useEffect(() => {
+    if (!selectedOffer) return
+    setAmount(String(selectedOffer.price_amount / 100))
+    setDestination(selectedOffer.name)
+  }, [selectedOffer])
+
   async function submit(e: FormEvent) {
     e.preventDefault()
-    const value = Number(amount.replace(',', '.').replace(/\s/g, ''))
-    if (!Number.isFinite(value) || value < 1) {
-      setError('Вкажіть суму від 1 грн')
-      return
+    if (!selectedOffer) {
+      const value = Number(amount.replace(',', '.').replace(/\s/g, ''))
+      if (!Number.isFinite(value) || value < 1) {
+        setError('Вкажіть суму від 1 грн')
+        return
+      }
     }
     setBusy(true)
     setError(null)
     try {
-      const res = await paymentApi({ action: 'create', threadId, amount: value, destination: destination.trim() })
+      const res = selectedOffer
+        ? await paymentApi({ action: 'create', threadId, offerId: selectedOffer.id })
+        : await paymentApi({ action: 'create', threadId, amount: Number(amount.replace(',', '.').replace(/\s/g, '')), destination: destination.trim() })
       if (res.message) onCreated(res.message)
     } catch (err) {
       setError((err as Error).message)
@@ -175,6 +209,16 @@ function PaymentLinkModal({ threadId, onClose, onCreated }: { threadId: string; 
           </div>
         ) : (
           <form className="pay-form" onSubmit={submit}>
+            {offers.length > 0 && (
+              <select className="input" value={offerId} onChange={(e) => setOfferId(e.target.value)} aria-label="Оффер з каталогу">
+                <option value="">Довільна сума</option>
+                {offers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name} — {(o.price_amount / 100).toLocaleString('uk-UA')} грн{o.kind === 'recurring' && o.interval ? ` / ${INTERVAL_LABEL[o.interval]}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="pay-amount">
               <input
                 className="input"
@@ -183,7 +227,8 @@ function PaymentLinkModal({ threadId, onClose, onCreated }: { threadId: string; 
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0,00"
                 aria-label="Сума, грн"
-                autoFocus
+                autoFocus={!selectedOffer}
+                disabled={!!selectedOffer}
               />
               <span>грн</span>
             </div>
@@ -194,7 +239,17 @@ function PaymentLinkModal({ threadId, onClose, onCreated }: { threadId: string; 
               maxLength={200}
               placeholder="Призначення: напр. «Курс «Старт», потік 12»"
               aria-label="Призначення платежу"
+              disabled={!!selectedOffer}
             />
+            {selectedOffer?.kind === 'recurring' && selectedOffer.interval && (
+              <div className="alert alert-info" style={{ alignItems: 'flex-start' }}>
+                <IconAlert size={16} />
+                <span>
+                  Оплата активує підписку {(selectedOffer.price_amount / 100).toLocaleString('uk-UA')} грн / {INTERVAL_LABEL[selectedOffer.interval]}, картка
+                  буде збережена для наступних списань. Скасувати можна в будь-який момент.
+                </span>
+              </div>
+            )}
             <p className="settings-row-hint">
               Посилання дійсне 7 днів. Повідомлення з ним з’явиться в полі відповіді — перевірте й надішліть як звичайно. Статус оплати оновиться тут і в профілі ліда.
             </p>

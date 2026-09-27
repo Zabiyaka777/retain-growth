@@ -71,6 +71,15 @@ export interface CreateInvoiceInput {
   webHookUrl: string;
   redirectUrl?: string;
   validitySeconds?: number;
+  // Card tokenization for a recurring offer's first charge. IMPORTANT: per
+  // the live docs (api.monobank.ua/docs/acquiring.html, "Створення рахунку"),
+  // tokenization is OFF by default for every merchant — "Для підключення
+  // функції, зверніться, будь ласка, в службу турботи monobank." Setting
+  // this without that support-desk step silently does nothing useful: the
+  // invoice is created but no card ever gets tokenized, so the subscription
+  // stays 'awaiting_card' forever. There is no API to check whether it's
+  // enabled — the org has to know they asked for it.
+  saveCardData?: { saveCard: true; walletId: string };
 }
 
 export function createInvoice(token: string, input: CreateInvoiceInput) {
@@ -83,6 +92,7 @@ export function createInvoice(token: string, input: CreateInvoiceInput) {
       webHookUrl: input.webHookUrl,
       ...(input.redirectUrl ? { redirectUrl: input.redirectUrl } : {}),
       ...(input.validitySeconds ? { validity: input.validitySeconds } : {}),
+      ...(input.saveCardData ? { saveCardData: input.saveCardData } : {}),
     },
   });
 }
@@ -98,10 +108,58 @@ export interface MonoInvoiceState {
   reference?: string;
   createdDate?: string;
   modifiedDate?: string;
+  // Present when saveCardData was set on invoice creation and Monobank
+  // actually tokenized the card — see the warning on CreateInvoiceInput.
+  walletData?: { cardToken: string; walletId: string; status: string };
 }
 
 export const getInvoiceStatus = (token: string, invoiceId: string) =>
   monoFetch<MonoInvoiceState>(token, `/api/merchant/invoice/status?invoiceId=${encodeURIComponent(invoiceId)}`);
+
+export interface WalletChargeInput {
+  cardToken: string;
+  amount: number; // minor units
+  ccy?: number;
+  reference: string;
+  destination: string;
+  webHookUrl?: string;
+  // 'merchant' = we're charging on a schedule, the customer isn't present
+  // (a subscription renewal). 'client' = the customer is actively paying
+  // right now from a saved card. charge-subscriptions-background.ts always
+  // uses 'merchant'.
+  initiationKind: "merchant" | "client";
+}
+
+export interface WalletChargeResult {
+  invoiceId: string;
+  tdsUrl?: string;
+  status: MonoInvoiceStatus | "processing";
+  failureReason?: string;
+  amount: number;
+  ccy: number;
+  createdDate?: string;
+  modifiedDate?: string;
+}
+
+/** Charges a previously tokenized card — POST /api/merchant/wallet/payment. */
+export function chargeByToken(token: string, input: WalletChargeInput) {
+  return monoFetch<WalletChargeResult>(token, "/api/merchant/wallet/payment", {
+    method: "POST",
+    body: {
+      cardToken: input.cardToken,
+      amount: input.amount,
+      ccy: input.ccy ?? 980,
+      initiationKind: input.initiationKind,
+      merchantPaymInfo: { reference: input.reference, destination: input.destination },
+      ...(input.webHookUrl ? { webHookUrl: input.webHookUrl } : {}),
+    },
+  });
+}
+
+/** Removes a tokenized card from Monobank's side — used on cancellation. */
+export function deleteWalletCard(token: string, cardToken: string) {
+  return monoFetch<Record<string, never>>(token, `/api/merchant/wallet/card?cardToken=${encodeURIComponent(cardToken)}`, { method: "DELETE" });
+}
 
 /**
  * X-Sign = base64 ECDSA (SHA-256, DER) signature over the exact raw request

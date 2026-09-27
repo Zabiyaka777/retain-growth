@@ -6,6 +6,8 @@ import { logLeadActivity } from "./_shared/activity-log";
 import { MonoError, createInvoice, formatUah, getInvoiceStatus, readOrgMonoToken } from "./_shared/monobank";
 import { PAYMENT_COLUMNS, applyInvoiceState, type PaymentRow } from "./_shared/payments";
 
+const INTERVAL_LABEL: Record<"week" | "month" | "year", string> = { week: "тиждень", month: "місяць", year: "рік" };
+
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
 if (typeof globalThis.WebSocket === "undefined") {
@@ -79,18 +81,66 @@ export const handler: Handler = async (event) => {
 
   // action: create
   const threadId = typeof body.threadId === "string" ? body.threadId : "";
-  const amountUah = typeof body.amount === "number" ? body.amount : Number.NaN;
-  const destination = typeof body.destination === "string" ? body.destination.trim().slice(0, 200) : "";
-  if (!Number.isFinite(amountUah) || amountUah < 1 || amountUah > MAX_AMOUNT_UAH) {
-    return jsonResponse(400, { error: `Сума має бути від 1 до ${MAX_AMOUNT_UAH.toLocaleString("uk-UA")} грн` });
-  }
-  if (!destination) return jsonResponse(400, { error: "Вкажіть призначення платежу — його побачить клієнт" });
-  const amount = Math.round(amountUah * 100);
+  const offerId = typeof body.offerId === "string" ? body.offerId : null;
 
   const { data: thread } = await supabase.from("threads").select("id, lead_id").eq("id", threadId).eq("org_id", orgId).maybeSingle();
   if (!thread) return jsonResponse(404, { error: "Чат не знайдено" });
 
+  // Catalog offer: amount/destination/currency come from the offers row,
+  // never from the client — a tampered request must not be able to claim
+  // "this is offer X" while charging a different amount. Manual "довільна
+  // сума" (offerId absent) keeps today's behaviour exactly.
+  let amount: number;
+  let ccy = 980;
+  let destination: string;
+  let offer: { id: string; name: string; kind: "one_time" | "recurring"; interval: "week" | "month" | "year" | null } | null = null;
+
+  if (offerId) {
+    const { data: offerRow } = await supabase.from("offers").select("id, name, price_amount, ccy, kind, interval, is_active").eq("id", offerId).eq("org_id", orgId).maybeSingle();
+    if (!offerRow || !offerRow.is_active) return jsonResponse(404, { error: "Оффер не знайдено або він неактивний" });
+    amount = offerRow.price_amount as number;
+    ccy = offerRow.ccy as number;
+    destination = offerRow.name as string;
+    offer = { id: offerRow.id as string, name: offerRow.name as string, kind: offerRow.kind as "one_time" | "recurring", interval: offerRow.interval as "week" | "month" | "year" | null };
+  } else {
+    const amountUah = typeof body.amount === "number" ? body.amount : Number.NaN;
+    destination = typeof body.destination === "string" ? body.destination.trim().slice(0, 200) : "";
+    if (!Number.isFinite(amountUah) || amountUah < 1 || amountUah > MAX_AMOUNT_UAH) {
+      return jsonResponse(400, { error: `Сума має бути від 1 до ${MAX_AMOUNT_UAH.toLocaleString("uk-UA")} грн` });
+    }
+    if (!destination) return jsonResponse(400, { error: "Вкажіть призначення платежу — його побачить клієнт" });
+    amount = Math.round(amountUah * 100);
+  }
+
   const reference = randomUUID().replace(/-/g, "");
+
+  // Recurring offer: a subscription row exists before the invoice does, same
+  // "reserve then fulfil" reasoning as the payment row itself — the webhook
+  // that tokenizes the card (maybeStoreWalletToken) needs somewhere to
+  // attach to the moment it arrives.
+  let subscriptionId: string | null = null;
+  if (offer?.kind === "recurring" && offer.interval) {
+    const { data: subscription, error: subError } = await supabase
+      .from("subscriptions")
+      .insert({
+        org_id: orgId,
+        offer_id: offer.id,
+        lead_id: thread.lead_id,
+        thread_id: thread.id,
+        status: "awaiting_card",
+        amount,
+        ccy,
+        interval: offer.interval,
+      })
+      .select("id")
+      .single();
+    if (subError || !subscription) {
+      console.error("create-payment: subscription insert failed", subError);
+      return jsonResponse(500, { error: "Не вдалося створити підписку" });
+    }
+    subscriptionId = subscription.id as string;
+  }
+
   const { data: payment, error: insertError } = await supabase
     .from("payments")
     .insert({
@@ -101,15 +151,18 @@ export const handler: Handler = async (event) => {
       lead_id: thread.lead_id,
       thread_id: thread.id,
       amount,
-      ccy: 980,
+      ccy,
       destination,
       status: "created",
       created_by: userData.user.id,
+      offer_id: offer?.id ?? null,
+      subscription_id: subscriptionId,
     })
     .select("id")
     .single();
   if (insertError || !payment) {
     console.error("create-payment: insert failed", insertError);
+    if (subscriptionId) await supabase.from("subscriptions").delete().eq("id", subscriptionId);
     return jsonResponse(500, { error: "Не вдалося створити платіж" });
   }
 
@@ -118,14 +171,17 @@ export const handler: Handler = async (event) => {
   try {
     invoice = await createInvoice(creds.token, {
       amount,
+      ccy,
       reference,
       destination,
       webHookUrl: `${siteUrl}/.netlify/functions/mono-webhook`,
       validitySeconds: VALIDITY_SECONDS,
+      ...(subscriptionId ? { saveCardData: { saveCard: true as const, walletId: subscriptionId } } : {}),
     });
   } catch (err) {
-    // Never reached the gateway as a real invoice — drop the placeholder row.
+    // Never reached the gateway as a real invoice — drop the placeholder rows.
     await supabase.from("payments").delete().eq("id", payment.id);
+    if (subscriptionId) await supabase.from("subscriptions").delete().eq("id", subscriptionId);
     return jsonResponse(err instanceof MonoError && err.status !== 0 ? 400 : 502, { error: (err as Error).message });
   }
 
@@ -144,13 +200,14 @@ export const handler: Handler = async (event) => {
       actorType: "manager",
       actorUserId: userData.user.id,
       actorEmail: userData.user.email,
-      details: { payment_id: payment.id, amount: formatUah(amount), destination, test_mode: creds.account.test_mode },
+      details: { payment_id: payment.id, amount: formatUah(amount), destination, test_mode: creds.account.test_mode, offer_id: offer?.id ?? null },
     });
   }
 
-  return jsonResponse(200, {
-    ok: true,
-    payment: saved,
-    message: `${destination} — ${formatUah(amount)} грн\nОплатити: ${invoice.pageUrl}`,
-  });
+  const message =
+    offer?.kind === "recurring" && offer.interval
+      ? `${destination} — ${formatUah(amount)} грн / ${INTERVAL_LABEL[offer.interval]}\nОплата активує підписку: картка буде збережена для наступних списань. Скасувати можна в будь-який момент.\nОплатити: ${invoice.pageUrl}`
+      : `${destination} — ${formatUah(amount)} грн\nОплатити: ${invoice.pageUrl}`;
+
+  return jsonResponse(200, { ok: true, payment: saved, message });
 };

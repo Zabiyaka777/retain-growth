@@ -2,7 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { getWebhookPubkey, readOrgMonoToken, verifyMonoSignature, type MonoInvoiceState } from "./_shared/monobank";
-import { PAYMENT_COLUMNS, applyInvoiceState, type PaymentRow } from "./_shared/payments";
+import { PAYMENT_COLUMNS, applyInvoiceState, maybeStoreWalletToken, type PaymentRow } from "./_shared/payments";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -45,7 +45,7 @@ export const handler: Handler = async (event) => {
 
   const { data: payment } = await supabase
     .from("payments")
-    .select(`${PAYMENT_COLUMNS}, reference`)
+    .select(`${PAYMENT_COLUMNS}, reference, funnel_state_id`)
     .eq("invoice_id", state.invoiceId)
     .maybeSingle();
   // Not ours (or already removed with its org) — nothing to verify against.
@@ -96,6 +96,35 @@ export const handler: Handler = async (event) => {
   // Signed, but it must also be about this very payment.
   if (state.reference && state.reference !== payment.reference) return text(200);
 
-  await applyInvoiceState(supabase, payment as PaymentRow, state, "webhook");
+  const row = payment as PaymentRow;
+  const wasSuccess = row.status === "success";
+  await Promise.all([applyInvoiceState(supabase, row, state, "webhook"), maybeStoreWalletToken(supabase, row, state)]);
+
+  // A funnel's 'offer' node parked here waiting for exactly this — resume it
+  // the same way a button tap or the AI hand-off does elsewhere: hand the
+  // now-due state to funnel-advance-background rather than walking the graph
+  // inline in a webhook handler (keeps this function's own timeout budget
+  // out of the funnel walk's way).
+  const funnelStateId = (payment as { funnel_state_id?: string | null }).funnel_state_id;
+  if (funnelStateId && state.status === "success" && !wasSuccess) {
+    const siteUrl = process.env.URL;
+    if (siteUrl) {
+      try {
+        // claim_specific_funnel_state (what funnel-advance.ts's handler uses)
+        // only checks status='active', not waiting_until — no need to touch
+        // that column here, this is the same immediate-advance path
+        // manage-lead-funnel.ts's advanceNow and telegram-webhook.ts's button
+        // handler already use.
+        await fetch(`${siteUrl}/.netlify/functions/funnel-advance-background`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ stateId: funnelStateId }),
+        });
+      } catch (err) {
+        console.error("mono-webhook: funnel-advance invoke failed", err);
+      }
+    }
+  }
+
   return text(200, "ok");
 };
