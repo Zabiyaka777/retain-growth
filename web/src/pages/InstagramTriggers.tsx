@@ -424,18 +424,24 @@ export default function InstagramTriggers() {
   const [error, setError] = useState<string | null>(null)
   const [editingComment, setEditingComment] = useState<CommentTrigger | 'new' | null>(null)
   const [editingStory, setEditingStory] = useState<StoryTrigger | 'new' | null>(null)
+  // Drives the temporary "not connected yet" banner below — remove this
+  // state and the banner together once Settings.tsx gets its Instagram card
+  // (see the comment on the banner itself).
+  const [instagramConnected, setInstagramConnected] = useState<boolean | null>(null)
 
   async function load() {
     setLoading(true)
-    const [c, s] = await Promise.all([
+    const [c, s, cred] = await Promise.all([
       supabase.from('instagram_comment_triggers').select('*').order('created_at', { ascending: false }),
       supabase.from('instagram_story_triggers').select('*').order('created_at', { ascending: false }),
+      supabase.from('channel_credentials').select('created_at').eq('channel_type', 'instagram').maybeSingle(),
     ])
     if (c.error || s.error) {
       setError(c.error?.message ?? s.error?.message ?? 'Не вдалося завантажити тригери')
     } else {
       setCommentTriggers((c.data ?? []) as CommentTrigger[])
       setStoryTriggers((s.data ?? []) as StoryTrigger[])
+      setInstagramConnected(!!cred.data)
       setError(null)
     }
     setLoading(false)
@@ -464,13 +470,42 @@ export default function InstagramTriggers() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: 720, paddingBottom: '1rem' }}>
-      <div>
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem', margin: 0 }}>
-          <IconInstagram size={20} />
-          Instagram: коментарі та Stories
-        </h1>
-        <p className="settings-row-hint">Точки входу з коментарів під постами й реакцій на Stories — ведуть у той самий граф тунелів.</p>
+    <div className="page fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">
+            <IconInstagram size={20} style={{ marginRight: '0.5rem', verticalAlign: '-3px' }} />
+            Instagram: коментарі та Stories
+          </h1>
+          <p className="page-description">Точки входу з коментарів під постами й реакцій на Stories — ведуть у той самий граф тунелів, що і Telegram чи WhatsApp.</p>
+        </div>
+      </div>
+
+      {/* Temporary: Settings.tsx doesn't have an Instagram connection card
+          yet (blocked earlier by a parallel session, now just not built).
+          Remove this whole block once that card exists and links here —
+          this page keeps working by direct link either way. */}
+      {instagramConnected === false && (
+        <div className="alert alert-warning" style={{ marginBottom: '1.25rem' }}>
+          <IconAlert size={16} />
+          <span>Instagram ще не підключено. Ця сторінка керує тригерами на коментарі/Stories — вони запрацюють, коли буде додано підключення акаунта (Налаштування → Інтеграції).</span>
+        </div>
+      )}
+
+      <div className="settings-group" style={{ marginBottom: '1.25rem' }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', lineHeight: 1.6, margin: 0 }}>
+          Instagram-тригери — це два незалежні механізми. <b>Коментар</b> під постом чи рілзом із певними словами: бот
+          публічно відповідає в коментарях і водночас шле DM з обраного вузла тунелю. <b>Реакція чи згадка в Stories</b>:
+          бот шле DM у відповідь. Обидва ведуть у той самий граф тунелів, що і Telegram чи WhatsApp.
+        </p>
+      </div>
+
+      <div className="alert alert-info" style={{ marginBottom: '1.5rem' }}>
+        <IconAlert size={16} />
+        <span>
+          Перше DM-повідомлення на коментар обов'язково має містити кнопку — це вимога Meta, без неї збереження тригера
+          буде відхилено.
+        </span>
       </div>
 
       {error && (
@@ -480,16 +515,21 @@ export default function InstagramTriggers() {
         </div>
       )}
 
-      <section>
-        <div className="settings-row-label" style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Коментарі → DM</span>
+      <section className="settings-group" style={{ marginBottom: '1.5rem' }}>
+        <header className="settings-group-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+          <div>
+            <h2>Коментарі → DM</h2>
+            <p>Слово чи фраза під постом запускає публічну відповідь і приватне DM з обраного вузла тунелю.</p>
+          </div>
           {editingComment === null && (
-            <button type="button" className="btn btn-secondary" onClick={() => setEditingComment('new')}>
+            <button type="button" className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={() => setEditingComment('new')}>
               <IconPlus size={13} /> Новий тригер
             </button>
           )}
-        </div>
-        {commentTriggers.length === 0 && editingComment === null && <p className="settings-row-hint">Тригерів ще немає.</p>}
+        </header>
+        {commentTriggers.length === 0 && editingComment === null && (
+          <p className="settings-row-hint">Тригерів ще немає. Приклад: слово «ціна» під постом → DM з прайсом.</p>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
           {commentTriggers.map((t) => (
             <TriggerRow
@@ -514,16 +554,21 @@ export default function InstagramTriggers() {
         )}
       </section>
 
-      <section>
-        <div className="settings-row-label" style={{ marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Stories</span>
+      <section className="settings-group">
+        <header className="settings-group-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+          <div>
+            <h2>Stories</h2>
+            <p>Reply чи згадка в Stories запускає DM з обраного вузла тунелю.</p>
+          </div>
           {editingStory === null && (
-            <button type="button" className="btn btn-secondary" onClick={() => setEditingStory('new')}>
+            <button type="button" className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={() => setEditingStory('new')}>
               <IconPlus size={13} /> Новий тригер
             </button>
           )}
-        </div>
-        {storyTriggers.length === 0 && editingStory === null && <p className="settings-row-hint">Тригерів ще немає.</p>}
+        </header>
+        {storyTriggers.length === 0 && editingStory === null && (
+          <p className="settings-row-hint">Тригерів ще немає. Приклад: лід відповів на вашу Stories → DM з подякою і наступним кроком.</p>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
           {storyTriggers.map((t) => (
             <TriggerRow
