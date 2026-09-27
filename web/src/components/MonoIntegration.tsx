@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { IconAlert, IconCheckCircle, IconChevronDown, IconChevronUp, IconSpinner, IconWallet } from './icons'
+import { IconAlert, IconCheckCircle, IconChevronDown, IconSpinner, IconWallet } from './icons'
 
 interface MonoAccount {
   id: string
@@ -57,7 +57,6 @@ export default function MonoIntegration() {
       .maybeSingle()
       .then(({ data }) => {
         setAccount((data as MonoAccount | null) ?? null)
-        setGuideOpen(!data)
         setLoading(false)
       })
   }, [session])
@@ -211,12 +210,14 @@ export default function MonoIntegration() {
             </div>
           )}
 
-          <button type="button" className="mono-guide-toggle" onClick={() => setGuideOpen((v) => !v)} aria-expanded={guideOpen}>
-            {guideOpen ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
-            Як підключити — покрокова інструкція
-          </button>
-          {guideOpen && (
-            <ol className="mono-guide">
+          <div className={`accordion${guideOpen ? ' is-open' : ''}`}>
+            <button type="button" className="accordion-head" onClick={() => setGuideOpen((v) => !v)} aria-expanded={guideOpen} aria-controls="mono-guide">
+              <span>Як підключити — покрокова інструкція</span>
+              <small>6 кроків</small>
+              <IconChevronDown size={15} className="accordion-chevron" />
+            </button>
+            {guideOpen && (
+            <ol className="mono-guide" id="mono-guide">
               <li>
                 <b>Потрібен рахунок ФОП або юрособи в monobank</b> з підключеним інтернет-еквайрингом (Plata by Mono). Якщо його ще немає — подайте заявку в застосунку monobank
                 (розділ для бізнесу) або на <a href="https://www.monobank.ua/business" target="_blank" rel="noopener noreferrer">monobank.ua/business</a>.
@@ -243,7 +244,8 @@ export default function MonoIntegration() {
                 перевіряємо за цифровим підписом monobank.
               </li>
             </ol>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

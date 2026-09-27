@@ -53,13 +53,37 @@ export default function Settings() {
       </div>
 
       {tab === 'integrations' && (
-        <div className="integrations-grid">
-          <IntegrationsPanel />
-          <WhatsAppPanel />
-          <MonoIntegration />
-        </div>
+        <>
+          <section className="settings-group">
+            <header className="settings-group-head">
+              <h2>Щоб приймати повідомлення, підключіть канали</h2>
+              <p>Месенджери, з яких ліди пишуть вам і куди відповідають менеджери та воронки.</p>
+            </header>
+            <div className="integrations-grid">
+              <IntegrationsPanel />
+              <WhatsAppPanel />
+            </div>
+          </section>
+          <section className="settings-group">
+            <header className="settings-group-head">
+              <h2>Щоб приймати платежі, підключіть платіжні процесори</h2>
+              <p>Рахунки на оплату прямо з чату — гроші надходять на ваш рахунок, статус оплати видно в профілі ліда.</p>
+            </header>
+            <div className="integrations-grid">
+              <MonoIntegration />
+            </div>
+          </section>
+        </>
       )}
-      {tab === 'ai' && <AiPanel />}
+      {tab === 'ai' && (
+        <section className="settings-group">
+          <header className="settings-group-head">
+            <h2>Щоб ваш АІ ожив, підключіть ключ</h2>
+            <p>Без ключа AI-вузли у воронках мовчать — з ним вони відповідають лідам самі.</p>
+          </header>
+          <AiPanel />
+        </section>
+      )}
       {tab === 'organization' && <OrganizationPanel />}
     </div>
   )
