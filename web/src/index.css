@@ -6383,14 +6383,22 @@ a.lp-cta-custom:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0
   color: var(--fg-subtle);
 }
 
-/* Row under the KPIs: subs chart | channel split */
+/* Row under the KPIs: subs chart | channel split | sales funnel */
 .analytics-live-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
   align-items: stretch;
 }
-@media (max-width: 760px) {
+@media (max-width: 900px) {
+  .analytics-live-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .analytics-live-row .analytics-subs-card {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 640px) {
   .analytics-live-row {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -7539,4 +7547,383 @@ a.lp-cta-custom:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0
   font-size: 0.6875rem;
   line-height: 1.5;
   color: var(--fg-subtle);
+}
+
+/* ---------- Analytics: compact density ----------
+   One pass over the whole page so the same numbers fit in far less height:
+   tighter gaps and paddings, smaller values, and the landing tiles six to a
+   row. Scoped to the page (and .ls for the landing popup). */
+
+.analytics-page {
+  gap: 0.875rem;
+  padding-top: 1.75rem;
+  padding-bottom: 2rem;
+}
+.analytics-page .page-header {
+  align-items: center;
+}
+.analytics-page .page-title {
+  font-size: 1.3125rem;
+}
+.analytics-page .page-description {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+}
+.analytics-page .period-picker {
+  gap: 0.3125rem;
+}
+.analytics-page .period-seg-btn {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+/* KPI row — compact cards stay four across down to tablet width */
+.analytics-page .kpi-grid {
+  gap: 0.75rem;
+}
+@media (min-width: 901px) {
+  .analytics-page .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.analytics-page .kpi-card,
+.analytics-page .analytics-live-card,
+.analytics-page .analytics-live-card.card-tight {
+  gap: 0.3125rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-md);
+}
+.analytics-page .kpi-label {
+  font-size: 0.75rem;
+}
+.analytics-page .kpi-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+.analytics-page .kpi-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.analytics-page .kpi-value {
+  font-size: 1.25rem;
+}
+.analytics-page .kpi-value-unit {
+  font-size: 0.75rem;
+}
+.analytics-page .kpi-delta-row,
+.analytics-page .kpi-hint {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+.analytics-page .kpi-spark {
+  height: 22px;
+  margin-top: 0;
+}
+
+/* Top row: subs chart, channels, funnel */
+.analytics-page .analytics-live-card .analytics-chart {
+  height: 72px;
+}
+.analytics-page .analytics-chart-legend {
+  font-size: 0.6875rem;
+}
+.analytics-page .channel-list {
+  gap: 0.5rem;
+  margin: 0;
+}
+.analytics-page .channel-row-head {
+  font-size: 0.8125rem;
+}
+.analytics-page .channel-track {
+  height: 5px;
+}
+.analytics-funnel-card .stage-funnel-select {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 30px;
+  font-size: 0.75rem;
+}
+.stage-funnel-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.6875rem;
+  color: var(--fg-subtle);
+}
+.stage-funnel-total b {
+  font-size: 0.9375rem;
+  color: var(--success);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compact funnel bars (top-row card, landing section) */
+.fb.is-compact {
+  gap: 0.375rem;
+}
+.fb.is-compact .fb-row {
+  gap: 0.5rem;
+}
+.fb.is-compact .fb-idx {
+  width: 18px;
+  height: 18px;
+  font-size: 0.625rem;
+}
+.fb.is-compact .fb-main {
+  gap: 0.1875rem;
+}
+.fb.is-compact .fb-label {
+  font-size: 0.75rem;
+}
+.fb.is-compact .fb-count {
+  font-size: 0.8125rem;
+}
+.fb.is-compact .fb-track {
+  height: 6px;
+}
+.fb.is-compact .fb-foot {
+  justify-content: flex-end;
+  font-size: 0.625rem;
+}
+.fb.is-compact .fb-link {
+  height: 18px;
+  padding-left: 8px;
+  gap: 0.5rem;
+}
+.fb.is-compact .fb-link-pill {
+  padding: 0 0.375rem;
+  font-size: 0.625rem;
+}
+.fb.is-compact .fb-drop-note {
+  padding: 0.3125rem 0.5rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+.fb.is-compact .fb-drop-note svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Full-width sections */
+.analytics-page .analytics-section {
+  gap: 0.75rem;
+  padding: 0.875rem 1rem 1rem;
+  border-radius: var(--radius-md);
+}
+.analytics-section-title {
+  align-items: center;
+  gap: 0.5rem;
+}
+.analytics-section-title h3 {
+  font-size: 0.9375rem;
+}
+.analytics-section-top {
+  align-items: center;
+  gap: 0.625rem;
+}
+
+/* Landing stats: heading + picker on one row, six tiles to a row */
+.ls {
+  gap: 0.75rem;
+}
+.ls-toolbar {
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+.ls-toolbar-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.ls-select {
+  height: 32px;
+  min-width: 200px;
+  font-size: 0.8125rem;
+}
+.ls-reset {
+  height: 32px;
+  padding: 0 0.625rem;
+}
+.ls-tiles {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+@media (max-width: 1000px) {
+  .ls-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .ls-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ls-tile {
+  gap: 0.25rem;
+  padding: 0.5625rem 0.6875rem 0.625rem;
+  border-radius: 12px;
+}
+.ls-tile-top {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.375rem;
+}
+.ls-tile-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+.ls-tile-icon svg {
+  width: 11px;
+  height: 11px;
+}
+.ls-tile-label {
+  font-size: 0.6875rem;
+  line-height: 1.25;
+}
+.ls-tile-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  font-size: 1.125rem;
+}
+.ls-tile-value .kpi-delta {
+  font-size: 0.625rem;
+  letter-spacing: 0;
+}
+.ls-tile-sub {
+  font-size: 0.625rem;
+  line-height: 1.3;
+  color: var(--fg-subtle);
+}
+.ls-visuals {
+  gap: 0.5rem;
+}
+.ls-panel {
+  gap: 0.5rem;
+  padding: 0.6875rem 0.8125rem 0.75rem;
+  border-radius: 12px;
+}
+.ls-panel-head h4 {
+  font-size: 0.8125rem;
+}
+.ls-chart {
+  gap: 0.25rem;
+}
+.ls-chart-legend {
+  gap: 0.625rem;
+  font-size: 0.6875rem;
+}
+.ls-insights {
+  gap: 0.375rem;
+}
+.ls-insights li {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.ls-insights svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Ranked lists */
+.rank-head,
+.rank-row {
+  padding: 0.4375rem 0.875rem;
+}
+.rank-head {
+  font-size: 0.625rem;
+}
+.rank-name {
+  gap: 0.25rem;
+}
+.rank-title,
+.rank-num {
+  font-size: 0.8125rem;
+}
+.rank-bar {
+  height: 4px;
+}
+.source-summary {
+  gap: 0.375rem;
+}
+.source-chip {
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.6875rem;
+}
+.source-chip b {
+  font-size: 0.8125rem;
+}
+
+/* Ad spend + AI placeholder follow the same density */
+.analytics-page .analytics-ad-spend-card .analytics-section-header {
+  padding: 0.875rem 1rem 0.5rem;
+}
+.analytics-page .analytics-ad-spend-card {
+  /* the page's own gap spaces the sections evenly */
+  margin-top: 0;
+}
+.analytics-page .analytics-ad-spend-card .analytics-section-header h3 {
+  flex: 1;
+  font-size: 0.9375rem;
+}
+.analytics-page .analytics-ad-spend-card .analytics-upload-btn {
+  height: 30px;
+  font-size: 0.75rem;
+}
+/* Empty states inside the page's cards: a one-line note, not a hero block */
+.analytics-page .card .empty-state {
+  gap: 0.25rem;
+  padding: 0.5rem 1rem 1rem;
+}
+.analytics-page .card .empty-state h3 {
+  font-size: 0.875rem;
+}
+.analytics-page .card .empty-state p {
+  max-width: 560px;
+  font-size: 0.75rem;
+}
+.analytics-page .ai-reco-card {
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md);
+}
+.analytics-page .ai-reco-head h3 {
+  font-size: 0.9375rem;
+}
+.analytics-page .ai-reco-list {
+  margin: 0.625rem 0 0.5rem;
+  gap: 0.375rem;
+}
+.analytics-page .ai-reco-list li {
+  padding: 0.4375rem 0.75rem;
+  font-size: 0.8125rem;
+}
+.ls-panel-head h4 {
+  white-space: nowrap;
+}
+@media (max-width: 1280px) {
+  .ls-panel-hint {
+    display: none;
+  }
+}
+@media (max-width: 640px) {
+  .analytics-page .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+  .analytics-page .kpi-value {
+    font-size: 1.0625rem;
+  }
+  .analytics-page .period-seg-btn {
+    padding: 0.3125rem 0.5625rem;
+    white-space: nowrap;
+  }
 }

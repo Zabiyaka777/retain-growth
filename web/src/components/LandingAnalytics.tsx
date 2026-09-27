@@ -119,7 +119,7 @@ export interface FunnelStep {
  * the step before. The transition that loses the biggest share of people is
  * marked, so the main drop-off reads at a glance.
  */
-export function FunnelBars({ steps, unit = '' }: { steps: FunnelStep[]; unit?: string }) {
+export function FunnelBars({ steps, unit = '', compact = false }: { steps: FunnelStep[]; unit?: string; compact?: boolean }) {
   const first = steps[0]?.count ?? 0
   const max = Math.max(1, ...steps.map((s) => s.count))
 
@@ -137,7 +137,7 @@ export function FunnelBars({ steps, unit = '' }: { steps: FunnelStep[]; unit?: s
   })
 
   return (
-    <div className="fb">
+    <div className={`fb${compact ? ' is-compact' : ''}`}>
       <ol className="fb-list">
         {steps.map((step, i) => {
           const prev = i > 0 ? steps[i - 1].count : null
@@ -169,10 +169,12 @@ export function FunnelBars({ steps, unit = '' }: { steps: FunnelStep[]; unit?: s
                   <div className="fb-track">
                     <span className="fb-fill" style={{ width: `${width}%` }} />
                   </div>
-                  <div className="fb-foot">
-                    <span>{i === 0 ? '100% — точка відліку' : `${formatPercent(share(step.count, first))} від першого кроку`}</span>
-                    {step.note && <span className="fb-note">{step.note}</span>}
-                  </div>
+                  {(!compact || step.note) && (
+                    <div className="fb-foot">
+                      {!compact && <span>{i === 0 ? '100% — точка відліку' : `${formatPercent(share(step.count, first))} від першого кроку`}</span>}
+                      {step.note && <span className="fb-note">{step.note}</span>}
+                    </div>
+                  )}
                 </div>
               </div>
             </li>
@@ -182,10 +184,16 @@ export function FunnelBars({ steps, unit = '' }: { steps: FunnelStep[]; unit?: s
       {dropIndex > 0 && (
         <p className="fb-drop-note">
           <IconAlert size={14} aria-hidden="true" />
-          <span>
-            Основний відсів: <b>{steps[dropIndex - 1].label}</b> → <b>{steps[dropIndex].label}</b> — далі не проходять{' '}
-            <b>{formatPercent(dropShare * 100)}</b>.
-          </span>
+          {compact ? (
+            <span>
+              Основний відсів: <b>{steps[dropIndex - 1].label} → {steps[dropIndex].label}</b> (−{formatPercent(dropShare * 100)})
+            </span>
+          ) : (
+            <span>
+              Основний відсів: <b>{steps[dropIndex - 1].label}</b> → <b>{steps[dropIndex].label}</b> — далі не проходять{' '}
+              <b>{formatPercent(dropShare * 100)}</b>.
+            </span>
+          )}
         </p>
       )}
     </div>
@@ -336,22 +344,22 @@ function Tile({
   return (
     <div className={`ls-tile tone-${tone ?? 'accent'}`} style={{ '--i': index } as React.CSSProperties}>
       <div className="ls-tile-top">
-        <span className="ls-tile-label">{label}</span>
         <span className="ls-tile-icon" aria-hidden="true">
           {icon}
         </span>
+        <span className="ls-tile-label">{label}</span>
       </div>
-      <div className="ls-tile-value">{value}</div>
-      <div className="ls-tile-foot">
-        {delta ? <span className={`kpi-delta is-${delta.tone}`}>{delta.text}</span> : <span className="ls-tile-muted">—</span>}
-        {sub && <span className="ls-tile-sub">{sub}</span>}
+      <div className="ls-tile-value">
+        {value}
+        {delta && <span className={`kpi-delta is-${delta.tone}`}>{delta.text}</span>}
       </div>
+      {sub && <div className="ls-tile-sub">{sub}</div>}
     </div>
   )
 }
 
-const CHART_H = 190
-const CHART_PAD = { top: 12, right: 34, bottom: 22, left: 34 }
+const CHART_H = 150
+const CHART_PAD = { top: 8, right: 30, bottom: 20, left: 30 }
 
 // A round-ish ceiling so the gridlines land on readable numbers.
 function niceCeil(max: number): number {
@@ -365,7 +373,7 @@ function niceCeil(max: number): number {
  * own right scale — on a shared one they'd be flattened against the axis,
  * since a landing usually sees many times more visitors than leads.
  */
-function TrendChart({ days }: { days: LandingDay[] }) {
+function TrendChart({ days, height = CHART_H }: { days: LandingDay[]; height?: number }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const [hover, setHover] = useState<number | null>(null)
@@ -383,7 +391,7 @@ function TrendChart({ days }: { days: LandingDay[] }) {
   const ceil = niceCeil(Math.max(...days.map((d) => d.visitors), 0))
   const ceilR = niceCeil(Math.max(...days.map((d) => Math.max(d.leads, d.sales)), 0))
   const innerW = Math.max(0, width - CHART_PAD.left - CHART_PAD.right)
-  const innerH = CHART_H - CHART_PAD.top - CHART_PAD.bottom
+  const innerH = height - CHART_PAD.top - CHART_PAD.bottom
   const slot = days.length > 0 ? innerW / days.length : 0
   const barW = Math.max(1.5, Math.min(22, slot * 0.62))
   const x = (i: number) => CHART_PAD.left + slot * i + slot / 2
@@ -407,7 +415,7 @@ function TrendChart({ days }: { days: LandingDay[] }) {
         </span>
       </div>
       {width > 0 && (
-        <svg width={width} height={CHART_H} role="img" aria-label="Відвідувачі, ліди та продажі по днях">
+        <svg width={width} height={height} role="img" aria-label="Відвідувачі, ліди та продажі по днях">
           {[0, 0.5, 1].map((f) => (
             <g key={f}>
               <line className="ls-grid" x1={CHART_PAD.left} x2={width - CHART_PAD.right} y1={y(ceil * f)} y2={y(ceil * f)} />
@@ -443,7 +451,7 @@ function TrendChart({ days }: { days: LandingDay[] }) {
           )}
           {days.map((d, i) =>
             i % labelEvery === 0 || i === days.length - 1 ? (
-              <text key={`t${d.date}`} className="ls-axis" x={x(i)} y={CHART_H - 6} textAnchor="middle">
+              <text key={`t${d.date}`} className="ls-axis" x={x(i)} y={height - 6} textAnchor="middle">
                 {formatDay(d.date)}
               </text>
             ) : null,
@@ -455,7 +463,7 @@ function TrendChart({ days }: { days: LandingDay[] }) {
               x={x(i) - slot / 2}
               y={0}
               width={slot}
-              height={CHART_H}
+              height={height}
               onMouseEnter={() => setHover(i)}
               onTouchStart={() => setHover(i)}
             />
@@ -529,9 +537,11 @@ interface LandingStatsProps {
   /** Shows the landing picker and the per-landing table (dashboard). */
   onLandingChange?: (id: string | null) => void
   variant: 'section' | 'modal'
+  /** Section heading, laid out on one row with the landing picker. */
+  title?: React.ReactNode
 }
 
-export function LandingStats({ period, landingId, onLandingChange, variant }: LandingStatsProps) {
+export function LandingStats({ period, landingId, onLandingChange, variant, title }: LandingStatsProps) {
   const { data, prev, error, loading } = useLandingAnalytics(period, landingId)
   const currency = useBaseCurrency()
   const [landings, setLandings] = useState<LandingRef[]>([])
@@ -564,18 +574,18 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
   const toLead = t ? share(t.leads, t.visitors) : null
   const toSale = t ? share(t.sales, t.leads) : null
   const prevToLead = prev ? share(prev.leads, prev.visitors) : null
-  const insights = t ? buildInsights(t, prev, currency) : []
+  const insights = t ? buildInsights(t, prev, currency).slice(0, variant === 'section' ? 3 : 4) : []
   const pages = (data?.pages ?? []).slice().sort((a, b) => b.visitors - a.visitors || b.leads - a.leads)
   const maxVisitors = Math.max(1, ...pages.map((p) => p.visitors))
 
   return (
     <div className={`ls ls-${variant}${loading && data ? ' is-refreshing' : ''}`}>
-      {onLandingChange && (
+      {(title || onLandingChange) && (
         <div className="ls-toolbar">
-          <label className="ls-select-label" htmlFor="ls-landing">
-            Лендінг
-          </label>
-          <select id="ls-landing" className="input ls-select" value={landingId ?? ''} onChange={(e) => onLandingChange(e.target.value || null)}>
+          {title}
+          {onLandingChange && (
+            <div className="ls-toolbar-pick">
+          <select id="ls-landing" className="input ls-select" aria-label="Лендінг" value={landingId ?? ''} onChange={(e) => onLandingChange(e.target.value || null)}>
             <option value="">Усі лендінги</option>
             {landings.map((l) => (
               <option key={l.id} value={l.id}>
@@ -589,6 +599,8 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
               Скинути
             </button>
           )}
+            </div>
+          )}
         </div>
       )}
 
@@ -597,7 +609,7 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
           index={0}
           tone="ai"
           icon={<IconUsers size={15} />}
-          label="Унікальні відвідувачі"
+          label="Відвідувачі"
           value={t ? formatInt(t.visitors) : '…'}
           delta={t ? countDelta(t.visitors, prev?.visitors) : null}
         />
@@ -605,7 +617,7 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
           index={1}
           tone="ai"
           icon={<IconEye size={15} />}
-          label="Перегляди сторінки"
+          label="Перегляди"
           value={t ? formatInt(t.views) : '…'}
           sub={t && t.visitors > 0 ? `${(t.views / t.visitors).toFixed(1)} на відвідувача` : undefined}
           delta={t ? countDelta(t.views, prev?.views) : null}
@@ -631,15 +643,15 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
           index={4}
           tone="violet"
           icon={<IconClock size={15} />}
-          label="Середній час на сторінці"
+          label="Час на сторінці"
           value={t ? formatDuration(t.avg_duration_ms) : '…'}
-          sub={t && t.timed_views > 0 ? `за ${formatInt(t.timed_views)} переглядами` : undefined}
+          sub={t && t.timed_views > 0 ? `з ${formatInt(t.timed_views)} переглядів` : undefined}
           delta={t && prev && t.avg_duration_ms > 0 && prev.avg_duration_ms > 0 ? countDelta(t.avg_duration_ms, prev.avg_duration_ms) : null}
         />
         <Tile
           index={5}
           icon={<IconPercent size={15} />}
-          label="Конверсія лендінгу"
+          label="Конверсія в ліда"
           value={t ? formatPercent(toLead) : '…'}
           sub={t ? <>лід → продаж: <b>{formatPercent(toSale)}</b></> : undefined}
           delta={t ? pointsDelta(toLead, prevToLead) : null}
@@ -654,6 +666,7 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
               <span className="ls-panel-hint">де відсіюються відвідувачі</span>
             </div>
             <FunnelBars
+              compact={variant === 'section'}
               steps={[
                 { key: 'visitors', label: 'Відвідали сторінку', count: t.visitors },
                 { key: 'clicks', label: 'Натиснули кнопку', count: t.clicks },
@@ -667,7 +680,7 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
               <h4>Динаміка по днях</h4>
               <span className="ls-panel-hint">наведіть на день</span>
             </div>
-            <TrendChart days={data.daily} />
+            <TrendChart days={data.daily} height={variant === 'modal' ? 300 : CHART_H} />
           </div>
         </div>
       )}
@@ -709,7 +722,7 @@ export function LandingStats({ period, landingId, onLandingChange, variant }: La
                 <span className="rank-num" data-label="Ліди">
                   {formatInt(p.leads)}
                 </span>
-                <span className="rank-num" data-label="Конверсія">
+                <span className="rank-num" data-label="Конверсія в ліда">
                   <span className={`rank-pill${cr !== null && cr >= 10 ? ' is-good' : ''}`}>{formatPercent(cr)}</span>
                 </span>
                 <span className="rank-num" data-label="Продажі">

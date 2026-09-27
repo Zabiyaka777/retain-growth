@@ -1129,44 +1129,31 @@ export default function Analytics() {
           )}
         </div>
 
-      </div>
-
-      <section className="card analytics-section ls-section" style={{ '--i': 6 } as React.CSSProperties}>
-        <div className="analytics-section-top">
-          <div className="analytics-section-title">
-            <span className="kpi-icon" aria-hidden="true">
-              <IconBarChart size={16} />
-            </span>
-            <div>
-              <h3>Стата по лендінгах</h3>
-              <p>Відвідувачі, ліди й продажі з ваших лендінгів за обраний угорі період</p>
-            </div>
-          </div>
-        </div>
-        <LandingStats period={period} landingId={statsLandingId} onLandingChange={setStatsLandingId} variant="section" />
-      </section>
-
-      <section className="card analytics-section analytics-funnel-card" style={{ '--i': 7 } as React.CSSProperties}>
-        <div className="analytics-section-top">
-          <div className="analytics-section-title">
+        <div className="card analytics-live-card analytics-funnel-card" style={{ '--i': 6 } as React.CSSProperties}>
+          <div className="kpi-card-top">
+            <span className="kpi-label">Аналітична воронка</span>
             <span className="kpi-icon" aria-hidden="true">
               <IconTarget size={16} />
             </span>
-            <div>
-              <h3>Аналітична воронка</h3>
-              <p>Скільки лідів дійшли до кожного етапу продажу за період</p>
-            </div>
           </div>
-          {!stageLoading && !stageError && stages.length > 0 && (
-            <div
-              className="analytics-section-tools"
-              title={`Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді сума на етапі по кожному ліду.${selectedFunnelId ? ' Показані лише ліди з посилань цього тунелю — прямі переходи не потрапляють.' : ''}`}
-            >
+
+          {stageLoading ? (
+            <div className="kpi-value">…</div>
+          ) : stageError ? (
+            <div className="alert alert-error">
+              <IconAlert size={16} />
+              <span>{stageError}</span>
+            </div>
+          ) : stages.length === 0 ? (
+            <p className="kpi-hint">Ще немає етапів продажу — додайте conversion-вузол у тунель або оберіть етап у профілі ліда.</p>
+          ) : (
+            <>
               <select
                 className="input stage-funnel-select"
                 value={selectedFunnelId}
                 onChange={(e) => setSelectedFunnelId(e.target.value)}
                 aria-label="Тунель"
+                title={`Кількість — унікальні ліди, які досягли етапу в обраний період. Сума — остання зафіксована в цьому періоді сума на етапі по кожному ліду.${selectedFunnelId ? ' Показані лише ліди з посилань цього тунелю — прямі переходи не потрапляють.' : ''}`}
               >
                 <option value="">Усі тунелі</option>
                 {funnels.map((f) => (
@@ -1175,58 +1162,47 @@ export default function Analytics() {
                   </option>
                 ))}
               </select>
-            </div>
-          )}
-        </div>
-
-        {stageLoading ? (
-          <p className="settings-row-hint">Завантаження…</p>
-        ) : stageError ? (
-          <div className="alert alert-error">
-            <IconAlert size={16} />
-            <span>{stageError}</span>
-          </div>
-        ) : stages.length === 0 ? (
-          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
-            <h3>Ще немає етапів продажу</h3>
-            <p>Додайте conversion-вузол у тунель або оберіть етап у профілі ліда.</p>
-          </div>
-        ) : (
-          <div className="stage-funnel-layout">
-            <FunnelBars
-              unit="лідів"
-              steps={funnelSteps.map((step) => ({
-                key: step.id,
-                label: step.name,
-                count: step.leads,
-                note: step.total > 0 ? `${formatMoney(step.total)} ${baseCurrency}` : undefined,
-              }))}
-            />
-            {funnelSteps.length > 1 && (
-              <div className="stage-funnel-summary">
-                <div className="stage-funnel-stat">
+              <FunnelBars
+                compact
+                steps={funnelSteps.map((step) => ({
+                  key: step.id,
+                  label: step.name,
+                  count: step.leads,
+                  note: step.total > 0 ? `${formatMoney(step.total)} ${baseCurrency}` : undefined,
+                }))}
+              />
+              {funnelSteps.length > 1 && (
+                <div className="stage-funnel-total">
                   <span>Наскрізна конверсія</span>
                   <b>
                     {formatPercent(
                       funnelSteps[0].leads > 0 ? (funnelSteps[funnelSteps.length - 1].leads / funnelSteps[0].leads) * 100 : null,
                     )}
                   </b>
-                  <small>
-                    {funnelSteps[0].name} → {funnelSteps[funnelSteps.length - 1].name}
-                  </small>
                 </div>
-                <div className="stage-funnel-stat">
-                  <span>Сума на останньому етапі</span>
-                  <b>
-                    {formatMoney(funnelSteps[funnelSteps.length - 1].total)} <small>{baseCurrency}</small>
-                  </b>
-                  <small>{funnelSteps[funnelSteps.length - 1].leads} лідів</small>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <section className="card analytics-section ls-section" style={{ '--i': 7 } as React.CSSProperties}>
+        <LandingStats
+          period={period}
+          landingId={statsLandingId}
+          onLandingChange={setStatsLandingId}
+          variant="section"
+          title={
+            <div className="analytics-section-title">
+              <span className="kpi-icon" aria-hidden="true">
+                <IconBarChart size={16} />
+              </span>
+              <h3>Стата по лендінгах</h3>
+            </div>
+          }
+        />
       </section>
+
 
       <section className="card analytics-section analytics-sources-card" style={{ '--i': 8 } as React.CSSProperties}>
         <div className="analytics-section-top">
@@ -1234,27 +1210,9 @@ export default function Analytics() {
             <span className="kpi-icon" aria-hidden="true">
               <IconTrendingUp size={16} />
             </span>
-            <div>
-              <h3>Підписки за джерелом</h3>
-              <p>Лідогенераційні посилання: хто приводить аудиторію і хто її втрачає</p>
-            </div>
+            <h3>Підписки за джерелом</h3>
           </div>
-        </div>
-
-        {loading ? (
-          <p className="settings-row-hint">Завантаження…</p>
-        ) : error ? (
-          <div className="alert alert-error">
-            <IconAlert size={16} />
-            <span>{error}</span>
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
-            <h3>Ще немає лідогенераційних посилань</h3>
-            <p>Створіть посилання в розділі «Лідогенерація», щоб побачити статистику підписок тут.</p>
-          </div>
-        ) : (
-          <>
+          {!loading && !error && rows.length > 0 && (
             <div className="source-summary">
               <div className="source-chip">
                 <span>Джерел</span>
@@ -1275,7 +1233,23 @@ export default function Analytics() {
                 </div>
               )}
             </div>
+          )}
+        </div>
 
+        {loading ? (
+          <p className="settings-row-hint">Завантаження…</p>
+        ) : error ? (
+          <div className="alert alert-error">
+            <IconAlert size={16} />
+            <span>{error}</span>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
+            <h3>Ще немає лідогенераційних посилань</h3>
+            <p>Створіть посилання в розділі «Лідогенерація», щоб побачити статистику підписок тут.</p>
+          </div>
+        ) : (
+          <>
             <div className="rank">
               <div className="rank-head source-cols">
                 <span>Посилання</span>
