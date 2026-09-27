@@ -480,6 +480,15 @@ export default function LandingPageForm() {
   // Hidden while the slug is someone else's — the link would open their page.
   const publicUrl = slugValid && !slugReserved && slugState !== 'taken' ? `${window.location.origin}/lp/${slug}` : ''
 
+  const pageHeader = (
+    <div className="page-header">
+      <div>
+        <h1 className="page-title">{isEditing ? 'Редагування лендінга' : 'Новий лендінг'}</h1>
+        <p className="page-description">Клікніть на будь-який текст, картинку чи кнопку прямо на макеті — редагується на місці</p>
+      </div>
+    </div>
+  )
+
   return (
     <div className="page fade-in lpe-editor-page">
       <div className="lpe-stickybar">
@@ -531,27 +540,19 @@ export default function LandingPageForm() {
         )}
       </div>
 
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{isEditing ? 'Редагування лендінга' : 'Новий лендінг'}</h1>
-          <p className="page-description">Клікніть на будь-який текст, картинку чи кнопку прямо на макеті — редагується на місці</p>
-        </div>
-      </div>
-
-      {error && (
-        <div className="alert alert-error">
-          <IconAlert size={16} />
-          <span>{error}</span>
-        </div>
-      )}
-
       {loading ? (
-        <p style={{ color: 'var(--fg-muted)' }}>Завантаження…</p>
+        <>
+          {pageHeader}
+          <p style={{ color: 'var(--fg-muted)' }}>Завантаження…</p>
+        </>
       ) : notFound ? (
-        <div className="alert alert-error">
-          <IconAlert size={16} />
-          <span>Лендінг не знайдено</span>
-        </div>
+        <>
+          {pageHeader}
+          <div className="alert alert-error">
+            <IconAlert size={16} />
+            <span>Лендінг не знайдено</span>
+          </div>
+        </>
       ) : (
         <div className="lpe-stage">
           <div className="lpe-phone-wrap">
@@ -566,7 +567,17 @@ export default function LandingPageForm() {
             <PhoneScrollbar screenRef={screenRef} />
           </div>
 
+          {/* Title lives in the right column, not across both: the phone column
+              starts right under the sticky button bar and gets the whole
+              screen height. */}
           <aside className="lpe-side">
+            {pageHeader}
+            {error && (
+              <div className="alert alert-error">
+                <IconAlert size={16} />
+                <span>{error}</span>
+              </div>
+            )}
             <div className="card lpe-panel">
               <div className="tabs lpe-tabs">
                 <button type="button" className={`tab-trigger${tab === 'main' ? ' active' : ''}`} onClick={() => setTab('main')}>
@@ -993,7 +1004,7 @@ export default function LandingPageForm() {
             <div className="card lpe-hints">
               <h3>Як редагувати</h3>
               <ul>
-                <li><b>Текст</b> — клікабельний весь: заголовок, підписи, плашки, футер. Enter завершує, Esc скасовує.</li>
+                <li><b>Текст</b> — клікабельний весь: заголовок, підписи, плашки, футер. В описах і пунктах переваг Enter — новий рядок, в інших полях Enter завершує. Зберегти поле — клік поза ним або Esc.</li>
                 <li><b>Колір</b> — наведіть на заголовок чи підзаголовок, над ним з’являться кольорові крапки. Перша — типовий колір теми.</li>
                 <li><b>Картинка</b> — перетягніть файл на зону або клікніть на неї. PNG/JPG/WebP до 4 MB. Перемикач 1:1 / 2:3 у кутку.</li>
                 <li><b>Кнопки</b> — показані всі три месенджери; перемикач вмикає кнопку, крапки над нею змінюють колір, другий рядок теж редагується.</li>

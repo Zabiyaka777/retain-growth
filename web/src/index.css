@@ -5348,7 +5348,7 @@ input[type='password'] {
 @keyframes lpPulseLive { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pain) 60%, transparent); } 70% { box-shadow: 0 0 0 9px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .lp-pains { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 7px; }
 .lp-pains li { display: inline-flex; align-items: center; gap: 7px; font: 500 12.5px/1.3 'Inter', sans-serif; padding: 9px 12px 9px 9px; border-radius: 10px; color: var(--lp-ink); border: 1px solid color-mix(in srgb, var(--pain) 30%, transparent); background: color-mix(in srgb, var(--pain) 8%, transparent); }
-.lp-pains li > span:not(.lp-pain-x) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--pain) 70%, transparent); text-decoration-thickness: 1.5px; }
+.lp-pains li > .lp-li-x { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--pain) 70%, transparent); text-decoration-thickness: 1.5px; }
 .lp-pain-x svg { width: 14px; height: 14px; stroke: var(--pain); stroke-width: 2.6; stroke-linecap: round; fill: none; display: block; }
 .lp-ps-bridge { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 20px; }
 .lp-ps-ln { width: 2px; height: 54px; border-radius: 2px; background: linear-gradient(180deg, var(--pain), var(--accent)); position: relative; overflow: hidden; }
@@ -5491,6 +5491,10 @@ a.lp-cta-ms:hover .lp-cta-ico::after { animation: lpFlash .55s ease-out; }
 /* ---------- in-place editing affordances ---------- */
 .lp-edit { outline: 1px dashed transparent; outline-offset: 3px; border-radius: 6px; cursor: text; transition: outline-color .2s, background .2s; min-width: 1ch; }
 .lp-edit-ml { white-space: pre-wrap; }
+/* Bullet text keeps its line breaks on the public page too (pre-wrap above
+   covers the editor; pre-line here wouldn't let a typed trailing space show). */
+.lp-li-x { min-width: 0; }
+.lp-li-x:not(.lp-edit-ml) { white-space: pre-line; }
 .lp-edit:hover { outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .lp-edit:focus { outline: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .lp-edit:empty::before { content: attr(data-placeholder); color: var(--lp-muted); opacity: .7; pointer-events: none; }
@@ -5579,22 +5583,24 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lpe-swatches button.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #fff; }
 .lpe-swatches input[type=color] { width: 30px; height: 26px; padding: 0; border: 1px solid var(--border-strong); border-radius: 8px; background: none; cursor: pointer; }
 .lpe-actions { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
-/* Fills whatever height .lpe-editor-page's flex column leaves it (see that
-   class), instead of each column guessing its own via a vh calc()/subtracted
-   offset — grid-template-rows makes the single row shrinkable (grid rows
-   default to a content-based minimum, same automatic-min-size trap flex
-   items have) so the row can actually be less tall than the settings panel's
-   full content once .lpe-side scrolls internally instead of the row growing
-   to fit it. */
-.lpe-stage { display: grid; grid-template-columns: 440px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 2rem; }
-@media (max-width: 1100px) { .lpe-stage { grid-template-columns: 1fr; grid-template-rows: none; } }
-.lpe-phone-wrap { display: flex; align-items: center; justify-content: center; position: relative; padding: 10px 0; min-height: 0; }
+/* The page scrolls normally; the settings column is as tall as its content
+   and scrolls past the phone, which stays put (sticky) and owns the full
+   screen height below the sticky button bar. align-items: start is what lets
+   the phone cell be sticky at all — a stretched grid item is as tall as the
+   row and has nowhere to stick within it. */
+.lpe-stage { display: grid; grid-template-columns: 440px minmax(0, 1fr); align-items: start; gap: 2rem; }
+@media (max-width: 1100px) { .lpe-stage { grid-template-columns: 1fr; } }
+/* --lpe-bar-h (on .lpe-editor-page) = the sticky button bar's height; the phone
+   sticks 1rem under it and is exactly as tall as what's left of the screen, so
+   .lpe-phone's max-height: 100% resolves against a definite height. */
+.lpe-phone-wrap { display: flex; align-items: flex-start; justify-content: center; position: sticky; top: calc(var(--lpe-bar-h) + 1rem); height: calc(100vh - var(--lpe-bar-h) - 2rem); padding: 10px 0; }
+@media (max-width: 1100px) { .lpe-phone-wrap { position: relative; top: auto; height: auto; } }
 .lpe-phone-glow { position: absolute; inset: 10% 5%; filter: blur(70px); opacity: .55; z-index: 0; border-radius: 50%; transition: background .6s; pointer-events: none; }
 .lpe-phone-glow.white { background: radial-gradient(circle, rgba(255,255,255,.35), transparent 70%); }
 .lpe-phone-glow.dark { background: radial-gradient(circle, rgba(255,140,90,.35), transparent 70%); }
 .lpe-phone-glow.rg { background: radial-gradient(circle, rgba(74,222,154,.4), rgba(77,163,255,.25) 50%, transparent 75%); }
-/* Fills .lpe-phone-wrap (whatever that cell's actual height turns out to be —
-   see .lpe-editor-page) rather than guessing a vh-minus-pixels offset. Both
+/* Fills .lpe-phone-wrap (whatever that cell's actual height turns out to be)
+   rather than guessing a vh-minus-pixels offset. Both
    width and height are auto, constrained only by max-width/max-height —
    confirmed live that this is the one combination that actually shrinks
    BOTH dimensions together via aspect-ratio:
@@ -5702,16 +5708,8 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 
 /* ---------- editor: settings panel in the right column ---------- */
 /* .lpe-stage itself is defined once, up near .lpe-phone-wrap/.lpe-phone. */
-/* Its own scroll region (min-height: 0 lets it shrink below its content in
-   the fixed-height grid row, overflow-y: auto is what actually scrolls) —
-   the settings form is long, and .lpe-stage's row is bounded by
-   .lpe-editor-page's height now, not by however tall this panel happens to
-   be. position: sticky is gone with it: the whole editor no longer scrolls
-   as a page (see .lpe-editor-page), so there's no scroll container left for
-   "stick to the top of" — a plain flex item that's already pinned in place
-   by the layout does the same job. */
-.lpe-side { display: flex; flex-direction: column; gap: 1rem; min-height: 0; overflow-y: auto; padding-right: 0.25rem; }
-@media (max-width: 1100px) { .lpe-side { overflow-y: visible; } }
+/* Full height of its content — the page itself scrolls, no inner scroll box. */
+.lpe-side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 .lpe-panel { display: flex; flex-direction: column; }
 .lpe-tabs { margin-bottom: 1rem; }
 .lpe-fields { display: flex; flex-direction: column; gap: 0.875rem; }
@@ -6524,25 +6522,17 @@ a.lp-cta-custom:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0
 .admin-landing-signs { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
 .admin-landing-link { color: var(--accent); font-weight: 500; display: block; }
 
-/* ---------- landing editor: own the viewport instead of scrolling the page ----------
-   .main is already flex: 1; min-height: 0 inside .app-shell (min-height:
-   100vh), so a child that itself claims height: 100vh and stretches .main to
-   match is the same proven pattern .page-workspace (Chats.tsx) already uses
-   — no sidebar/topbar offset to subtract, the sidebar sits beside .main, not
-   above it. Scoped to this page's own class, .page itself stays untouched
-   for every other screen that still wants to scroll normally. */
-.lpe-editor-page { height: 100vh; overflow: hidden; }
-.lpe-editor-page .page-header { flex-shrink: 0; }
-.lpe-editor-page .lpe-stickybar { flex-shrink: 0; }
-.lpe-editor-page .lpe-stage { flex: 1; min-height: 0; }
-@media (max-width: 1100px) {
-  /* Below the breakpoint .lpe-stage already stacks to a single column (see
-     its own media query) — the phone above a normal-scrolling settings
-     panel, same as any other page, reads better on a narrow/short screen
-     than two independently-clipped scroll regions stacked on top of each
-     other. */
-  .lpe-editor-page { height: auto; overflow: visible; }
-}
+/* ---------- landing editor: page frame ----------
+   Scrolls like any other page. Small top padding so the sticky button bar —
+   the first thing on the page now that the title moved into the right
+   column — sits at the top from the start, and the phone under it gets the
+   screen height instead of a page header. */
+/* padding-bottom 1rem, not .page's 2.5rem: the phone's sticky range ends where
+   .lpe-stage ends, so with a taller bottom padding the last scroll pixels push
+   the phone up under the button bar. 1rem = exactly the gap the phone keeps
+   below itself (its height leaves 2rem: 1rem above, 1rem below). */
+.lpe-editor-page { --lpe-bar-h: 5rem; padding-top: 0.75rem; padding-bottom: 1rem; }
+.lpe-editor-page .lpe-stickybar { min-height: var(--lpe-bar-h); box-sizing: border-box; }
 
 /* ---------- landing editor: top bar with the save / publish controls ---------- */
 .lpe-stickybar {

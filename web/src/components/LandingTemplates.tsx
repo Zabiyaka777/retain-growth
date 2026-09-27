@@ -279,7 +279,7 @@ function Editable({
   edit,
   className,
   placeholder,
-  tag = 'span',
+  tag,
   multiline,
   style,
 }: {
@@ -293,7 +293,10 @@ function Editable({
   style?: React.CSSProperties
 }) {
   const ref = useRef<HTMLElement>(null)
-  const Tag = tag as 'span'
+  // Multiline fields default to a block element: contentEditable's Enter
+  // handling differs between inline and block hosts across engines (WebKit
+  // in particular), and a block host is the case every engine agrees on.
+  const Tag = (tag ?? (multiline ? 'div' : 'span')) as 'span'
   // React must not fight the browser for the text node while the user types:
   // keep the element uncontrolled and only sync from props when not focused.
   useEffect(() => {
@@ -747,7 +750,10 @@ function Bullets({ config, edit, variant, placeholder }: { config: LandingConfig
               <span className="lp-bul-ck">{ICO.check}</span>
             </>
           )}
-          <Editable value={b} edit={!!edit} placeholder={placeholder} onCommit={(v) => set(i, v)} />
+          {/* multiline: these are the "Переваги" items tenants actually edit
+              (config.bullets) — long, several sentences, and they want line
+              breaks inside one item. Enter adds a line; Esc/click-away commits. */}
+          <Editable className="lp-li-x" value={b} edit={!!edit} multiline placeholder={placeholder} onCommit={(v) => set(i, v)} />
           {edit && (
             <button type="button" className="lp-rm" onClick={() => set(i, '')} aria-label="Прибрати пункт">
               {ICO.x}
