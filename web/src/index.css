@@ -5571,8 +5571,13 @@ a.lp-cta-ms:hover .lp-cta-ico::after { animation: lpFlash .55s ease-out; }
 
 /* Chat orb — a quiet glass button; its menu repeats every enabled CTA. The
    wrap is exactly the button's size so the menu (absolute) never shifts it. */
-.lp-orb-wrap { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 30; width: 40px; height: 40px; }
-.lpe-screen .lp-orb-wrap, .lp.static .lp-orb-wrap { position: absolute; }
+/* absolute, not fixed: it now lives inside .lp-inner (see LandingTemplate),
+   so left/top: % resolve against that same box in every context (editor,
+   static thumbnail, public page) — the one the drag math in OrbMenu also
+   measures. Fixed used to mean the public page positioned it against the
+   viewport while the drag was computed against .lp-inner's full page height,
+   so a position dragged in the editor landed somewhere else on the live page. */
+.lp-orb-wrap { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); z-index: 30; width: 40px; height: 40px; }
 .lp-orb {
   width: 100%; height: 100%; padding: 0; position: relative; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
   color: var(--lp-ink); border: 1px solid color-mix(in srgb, var(--lp-ink) 16%, transparent);
@@ -5691,19 +5696,41 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lpe-swatches button.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #fff; }
 .lpe-swatches input[type=color] { width: 30px; height: 26px; padding: 0; border: 1px solid var(--border-strong); border-radius: 8px; background: none; cursor: pointer; }
 .lpe-actions { display: flex; gap: 0.5rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
-.lpe-stage { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 2rem; align-items: start; }
-@media (max-width: 1100px) { .lpe-stage { grid-template-columns: 1fr; } }
-.lpe-phone-wrap { display: flex; justify-content: center; position: relative; padding: 10px 0; }
+/* Fills whatever height .lpe-editor-page's flex column leaves it (see that
+   class), instead of each column guessing its own via a vh calc()/subtracted
+   offset — grid-template-rows makes the single row shrinkable (grid rows
+   default to a content-based minimum, same automatic-min-size trap flex
+   items have) so the row can actually be less tall than the settings panel's
+   full content once .lpe-side scrolls internally instead of the row growing
+   to fit it. */
+.lpe-stage { display: grid; grid-template-columns: 440px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 2rem; }
+@media (max-width: 1100px) { .lpe-stage { grid-template-columns: 1fr; grid-template-rows: none; } }
+.lpe-phone-wrap { display: flex; align-items: center; justify-content: center; position: relative; padding: 10px 0; min-height: 0; }
 .lpe-phone-glow { position: absolute; inset: 10% 5%; filter: blur(70px); opacity: .55; z-index: 0; border-radius: 50%; transition: background .6s; pointer-events: none; }
 .lpe-phone-glow.white { background: radial-gradient(circle, rgba(255,255,255,.35), transparent 70%); }
 .lpe-phone-glow.dark { background: radial-gradient(circle, rgba(255,140,90,.35), transparent 70%); }
 .lpe-phone-glow.rg { background: radial-gradient(circle, rgba(74,222,154,.4), rgba(77,163,255,.25) 50%, transparent 75%); }
-/* Shrinks on short viewports instead of running off the bottom of the page —
-   height is capped to the visible area (with room for the sticky top bar and
-   page header above it), and width follows the same 400:840 ratio via
-   aspect-ratio (needs width: auto — an explicit width would make aspect-ratio
-   a no-op and let the frame distort instead of shrink). */
-.lpe-phone { width: auto; max-width: min(400px, 100%); aspect-ratio: 400 / 840; height: min(840px, max(360px, calc(100vh - 280px))); border-radius: 58px; background: #0c0d11; padding: 11px; position: relative; z-index: 1;
+/* Fills .lpe-phone-wrap (whatever that cell's actual height turns out to be —
+   see .lpe-editor-page) rather than guessing a vh-minus-pixels offset. Both
+   width and height are auto, constrained only by max-width/max-height —
+   confirmed live that this is the one combination that actually shrinks
+   BOTH dimensions together via aspect-ratio:
+     - width: 400px + max-height: 100% (an earlier attempt) does NOT: a
+       *specified* width is used outright, height is derived from it and
+       only then clamped by max-height — the clamp never feeds back into a
+       width recompute, so the box quietly stops matching 400:840 the
+       moment max-height binds (measured 400×712 instead of 400×840-scaled
+       339×712 — same width, wrong height, visibly squat).
+     - height: min(840px, calc(100vh - Npx)) + width: auto (an even earlier
+       attempt) technically shrinks both dimensions correctly, but the fixed
+       Npx offset it subtracts is a guess: too small and the phone still
+       overflows a short screen, too large and it renders needlessly small
+       on an ordinary laptop screen even with room to spare.
+   auto/auto + max-width/max-height is the only version where the browser's
+   own aspect-ratio "transferred size" algorithm can shrink whichever axis
+   is actually the tighter constraint and carry the other one along with it,
+   with no viewport-height arithmetic to get wrong. */
+.lpe-phone { width: auto; max-width: min(400px, 100%); aspect-ratio: 400 / 840; height: auto; max-height: 100%; border-radius: 58px; background: #0c0d11; padding: 11px; position: relative; z-index: 1;
   box-shadow: 0 0 0 1.5px #2a2e36, 0 0 0 6px #111318, 0 0 0 7px #2a2e36, 0 60px 120px -30px rgba(0,0,0,.85), inset 0 0 0 1px rgba(255,255,255,.05); }
 .lpe-phone .btnL { position: absolute; left: -9px; top: 180px; width: 3px; height: 34px; border-radius: 2px; background: #2a2e36; }
 .lpe-phone .btnL2 { position: absolute; left: -9px; top: 230px; width: 3px; height: 64px; border-radius: 2px; background: #2a2e36; }
@@ -5775,10 +5802,17 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lp-card-link:hover { color: var(--accent); text-decoration: underline; }
 
 /* ---------- editor: settings panel in the right column ---------- */
-.lpe-stage { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 1.5rem; align-items: start; }
-@media (max-width: 1100px) { .lpe-stage { grid-template-columns: 1fr; } }
-.lpe-side { display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 1rem; }
-@media (max-width: 1100px) { .lpe-side { position: static; } }
+/* .lpe-stage itself is defined once, up near .lpe-phone-wrap/.lpe-phone. */
+/* Its own scroll region (min-height: 0 lets it shrink below its content in
+   the fixed-height grid row, overflow-y: auto is what actually scrolls) —
+   the settings form is long, and .lpe-stage's row is bounded by
+   .lpe-editor-page's height now, not by however tall this panel happens to
+   be. position: sticky is gone with it: the whole editor no longer scrolls
+   as a page (see .lpe-editor-page), so there's no scroll container left for
+   "stick to the top of" — a plain flex item that's already pinned in place
+   by the layout does the same job. */
+.lpe-side { display: flex; flex-direction: column; gap: 1rem; min-height: 0; overflow-y: auto; padding-right: 0.25rem; }
+@media (max-width: 1100px) { .lpe-side { overflow-y: visible; } }
 .lpe-panel { display: flex; flex-direction: column; }
 .lpe-tabs { margin-bottom: 1rem; }
 .lpe-fields { display: flex; flex-direction: column; gap: 0.875rem; }
@@ -6602,6 +6636,26 @@ a.lp-cta-custom:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0
 .admin-landing-review-head h3 { margin: 0 0 0.25rem; font-size: 1rem; }
 .admin-landing-signs { display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
 .admin-landing-link { color: var(--accent); font-weight: 500; display: block; }
+
+/* ---------- landing editor: own the viewport instead of scrolling the page ----------
+   .main is already flex: 1; min-height: 0 inside .app-shell (min-height:
+   100vh), so a child that itself claims height: 100vh and stretches .main to
+   match is the same proven pattern .page-workspace (Chats.tsx) already uses
+   — no sidebar/topbar offset to subtract, the sidebar sits beside .main, not
+   above it. Scoped to this page's own class, .page itself stays untouched
+   for every other screen that still wants to scroll normally. */
+.lpe-editor-page { height: 100vh; overflow: hidden; }
+.lpe-editor-page .page-header { flex-shrink: 0; }
+.lpe-editor-page .lpe-stickybar { flex-shrink: 0; }
+.lpe-editor-page .lpe-stage { flex: 1; min-height: 0; }
+@media (max-width: 1100px) {
+  /* Below the breakpoint .lpe-stage already stacks to a single column (see
+     its own media query) — the phone above a normal-scrolling settings
+     panel, same as any other page, reads better on a narrow/short screen
+     than two independently-clipped scroll regions stacked on top of each
+     other. */
+  .lpe-editor-page { height: auto; overflow: visible; }
+}
 
 /* ---------- landing editor: top bar with the save / publish controls ---------- */
 .lpe-stickybar {

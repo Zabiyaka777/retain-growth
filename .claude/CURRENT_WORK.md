@@ -9,3 +9,4 @@
 `[2026-09-24 10:30] сесія «лендінги»: CAPI для лендінгів — netlify/functions/landing-page-view.ts, web/src/pages/LandingPage.tsx`
 
 ## Зараз у роботі
+[2026-09-27 16:47] сесія «лендінг-правки»: іконки в TTV-таймлайні — landing/index.html

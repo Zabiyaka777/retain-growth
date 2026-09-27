@@ -1269,9 +1269,20 @@ export function LandingTemplate({ templateKey, config, ctaHref, onCta, edit, sta
           )}
 
           {!isEdit && !isStatic && <StickyCta config={config} ctaHref={ctaHref} onCta={onCta} anchor={ctaAnchor} />}
+
+          {/* Inside .lp-inner (not a sibling of .lp-scroll) on purpose: its
+              position: absolute (see index.css) resolves left/top: % against
+              .lp-inner's own box, the SAME box onOrbMove below measures for
+              the drag math — on the public page .lp-inner spans the whole
+              scrollable page, not just one viewport-tall screen. It used to
+              sit outside .lp-scroll as position: fixed there, so a position
+              dragged in the editor (where .lp-inner is one phone-screen tall)
+              landed somewhere else entirely once the page was long enough to
+              scroll — the button "worked" in the editor and drifted on the
+              live page. */}
+          {!isStatic && <OrbMenu config={config} ctaHref={ctaHref} onCta={onCta} edit={edit} />}
         </div>
       </div>
-      {!isStatic && <OrbMenu config={config} ctaHref={ctaHref} onCta={onCta} edit={edit} />}
     </div>
   )
 }

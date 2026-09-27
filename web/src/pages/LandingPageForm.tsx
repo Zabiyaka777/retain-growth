@@ -467,7 +467,7 @@ export default function LandingPageForm() {
   const publicUrl = slugValid && !slugReserved && slugState !== 'taken' ? `${window.location.origin}/lp/${slug}` : ''
 
   return (
-    <div className="page fade-in">
+    <div className="page fade-in lpe-editor-page">
       <div className="lpe-stickybar">
         <button type="button" className="btn btn-ghost" onClick={() => navigate('/dashboard/leadgentools?tab=landings')} style={{ paddingLeft: 0 }}>
           <IconArrowLeft size={15} />
