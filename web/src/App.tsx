@@ -15,6 +15,7 @@ import Elements from './pages/Elements'
 import LeadGenTools from './pages/LeadGenTools'
 import LeadGenLinkForm from './pages/LeadGenLinkForm'
 import InstagramTriggers from './pages/InstagramTriggers'
+import Offers from './pages/Offers'
 import Analytics from './pages/Analytics'
 import LandingPage from './pages/LandingPage'
 import LandingPageForm from './pages/LandingPageForm'
@@ -52,6 +53,7 @@ function App() {
         <Route path="leadgentools/landings/:pageId" element={<LandingPageForm />} />
         <Route path="leadgentools/:linkId" element={<LeadGenLinkForm />} />
         <Route path="instagram-triggers" element={<InstagramTriggers />} />
+        <Route path="offers" element={<Offers />} />
         <Route path="templates" element={<Navigate to="/dashboard/elements?tab=templates" replace />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="ai" element={<Navigate to="/dashboard/settings?tab=ai" replace />} />

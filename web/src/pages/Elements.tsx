@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { IconAlert, IconBolt, IconBraces, IconCheckCircle, IconEdit, IconPlus, IconSpinner, IconSync, IconTag, IconTrash } from '../components/icons'
+import { IconAlert, IconBolt, IconBraces, IconCheckCircle, IconCreditCard, IconEdit, IconPlus, IconSpinner, IconSync, IconTag, IconTrash } from '../components/icons'
 
 type Tab = 'tags' | 'variables' | 'templates' | 'quick-replies'
 
@@ -61,6 +61,14 @@ export default function Elements() {
           <IconBolt size={15} />
           Швидкі відповіді
         </button>
+        {/* Not an in-page tab — offers are big enough (price/interval/
+            recurring, used from both chat and the funnel builder) to warrant
+            their own page rather than a panel here, but this is where
+            operators look for "catalogs" so the entry point lives here. */}
+        <Link to="/dashboard/offers" className="tab-trigger">
+          <IconCreditCard size={15} />
+          Офери
+        </Link>
       </div>
 
       {tab === 'tags' && <TagsPanel />}
