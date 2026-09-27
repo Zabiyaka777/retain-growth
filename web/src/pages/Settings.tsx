@@ -62,6 +62,7 @@ export default function Settings() {
             <div className="integrations-grid">
               <IntegrationsPanel />
               <WhatsAppPanel />
+              <InstagramPanel />
             </div>
           </section>
           <section className="settings-group">
@@ -583,6 +584,179 @@ function WhatsAppPanel() {
             {submitting ? <IconSpinner size={16} /> : 'Підключити'}
           </button>
         </form>
+      </div>
+    </div>
+  )
+}
+
+interface InstagramStatus {
+  ok: boolean
+  pageName?: string
+  instagramUsername?: string
+  error?: string
+}
+
+// Same card shape as IntegrationsPanel (Telegram) / WhatsAppPanel, with one
+// real difference: there's no token to paste. Instagram connects through a
+// Facebook OAuth dialog (connect-instagram.ts's callback expects `code` +
+// `redirectUri`), and that dialog needs a public Meta App ID this app
+// doesn't expose yet — connect-instagram.ts itself refuses with a clear 503
+// until META_APP_ID/META_APP_SECRET are set. The "Підключити" button below
+// is deliberately inert until that's wired, rather than pretending an OAuth
+// flow works when it can't be tested. "Керувати тригерами" works right now
+// regardless — see InstagramTriggers.tsx's own temporary banner.
+function InstagramPanel() {
+  const { session } = useAuth()
+  const [connected, setConnected] = useState(false)
+  const [checkingStatus, setCheckingStatus] = useState(true)
+  const [checking, setChecking] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [status, setStatus] = useState<InstagramStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!session) return
+
+    supabase
+      .from('channel_credentials')
+      .select('created_at')
+      .eq('channel_type', 'instagram')
+      .maybeSingle()
+      .then(({ data }) => {
+        setConnected(Boolean(data))
+        setCheckingStatus(false)
+      })
+  }, [session])
+
+  async function getAccessToken() {
+    const { data } = await supabase.auth.getSession()
+    return data.session?.access_token ?? null
+  }
+
+  async function handleCheck() {
+    setChecking(true)
+    setStatus(null)
+
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setStatus({ ok: false, error: 'Сесія недійсна, увійдіть знову' })
+      setChecking(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/.netlify/functions/check-instagram-connection', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${accessToken}` },
+      })
+      const data = await res.json()
+      setStatus(res.ok ? data : { ok: false, error: data.error ?? 'Не вдалося перевірити зв’язок' })
+    } catch {
+      setStatus({ ok: false, error: 'Мережева помилка' })
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!window.confirm('Відключити Instagram? Підписку на webhook і збережені дані підключення буде видалено.')) {
+      return
+    }
+
+    setDisconnecting(true)
+    setError(null)
+
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setError('Сесія недійсна, увійдіть знову')
+      setDisconnecting(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/.netlify/functions/disconnect-instagram', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${accessToken}` },
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error ?? 'Не вдалося відключити Instagram')
+      } else {
+        setConnected(false)
+        setStatus(null)
+      }
+    } catch {
+      setError('Мережева помилка')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 480 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div>
+          <h3 style={{ fontSize: '1.0625rem', marginBottom: '0.375rem' }}>Instagram</h3>
+          <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
+            Підключіть Instagram Business Account (через Facebook-сторінку), щоб вести директ, коментарі й Stories.
+          </p>
+        </div>
+
+        {!checkingStatus && connected && (
+          <>
+            <div className="alert alert-info">
+              <IconCheckCircle size={16} />
+              <span>Instagram підключено</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.625rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={handleCheck} disabled={checking}>
+                {checking ? <IconSpinner size={16} /> : 'Перевірити зв’язок'}
+              </button>
+              <button type="button" className="btn btn-danger-ghost" onClick={handleDisconnect} disabled={disconnecting}>
+                {disconnecting ? <IconSpinner size={16} /> : 'Відключити'}
+              </button>
+            </div>
+
+            {status &&
+              (status.ok ? (
+                <div className="alert alert-info">
+                  <IconCheckCircle size={16} />
+                  <span>
+                    Сторінка «{status.pageName || '—'}» · Instagram @{status.instagramUsername || '—'}
+                  </span>
+                </div>
+              ) : (
+                <div className="alert alert-error">
+                  <IconAlert size={16} />
+                  <span>{status.error}</span>
+                </div>
+              ))}
+          </>
+        )}
+
+        {!checkingStatus && !connected && (
+          <>
+            {error && (
+              <div className="alert alert-error">
+                <IconAlert size={16} />
+                <span>{error}</span>
+              </div>
+            )}
+            <div className="alert alert-warning" style={{ alignItems: 'flex-start' }}>
+              <IconAlert size={16} />
+              <span>Підключення через Facebook Login ще не активовано на рівні платформи — з'явиться, щойно буде готовий Meta Business App.</span>
+            </div>
+            <button type="button" className="btn btn-primary" disabled style={{ alignSelf: 'flex-start' }} title="Ще не активовано">
+              Підключити через Facebook
+            </button>
+          </>
+        )}
+
+        <Link to="/dashboard/instagram-triggers" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}>
+          Керувати тригерами (коментарі/Stories)
+        </Link>
       </div>
     </div>
   )

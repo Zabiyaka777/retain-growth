@@ -424,24 +424,18 @@ export default function InstagramTriggers() {
   const [error, setError] = useState<string | null>(null)
   const [editingComment, setEditingComment] = useState<CommentTrigger | 'new' | null>(null)
   const [editingStory, setEditingStory] = useState<StoryTrigger | 'new' | null>(null)
-  // Drives the temporary "not connected yet" banner below — remove this
-  // state and the banner together once Settings.tsx gets its Instagram card
-  // (see the comment on the banner itself).
-  const [instagramConnected, setInstagramConnected] = useState<boolean | null>(null)
 
   async function load() {
     setLoading(true)
-    const [c, s, cred] = await Promise.all([
+    const [c, s] = await Promise.all([
       supabase.from('instagram_comment_triggers').select('*').order('created_at', { ascending: false }),
       supabase.from('instagram_story_triggers').select('*').order('created_at', { ascending: false }),
-      supabase.from('channel_credentials').select('created_at').eq('channel_type', 'instagram').maybeSingle(),
     ])
     if (c.error || s.error) {
       setError(c.error?.message ?? s.error?.message ?? 'Не вдалося завантажити тригери')
     } else {
       setCommentTriggers((c.data ?? []) as CommentTrigger[])
       setStoryTriggers((s.data ?? []) as StoryTrigger[])
-      setInstagramConnected(!!cred.data)
       setError(null)
     }
     setLoading(false)
@@ -480,17 +474,6 @@ export default function InstagramTriggers() {
           <p className="page-description">Точки входу з коментарів під постами й реакцій на Stories — ведуть у той самий граф тунелів, що і Telegram чи WhatsApp.</p>
         </div>
       </div>
-
-      {/* Temporary: Settings.tsx doesn't have an Instagram connection card
-          yet (blocked earlier by a parallel session, now just not built).
-          Remove this whole block once that card exists and links here —
-          this page keeps working by direct link either way. */}
-      {instagramConnected === false && (
-        <div className="alert alert-warning" style={{ marginBottom: '1.25rem' }}>
-          <IconAlert size={16} />
-          <span>Instagram ще не підключено. Ця сторінка керує тригерами на коментарі/Stories — вони запрацюють, коли буде додано підключення акаунта (Налаштування → Інтеграції).</span>
-        </div>
-      )}
 
       <div className="settings-group" style={{ marginBottom: '1.25rem' }}>
         <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', lineHeight: 1.6, margin: 0 }}>
