@@ -208,11 +208,14 @@ export default function AdminOrganizations() {
                     </span>
                   </span>
                   <span className="adm-cell adm-num" data-label="Рахунок / міс">
-                    {o.bill.gross > 0 ? (
+                    {/* Every org now carries a $29+ gross once formula-priced — 'active' is
+                        the only status actually billed for it, so that's the real gate now,
+                        not gross > 0 (which used to mean "has any addon enabled"). */}
+                    {o.plan_status === 'active' ? (
                       <>
                         {usd(o.bill.net)}
                         <small>
-                          {o.addons_count} мод.{o.bill.discountPct > 0 ? ` · −${o.bill.discountPct}%` : ''}
+                          {o.bill.subscriberCount.toLocaleString('uk-UA')} підп.{o.bill.discountPct > 0 ? ` · −${o.bill.discountPct}%` : ''}
                         </small>
                       </>
                     ) : (

@@ -8,6 +8,8 @@ export interface OrgBill {
   gross: number
   discountPct: number
   net: number
+  subscriberCount: number
+  managerSeats: number
 }
 
 export interface AdminOrgListItem {

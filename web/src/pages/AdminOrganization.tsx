@@ -27,6 +27,7 @@ import {
   type OrgBill,
   type PlanStatus,
 } from '../lib/adminOrgs'
+import { calcSubscriptionPrice } from '../lib/subscriptionPricing'
 
 interface Detail {
   organization: {
@@ -46,6 +47,7 @@ interface Detail {
   }
   usage: {
     leads: number
+    subscribers: number
     threads: number
     messages_30d: number
     landings: number
@@ -219,7 +221,8 @@ export default function AdminOrganization() {
   const meta = STATUS_META[status ?? 'none']
   const days = status === 'trial' ? trialDaysLeft(billing.state?.trial_ends_at ?? null) : null
   const trialTotal = billing.state ? Math.max(1, Math.round((Date.parse(billing.state.trial_ends_at) - Date.parse(billing.state.trial_started_at)) / 86_400_000)) : 14
-  const enabled = new Map(billing.addons.map((a) => [a.key, a]))
+  const seatAddon = billing.catalog.find((c) => c.key === 'extra_seat')
+  const seatPrice = seatAddon ? Number(seatAddon.price_monthly) : 5
 
   return (
     <div className={`adm adm-profile fade-in tone-${meta.tone}`}>
@@ -264,7 +267,7 @@ export default function AdminOrganization() {
 
       <div className="adm-stats adm-stats-6">
         {[
-          { label: 'Рахунок / міс', value: usd(billing.bill.net), sub: billing.bill.discountPct > 0 ? `з ${usd(billing.bill.gross)}, −${billing.bill.discountPct}%` : `${billing.addons.length} модулів`, tone: 'accent' },
+          { label: 'Рахунок / міс', value: usd(billing.bill.net), sub: billing.bill.discountPct > 0 ? `з ${usd(billing.bill.gross)}, −${billing.bill.discountPct}%` : `${billing.bill.subscriberCount.toLocaleString('uk-UA')} підписників`, tone: 'accent' },
           { label: 'Ліди', value: usage.leads.toLocaleString('uk-UA'), sub: `${usage.threads} чатів`, tone: 'ai' },
           { label: 'Повідомлень · 30 дн', value: usage.messages_30d.toLocaleString('uk-UA'), sub: `остання активність ${relativeTime(usage.last_thread_at)}`, tone: 'ai' },
           { label: 'Команда', value: String(org.members.length), sub: 'учасників', tone: 'active' },
@@ -347,53 +350,38 @@ export default function AdminOrganization() {
               )}
             </div>
 
-            <h3 className="adm-h3">Модулі</h3>
-            <ul className="adm-addons">
-              {billing.catalog.map((c) => {
-                const on = enabled.get(c.key)
-                const qty = on?.quantity ?? 1
-                const key = `addon-${c.key}`
-                return (
-                  <li key={c.key} className={on ? 'is-on' : ''}>
-                    <div className="adm-addon-text">
-                      <b>{c.name}</b>
-                      <small>
-                        {usd(Number(c.price_monthly))}/міс{c.key === 'extra_seat' ? ' за місце' : ''}
-                        {on ? ` · з ${formatDate(on.enabled_at)}` : ''}
-                      </small>
-                    </div>
-                    {on && c.key === 'extra_seat' && (
-                      <div className="adm-qty">
-                        <button type="button" disabled={busy !== null || qty <= 1} onClick={() => void run(key, { action: 'set_addon', addonKey: c.key, enabled: true, quantity: qty - 1 })}>
-                          −
-                        </button>
-                        <span>{qty}</span>
-                        <button type="button" disabled={busy !== null} onClick={() => void run(key, { action: 'set_addon', addonKey: c.key, enabled: true, quantity: qty + 1 })}>
-                          +
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className={`adm-switch${on ? ' is-on' : ''}`}
-                      role="switch"
-                      aria-checked={!!on}
-                      aria-label={`${on ? 'Вимкнути' : 'Увімкнути'} ${c.name}`}
-                      disabled={busy !== null}
-                      onClick={() =>
-                        void run(key, { action: 'set_addon', addonKey: c.key, enabled: !on, quantity: 1 }, `${on ? 'Вимкнути' : 'Увімкнути'} модуль «${c.name}» для «${org.name}»?`)
-                      }
-                    >
-                      {busy === key ? <IconSpinner size={11} /> : <i />}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <h3 className="adm-h3">Підписники</h3>
+            <div className="adm-plan-row">
+              <span>Підписники: {billing.bill.subscriberCount.toLocaleString('uk-UA')}</span>
+              <b>{usd(calcSubscriptionPrice(billing.bill.subscriberCount, 0))}/міс</b>
+            </div>
+            <p className="adm-note">Перші 2 500 — у базовій ціні $29. Далі +$5 за кожну наступну тисячу (округлення вгору).</p>
+
+            <h3 className="adm-h3">Менеджери</h3>
+            <div className="adm-plan-row">
+              <div className="adm-qty">
+                <button
+                  type="button"
+                  disabled={busy !== null || billing.bill.managerSeats <= 0}
+                  onClick={() => void run('addon-extra_seat', { action: 'set_addon', addonKey: 'extra_seat', enabled: billing.bill.managerSeats - 1 > 0, quantity: Math.max(1, billing.bill.managerSeats - 1) })}
+                >
+                  −
+                </button>
+                <span>{billing.bill.managerSeats}</span>
+                <button
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => void run('addon-extra_seat', { action: 'set_addon', addonKey: 'extra_seat', enabled: true, quantity: billing.bill.managerSeats + 1 })}
+                >
+                  {busy === 'addon-extra_seat' ? <IconSpinner size={11} /> : '+'}
+                </button>
+              </div>
+              <b>{usd(seatPrice)}/міс · місце</b>
+            </div>
 
             <div className="adm-bill">
               <div>
-                <span>Модулі</span>
+                <span>Базова ціна</span>
                 <b>{usd(billing.bill.gross)}</b>
               </div>
               <div>
@@ -561,18 +549,18 @@ function DangerZone({
 
       <div className="adm-danger-row">
         <div>
-          <b>Вимкнути всі модулі</b>
-          <p>Прибирає всі увімкнені модулі ({addonsCount}), статус плану не змінює.</p>
+          <b>Скинути менеджерів</b>
+          <p>Прибирає всі оплачувані місця менеджерів ({addonsCount}), статус плану не змінює.</p>
         </div>
         <div className="adm-danger-ctl">
           <button
             type="button"
             className="adm-btn-danger"
             disabled={busy !== null || addonsCount === 0}
-            onClick={() => void run('addons', { action: 'remove_addons' }, `Вимкнути всі модулі «${orgName}»?`)}
+            onClick={() => void run('addons', { action: 'remove_addons' }, `Скинути всіх оплачуваних менеджерів «${orgName}»?`)}
           >
             {busy === 'addons' ? <IconSpinner size={13} /> : <IconTrash size={13} />}
-            Вимкнути модулі
+            Скинути менеджерів
           </button>
         </div>
       </div>
@@ -580,7 +568,7 @@ function DangerZone({
       <div className="adm-danger-row is-critical">
         <div>
           <b>Призупинити платний доступ</b>
-          <p>Те саме, що робить автоматичне завершення тріалу: статус «Free» і вимкнення всіх модулів. Дані організації не видаляються.</p>
+          <p>Те саме, що робить автоматичне завершення тріалу: статус «Free» і скидання оплачуваних місць менеджерів. Дані організації не видаляються.</p>
         </div>
         <div className="adm-danger-ctl adm-danger-ctl-stack">
           <input className="input" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={`Введіть «${orgName}» для підтвердження`} aria-label="Підтвердження назвою" />

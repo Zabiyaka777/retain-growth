@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { logAdminAction, requirePlatformAdmin } from "./_shared/platform-admin";
+import { calcSubscriptionPrice } from "./_shared/subscriptionPricing";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -50,17 +51,21 @@ interface DiscountRow {
   created_at: string;
 }
 
-// The same bill BillingPanel.tsx shows the org itself: enabled addons ×
-// quantity, minus every unexpired discount (stacked, capped at 100%).
-function computeBill(addons: AddonJoin[], discounts: DiscountRow[]) {
-  const gross = addons.reduce((sum, a) => sum + Number(a.billing_addons?.price_monthly ?? 0) * Math.max(1, a.quantity ?? 1), 0);
+// The same bill BillingPanel.tsx shows the org itself: calcSubscriptionPrice
+// off subscriber count + manager seats (the only addon left, 'extra_seat'),
+// minus every unexpired discount (stacked, capped at 100%). `addons` only
+// ever contains 'extra_seat' rows now — the other five billing_addons keys
+// were retired (see the retire_module_billing_addons migration).
+function computeBill(subscriberCount: number, addons: AddonJoin[], discounts: DiscountRow[]) {
+  const managerSeats = addons.find((a) => a.billing_addons?.key === "extra_seat")?.quantity ?? 0;
+  const gross = calcSubscriptionPrice(subscriberCount, managerSeats);
   const now = Date.now();
   const discountPct = Math.min(
     100,
     discounts.filter((d) => !d.expires_at || Date.parse(d.expires_at) > now).reduce((sum, d) => sum + Number(d.percent), 0),
   );
   const net = Math.max(0, gross * (1 - discountPct / 100));
-  return { gross, discountPct, net: Math.round(net * 100) / 100 };
+  return { gross, discountPct, net: Math.round(net * 100) / 100, subscriberCount, managerSeats };
 }
 
 function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
@@ -143,8 +148,9 @@ export const handler: Handler = async (event) => {
     }
 
     // Grouped reads instead of per-org queries.
-    const [leadsRes, channelsRes, threadsRes, stateRes, addonsRes, discountsRes, membersRes] = await Promise.all([
+    const [leadsRes, subsRes, channelsRes, threadsRes, stateRes, addonsRes, discountsRes, membersRes] = await Promise.all([
       supabase.from("leads").select("org_id").in("org_id", ids),
+      supabase.from("leads").select("org_id").in("org_id", ids).eq("subscribed", true),
       supabase.from("channel_credentials").select("org_id, channel_type").in("org_id", ids),
       supabase.from("threads").select("org_id, updated_at").in("org_id", ids).order("updated_at", { ascending: false }),
       supabase.from("org_billing_state").select("org_id, plan_status, trial_ends_at").in("org_id", ids),
@@ -159,6 +165,7 @@ export const handler: Handler = async (event) => {
       return m;
     };
     const leadCounts = count(leadsRes.data as { org_id: string }[] | null);
+    const subscriberCounts = count(subsRes.data as { org_id: string }[] | null);
     const memberCounts = count(membersRes.data as { org_id: string }[] | null);
     const channels = groupBy((channelsRes.data ?? []) as { org_id: string; channel_type: string }[], (r) => r.org_id);
     const lastActivity = new Map<string, string>();
@@ -172,7 +179,7 @@ export const handler: Handler = async (event) => {
 
     const organizations = list.map((org) => {
       const state = states.get(org.id) ?? null;
-      const bill = computeBill(addons.get(org.id) ?? [], discounts.get(org.id) ?? []);
+      const bill = computeBill(subscriberCounts.get(org.id) ?? 0, addons.get(org.id) ?? [], discounts.get(org.id) ?? []);
       return {
         id: org.id,
         name: org.name,
@@ -235,7 +242,7 @@ export const handler: Handler = async (event) => {
 
   if (action === "detail") {
     const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const [stateRes, addonsRes, catalogRes, discountsRes, membersRes, channelsRes, leadsRes, threadsRes, msgs30Res, lastThreadRes, auditRes, eventsRes, landingsRes, linksRes, funnelsRes] =
+    const [stateRes, addonsRes, catalogRes, discountsRes, membersRes, channelsRes, leadsRes, subsRes, threadsRes, msgs30Res, lastThreadRes, auditRes, eventsRes, landingsRes, linksRes, funnelsRes] =
       await Promise.all([
         supabase.from("org_billing_state").select("plan_status, trial_started_at, trial_ends_at, created_at").eq("org_id", orgId).maybeSingle(),
         supabase.from("org_billing_addons").select("org_id, quantity, enabled_at, billing_addons ( key, name, price_monthly )").eq("org_id", orgId),
@@ -244,6 +251,7 @@ export const handler: Handler = async (event) => {
         supabase.from("profiles").select("id, created_at").eq("org_id", orgId),
         supabase.from("channel_credentials").select("channel_type").eq("org_id", orgId),
         supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId),
+        supabase.from("leads").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("subscribed", true),
         supabase.from("threads").select("id", { count: "exact", head: true }).eq("org_id", orgId),
         supabase.from("messages").select("id", { count: "exact", head: true }).eq("org_id", orgId).gte("created_at", since30),
         supabase.from("threads").select("updated_at").eq("org_id", orgId).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
@@ -258,6 +266,7 @@ export const handler: Handler = async (event) => {
     const emails = await emailsById(supabase, [org.owner_id as string, ...members.map((m) => m.id)]);
     const addons = (addonsRes.data ?? []) as unknown as AddonJoin[];
     const discounts = (discountsRes.data ?? []) as DiscountRow[];
+    const subscriberCount = subsRes.count ?? 0;
 
     await logAdminAction(supabase, admin, "organization_detail", {}, orgId);
 
@@ -282,10 +291,11 @@ export const handler: Handler = async (event) => {
         })),
         catalog: catalogRes.data ?? [],
         discounts,
-        bill: computeBill(addons, discounts),
+        bill: computeBill(subscriberCount, addons, discounts),
       },
       usage: {
         leads: leadsRes.count ?? 0,
+        subscribers: subscriberCount,
         threads: threadsRes.count ?? 0,
         messages_30d: msgs30Res.count ?? 0,
         landings: landingsRes.count ?? 0,
