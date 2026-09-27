@@ -94,6 +94,49 @@ async function domainTaken(supabase: SupabaseClient, domain: string, table: Enti
   return other(landings.data, "landing_pages") || other(links.data, "lead_gen_links");
 }
 
+// Removes the Netlify alias of every custom domain whose landing/link row is
+// gone — the custom_domain_removals queue is filled by a DB trigger on
+// delete (including cascades from funnels/organizations). Best-effort and
+// idempotent: without a token or on a Netlify error the queue is simply left
+// for the next run; a domain that has since been re-attached to some other
+// row is dropped from the queue but its alias kept.
+export async function drainDomainRemovals(supabase: SupabaseClient): Promise<{ removed: string[]; kept: string[] } | null> {
+  const { data: queued, error } = await supabase.from("custom_domain_removals").select("domain");
+  if (error) {
+    console.error("drainDomainRemovals: queue read failed", error);
+    return null;
+  }
+  const domains = (queued ?? []).map((r) => r.domain as string);
+  if (domains.length === 0) return { removed: [], kept: [] };
+
+  const [landings, links] = await Promise.all([
+    supabase.from("landing_pages").select("custom_domain").in("custom_domain", domains),
+    supabase.from("lead_gen_links").select("custom_domain").in("custom_domain", domains),
+  ]);
+  if (landings.error || links.error) {
+    console.error("drainDomainRemovals: in-use lookup failed", landings.error ?? links.error);
+    return null;
+  }
+  const inUse = new Set([...(landings.data ?? []), ...(links.data ?? [])].map((r) => r.custom_domain as string));
+  const kept = domains.filter((d) => inUse.has(d));
+  const toRemove = domains.filter((d) => !inUse.has(d));
+
+  if (toRemove.length > 0) {
+    const siteId = getSiteId();
+    const token = siteId ? await getNetlifyToken(supabase) : null;
+    if (!siteId || !token) return null;
+    const site = await getSite(token, siteId);
+    if (!site) return null;
+    const aliases = site.domain_aliases ?? [];
+    const next = aliases.filter((a) => !toRemove.includes(a));
+    if (next.length !== aliases.length && !(await setDomainAliases(token, siteId, next))) return null;
+  }
+
+  const { error: clearError } = await supabase.from("custom_domain_removals").delete().in("domain", domains);
+  if (clearError) console.error("drainDomainRemovals: queue clear failed", clearError);
+  return { removed: toRemove, kept };
+}
+
 // Attaches (or removes, customDomain: null) a custom domain on one row:
 // validates it, registers/unregisters it as a domain alias on this Netlify
 // site via the API, and records it on the row. DNS/SSL verification is the

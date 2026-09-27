@@ -39,6 +39,12 @@
 [functions."billing-trial-expire"]
   schedule = "0 4 * * *"
 
+# Once a day: takes down Netlify domain aliases of deleted landings/links
+# (custom_domain_removals queue, filled by a delete trigger — covers cascade
+# deletes that never pass through save-landing-page / save-leadgen-link).
+[functions."custom-domain-cleanup"]
+  schedule = "30 4 * * *"
+
 # netlify/edge-functions/custom-domain.ts (tenant landing pages on their own
 # custom domain) is registered declaratively — its own `export const config`
 # carries path/excludedPath — not with an [[edge_functions]] block here, so

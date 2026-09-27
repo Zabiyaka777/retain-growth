@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { generateRefToken, MAX_REF_TOKEN_ATTEMPTS as MAX_TOKEN_ATTEMPTS } from "./_shared/ref-token";
+import { drainDomainRemovals } from "./_shared/netlify-domains";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -106,6 +107,10 @@ export const handler: Handler = async (event) => {
       console.error("save-leadgen-link: delete failed", deleteError);
       return jsonResponse(500, { error: "Не вдалося видалити лінк" });
     }
+    // The delete trigger queued its custom domain (if any) — take the Netlify
+    // alias down now rather than waiting for the daily sweep. Never fails the
+    // delete itself: whatever doesn't go through stays queued for the sweep.
+    await drainDomainRemovals(supabase).catch((err) => console.error("save-leadgen-link: drainDomainRemovals threw", err));
     return jsonResponse(200, { ok: true });
   }
 

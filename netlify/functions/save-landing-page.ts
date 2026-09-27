@@ -11,6 +11,7 @@ import {
   normalizeLandingConfig,
   type LandingTemplateKey,
 } from "./_shared/landing-page";
+import { drainDomainRemovals } from "./_shared/netlify-domains";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -107,6 +108,10 @@ export const handler: Handler = async (event) => {
       const { error: vaultError } = await supabase.rpc("vault_delete_secret", { secret_id: gone.meta_access_token_secret_id });
       if (vaultError) console.error("save-landing-page: vault_delete_secret failed", vaultError);
     }
+    // The delete trigger queued its custom domain (if any) — take the Netlify
+    // alias down now rather than waiting for the daily sweep. Never fails the
+    // delete itself: whatever doesn't go through stays queued for the sweep.
+    await drainDomainRemovals(supabase).catch((err) => console.error("save-landing-page: drainDomainRemovals threw", err));
     return jsonResponse(200, { ok: true });
   }
 
