@@ -304,12 +304,25 @@ function Editable({
   return (
     <Tag
       ref={ref as never}
-      className={`${className ?? ''} lp-edit`}
+      className={`${className ?? ''} lp-edit${multiline ? ' lp-edit-ml' : ''}`}
       style={style}
       contentEditable
       suppressContentEditableWarning
       data-placeholder={placeholder}
-      onBlur={(e) => onCommit?.((e.currentTarget.textContent ?? '').replace(/\n{2,}/g, '\n').trim())}
+      // contentEditable's default Enter behaviour splits the content into
+      // separate <div>/<br> blocks — textContent ignores those entirely and
+      // joins everything back with NO separator, silently dropping every
+      // line break on commit (confirmed live: manually re-inserting a '\n'
+      // node, or going through execCommand('insertText', …, '\n'), both get
+      // re-split or repositioned by Chrome's own editing/typing commands
+      // right afterward). innerText instead reads the rendered result — one
+      // '\n' per visual line break, exactly matching what's on screen — so
+      // multiline just lets Enter do whatever the browser does by default
+      // and reads it back correctly rather than fighting the DOM for it.
+      onBlur={(e) => {
+        const raw = multiline ? (e.currentTarget as HTMLElement).innerText : (e.currentTarget.textContent ?? '')
+        onCommit?.(raw.replace(/\n{3,}/g, '\n\n').trim())
+      }}
       onKeyDown={(e: KeyboardEvent<HTMLElement>) => {
         if (e.key === 'Enter' && !multiline) {
           e.preventDefault()

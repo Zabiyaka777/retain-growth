@@ -5602,6 +5602,7 @@ a.lp-cta-ms:hover .lp-cta-ico::after { animation: lpFlash .55s ease-out; }
 
 /* ---------- in-place editing affordances ---------- */
 .lp-edit { outline: 1px dashed transparent; outline-offset: 3px; border-radius: 6px; cursor: text; transition: outline-color .2s, background .2s; min-width: 1ch; }
+.lp-edit-ml { white-space: pre-wrap; }
 .lp-edit:hover { outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .lp-edit:focus { outline: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .lp-edit:empty::before { content: attr(data-placeholder); color: var(--lp-muted); opacity: .7; pointer-events: none; }
@@ -5637,8 +5638,9 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lp-dz img { transition: filter .25s; }
 .lp-dz[data-state=over] img, .lp-dz[data-state=uploading] img { filter: blur(2px) saturate(.6); }
 .lp-dz-st { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 18px; font: inherit; color: var(--lp-ink); background: none; border: 0; cursor: pointer; }
-.lp-dz-done { justify-content: space-between; flex-direction: row; align-items: flex-start; cursor: default; opacity: 0; transition: opacity .2s; background: linear-gradient(180deg, rgba(5,6,8,.45), transparent 40%, transparent 60%, rgba(5,6,8,.45)); }
-.lp-dz:hover .lp-dz-done { opacity: 1; }
+/* Always visible in edit mode — a small phone frame makes hover-to-reveal
+   unreliable (touch/trackpad), and this dropzone only ever renders while editing. */
+.lp-dz-done { justify-content: space-between; flex-direction: row; align-items: flex-start; cursor: default; background: linear-gradient(180deg, rgba(5,6,8,.45), transparent 40%, transparent 60%, rgba(5,6,8,.45)); }
 .lp-dz-icn { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; background: var(--lp-card); border: 1px solid var(--lp-line); box-shadow: 0 14px 30px -16px rgba(0,0,0,.5); animation: lpFloaty 3.4s ease-in-out infinite; position: relative; transition: transform .3s, border-color .3s, background .3s; }
 .lp-dz-icn svg { width: 24px; height: 24px; stroke: var(--lp-ink); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .lp-dz-spark { position: absolute; right: -6px; top: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--green); display: grid; place-items: center; box-shadow: 0 0 16px rgba(74,222,154,.6); transform: scale(0); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
@@ -5696,7 +5698,12 @@ li:hover > .lp-rm, .lp-rm:focus { opacity: 1; }
 .lpe-phone-glow.white { background: radial-gradient(circle, rgba(255,255,255,.35), transparent 70%); }
 .lpe-phone-glow.dark { background: radial-gradient(circle, rgba(255,140,90,.35), transparent 70%); }
 .lpe-phone-glow.rg { background: radial-gradient(circle, rgba(74,222,154,.4), rgba(77,163,255,.25) 50%, transparent 75%); }
-.lpe-phone { width: 400px; max-width: 100%; height: 840px; border-radius: 58px; background: #0c0d11; padding: 11px; position: relative; z-index: 1;
+/* Shrinks on short viewports instead of running off the bottom of the page —
+   height is capped to the visible area (with room for the sticky top bar and
+   page header above it), and width follows the same 400:840 ratio via
+   aspect-ratio (needs width: auto — an explicit width would make aspect-ratio
+   a no-op and let the frame distort instead of shrink). */
+.lpe-phone { width: auto; max-width: min(400px, 100%); aspect-ratio: 400 / 840; height: min(840px, max(360px, calc(100vh - 280px))); border-radius: 58px; background: #0c0d11; padding: 11px; position: relative; z-index: 1;
   box-shadow: 0 0 0 1.5px #2a2e36, 0 0 0 6px #111318, 0 0 0 7px #2a2e36, 0 60px 120px -30px rgba(0,0,0,.85), inset 0 0 0 1px rgba(255,255,255,.05); }
 .lpe-phone .btnL { position: absolute; left: -9px; top: 180px; width: 3px; height: 34px; border-radius: 2px; background: #2a2e36; }
 .lpe-phone .btnL2 { position: absolute; left: -9px; top: 230px; width: 3px; height: 64px; border-radius: 2px; background: #2a2e36; }
