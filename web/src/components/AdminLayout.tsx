@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
-import { IconArrowLeft, IconBuilding, IconShield, IconSpinner } from './icons'
+import { IconArrowLeft, IconBuilding, IconLink, IconShield, IconSpinner } from './icons'
 
 const adminNav = [
   { to: '/admin/organizations', label: 'Організації', icon: IconBuilding },
   { to: '/admin/security', label: 'Безпека', icon: IconShield },
+  { to: '/admin/settings', label: 'Налаштування', icon: IconLink },
 ]
 
 /**

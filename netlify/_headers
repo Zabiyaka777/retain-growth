@@ -36,5 +36,9 @@
 /admin/*
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://openrouter.ai; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
+# Same CSP is duplicated in netlify/edge-functions/custom-domain.ts — a
+# tenant's own custom domain serves this same landing content at "/", where
+# this path-based rule can't reach it, so the edge function sets it directly
+# on its response instead. Keep both in sync by hand.
 /lp/*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://connect.facebook.net https://analytics.tiktok.com https://*.tiktok.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self' https://jgtykwfwxotticfxvvwd.supabase.co wss://jgtykwfwxotticfxvvwd.supabase.co https://*.facebook.com https://*.facebook.net https://*.tiktok.com https://*.tiktokw.us https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.doubleclick.net https://www.google.com https://*.run.app https://*.on.aws; frame-src https://*.facebook.com https://*.doubleclick.net https://www.googletagmanager.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

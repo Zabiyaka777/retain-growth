@@ -39,6 +39,11 @@
 [functions."billing-trial-expire"]
   schedule = "0 4 * * *"
 
+# netlify/edge-functions/custom-domain.ts (tenant landing pages on their own
+# custom domain) is registered declaratively — its own `export const config`
+# carries path/excludedPath — not with an [[edge_functions]] block here, so
+# there's exactly one place its routing can drift out of sync with itself.
+
 # Public lead-gen short links -> redirect.ts (must stay above the SPA catch-all).
 # For a redirect that targets a Function, Netlify invokes the function but
 # leaves event.path/queryStringParameters as the browser's ORIGINAL request

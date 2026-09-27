@@ -62,6 +62,8 @@ interface ExistingPage {
   meta_access_token_secret_id: string | null
   funnel_id: string | null
   entry_node_id: string | null
+  custom_domain: string | null
+  custom_domain_status: 'pending' | 'verified' | null
 }
 
 interface FunnelOption {
@@ -223,6 +225,17 @@ export default function LandingPageForm() {
   const [entryNodesLoading, setEntryNodesLoading] = useState(false)
   const [entryNodeId, setEntryNodeId] = useState('')
 
+  // Custom domain — independent of slug/publish state, mirrors what's saved
+  // (never "dirty" the way config fields are, since it's applied immediately
+  // through its own save button rather than batched into submit()).
+  const [customDomain, setCustomDomain] = useState('')
+  const [domainInput, setDomainInput] = useState('')
+  const [domainStatus, setDomainStatus] = useState<'pending' | 'verified' | null>(null)
+  const [dnsTarget, setDnsTarget] = useState('')
+  const [savingDomain, setSavingDomain] = useState(false)
+  const [checkingDomain, setCheckingDomain] = useState(false)
+  const [domainError, setDomainError] = useState<string | null>(null)
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -233,7 +246,9 @@ export default function LandingPageForm() {
       if (pageId) {
         const { data } = await supabase
           .from('landing_pages')
-          .select('id, org_id, name, template_key, slug, status, config, meta_access_token_secret_id, funnel_id, entry_node_id')
+          .select(
+            'id, org_id, name, template_key, slug, status, config, meta_access_token_secret_id, funnel_id, entry_node_id, custom_domain, custom_domain_status',
+          )
           .eq('id', pageId)
           .maybeSingle()
         if (cancelled) return
@@ -250,6 +265,9 @@ export default function LandingPageForm() {
           setConfig(withConfigDefaults(p.config))
           setFunnelId(p.funnel_id ?? '')
           setEntryNodeId(p.entry_node_id ?? '')
+          setCustomDomain(p.custom_domain ?? '')
+          setDomainInput(p.custom_domain ?? '')
+          setDomainStatus(p.custom_domain_status)
         }
       }
       setLoading(false)
@@ -451,6 +469,69 @@ export default function LandingPageForm() {
     })
     if (res.ok) navigate('/dashboard/leadgentools?tab=landings')
     else setDeleting(false)
+  }
+
+  async function saveDomain(next: string | null) {
+    if (!pageId) return
+    setSavingDomain(true)
+    setDomainError(null)
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setDomainError('Сесія недійсна, увійдіть знову')
+      setSavingDomain(false)
+      return
+    }
+    try {
+      const res = await fetch('/.netlify/functions/save-landing-domain', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ landingPageId: pageId, customDomain: next }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setDomainError(data.error ?? 'Не вдалося зберегти домен')
+      } else {
+        setCustomDomain(data.customDomain ?? '')
+        setDomainInput(data.customDomain ?? '')
+        setDomainStatus(data.status ?? null)
+        if (data.dnsTarget) setDnsTarget(data.dnsTarget)
+      }
+    } catch {
+      setDomainError('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setSavingDomain(false)
+    }
+  }
+
+  async function checkDomain() {
+    if (!pageId) return
+    setCheckingDomain(true)
+    setDomainError(null)
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setDomainError('Сесія недійсна, увійдіть знову')
+      setCheckingDomain(false)
+      return
+    }
+    try {
+      const res = await fetch('/.netlify/functions/check-landing-domain', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ landingPageId: pageId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setDomainError(data.error ?? 'Не вдалося перевірити домен')
+      } else {
+        setDomainStatus(data.status ?? null)
+        if (!data.dnsResolved) setDomainError('DNS ще не вказує на нас — перевірте запис і спробуйте ще раз за кілька хвилин')
+        else if (!data.sslIssued) setDomainError('DNS налаштовано, сертифікат ще видається — спробуйте перевірити ще раз за хвилину')
+      }
+    } catch {
+      setDomainError('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setCheckingDomain(false)
+    }
   }
 
   const slugValid = SLUG_RE.test(slug)
@@ -818,6 +899,66 @@ export default function LandingPageForm() {
                 </div>
               ) : (
                 <div className="lpe-fields">
+                  {isEditing && (
+                    <Acc title="Свій домен" filled={!!customDomain}>
+                      <div className="field">
+                        <label htmlFor="lpe-domain">Домен для цього лендінга</label>
+                        <div className="input-wrap" style={{ alignItems: 'center' }}>
+                          <input
+                            id="lpe-domain"
+                            className="input"
+                            value={domainInput}
+                            onChange={(e) => setDomainInput(e.target.value.trim().toLowerCase())}
+                            placeholder="promo.вашдомен.com"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={savingDomain || !domainInput.trim() || domainInput.trim() === customDomain}
+                            onClick={() => saveDomain(domainInput.trim())}
+                          >
+                            {savingDomain ? <IconSpinner size={14} /> : 'Прив’язати'}
+                          </button>
+                          {customDomain && (
+                            <button type="button" className="btn btn-ghost" disabled={savingDomain} onClick={() => saveDomain(null)}>
+                              Відв’язати
+                            </button>
+                          )}
+                          {customDomain && (
+                            <button type="button" className="btn btn-secondary" disabled={checkingDomain} onClick={checkDomain}>
+                              {checkingDomain ? <IconSpinner size={14} /> : 'Перевірити'}
+                            </button>
+                          )}
+                        </div>
+
+                        {customDomain && (
+                          <p className="flow-node-hint" style={{ margin: '0.5rem 0 0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span className={`badge ${domainStatus === 'verified' ? 'badge-success' : 'badge-warning'}`}>
+                              {domainStatus === 'verified' ? 'Підключено' : 'Очікує DNS'}
+                            </span>
+                            {domainStatus === 'verified' ? (
+                              <span>Лендінг відкривається за адресою https://{customDomain}</span>
+                            ) : (
+                              <span>Додайте у DNS вашого домену CNAME-запис на {dnsTarget || 'адресу, показану після прив’язки'}, потім натисніть «Перевірити»</span>
+                            )}
+                          </p>
+                        )}
+                        {domainError && (
+                          <p className="flow-node-hint" style={{ margin: '0.5rem 0 0', color: 'var(--danger)' }}>
+                            {domainError}
+                          </p>
+                        )}
+                        <p className="flow-node-hint" style={{ margin: '0.5rem 0 0' }}>
+                          Для кореневого домену (без піддомену) замість CNAME вкажіть A-запис на IP-адресу, яку Netlify показує для нього.
+                        </p>
+                      </div>
+                    </Acc>
+                  )}
                   <Acc title="SEO" filled={!!(config.seo_title || config.seo_description)}>
                     <div className="field">
                       <label htmlFor="lpe-seo-t">Title сторінки</label>

@@ -18,11 +18,21 @@ import LandingPage from './pages/LandingPage'
 import LandingPageForm from './pages/LandingPageForm'
 import NotFound from './pages/NotFound'
 import DashboardLayout from './components/DashboardLayout'
+import AdminSettings from './pages/AdminSettings'
+
+// netlify/edge-functions/custom-domain.ts resolves a tenant's own custom
+// domain to its landing page's slug and injects it here before the SPA even
+// loads — window.__LP_SLUG__ is only ever set by that edge function (never
+// by our own code), so its presence is exactly "this request came in on a
+// registered custom domain". LandingPage itself already falls back to it
+// when there's no :slug route param (see that file) — this is just what
+// decides whether "/" renders the landing or the normal login redirect.
+const customDomainSlug = typeof window !== 'undefined' ? (window as { __LP_SLUG__?: string }).__LP_SLUG__ : undefined
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={customDomainSlug ? <LandingPage /> : <Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
       {/* Public — no auth guard: the guard lives in DashboardLayout, this is outside it. */}
       <Route path="/lp/:slug" element={<LandingPage />} />
@@ -51,6 +61,7 @@ function App() {
         <Route index element={<Navigate to="/admin/organizations" replace />} />
         <Route path="organizations" element={<AdminOrganizations />} />
         <Route path="security" element={<AdminSecurity />} />
+        <Route path="settings" element={<AdminSettings />} />
       </Route>
 
       {/* Branded 404: the SPA catch-all rewrite means Netlify's own 404

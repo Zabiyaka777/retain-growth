@@ -66,7 +66,11 @@ function setMeta(name: string, content: string, sink: Node[]) {
 // which logs the click and sends the visitor into the org's bot — the page
 // carries its own funnel + entry point and never touches lead-gen links.
 export default function LandingPage() {
-  const { slug = '' } = useParams<{ slug: string }>()
+  // No :slug param at all on a custom domain (it renders at "/" — see
+  // App.tsx) — netlify/edge-functions/custom-domain.ts already resolved the
+  // Host header to a slug and injected it before this bundle ever ran.
+  const { slug: routeSlug } = useParams<{ slug: string }>()
+  const slug = routeSlug || (typeof window !== 'undefined' ? ((window as { __LP_SLUG__?: string }).__LP_SLUG__ ?? '') : '')
   const [params] = useSearchParams()
   const [state, setState] = useState<{ templateKey: LandingTemplateKey; config: LandingConfig; capi: boolean; routable: boolean } | null | 'error'>(null)
   const injected = useRef<Node[]>([])
