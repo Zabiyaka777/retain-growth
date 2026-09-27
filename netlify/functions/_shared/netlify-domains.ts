@@ -60,9 +60,13 @@ function jsonResponse(statusCode: number, body: unknown) {
 
 type Authed = { supabase: SupabaseClient; orgId: string } | { error: ReturnType<typeof jsonResponse> };
 
-async function authenticate(event: Parameters<Handler>[0]): Promise<Authed> {
+function bearer(event: Parameters<Handler>[0]): string | null {
   const authHeader = event.headers.authorization ?? event.headers.Authorization;
-  const accessToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+}
+
+async function authenticate(event: Parameters<Handler>[0]): Promise<Authed> {
+  const accessToken = bearer(event);
   if (!accessToken) return { error: jsonResponse(401, { error: "Відсутній заголовок авторизації" }) };
 
   const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -102,6 +106,8 @@ export function makeSaveDomainHandler(entity: DomainEntity): Handler {
 
   return async (event) => {
     if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
+    // No session → 401 before anything else looks at the body.
+    if (!bearer(event)) return jsonResponse(401, { error: "Відсутній заголовок авторизації" });
 
     let id = "";
     let customDomain: string | null = null; // null = remove
@@ -121,8 +127,6 @@ export function makeSaveDomainHandler(entity: DomainEntity): Handler {
       }
     }
 
-    // Auth before the (cheap) validation above would be marginally stricter,
-    // but validation touches nothing — so a bad domain fails fast either way.
     const auth = await authenticate(event);
     if ("error" in auth) return auth.error;
     const { supabase, orgId } = auth;
@@ -192,6 +196,8 @@ export function makeCheckDomainHandler(entity: DomainEntity): Handler {
 
   return async (event) => {
     if (event.httpMethod !== "POST") return jsonResponse(405, { error: "Method Not Allowed" });
+    // No session → 401 before anything else looks at the body.
+    if (!bearer(event)) return jsonResponse(401, { error: "Відсутній заголовок авторизації" });
 
     let id = "";
     try {
