@@ -67,12 +67,13 @@ import {
   IconBranch,
   IconSync,
   IconDuplicate,
+  IconWallet,
   IconTrash,
   IconVideo,
   IconVideoNote,
 } from '../components/icons'
 
-type NodeKind = 'entry' | 'message' | 'action' | 'ai' | 'delay' | 'condition' | 'conversion'
+type NodeKind = 'entry' | 'message' | 'action' | 'ai' | 'delay' | 'condition' | 'conversion' | 'offer'
 
 interface AiTask {
   id: string
@@ -312,6 +313,10 @@ interface NodeConfig {
   // 'conversion' nodes only — which analytics-funnel stage entering this node
   // marks the lead as having reached.
   stage_id?: string
+  // 'offer' nodes only — which catalog offer (web/src/pages/Offers.tsx) to
+  // invoice. Everything else (price, name, one-time vs recurring) is read
+  // live from the offers row server-side, never duplicated into this config.
+  offer_id?: string
 }
 
 // Offset so the copy lands beside the original rather than exactly on top of
@@ -1961,6 +1966,72 @@ function ConversionNodeView({ data }: NodeProps<NodeData>) {
   )
 }
 
+interface OfferOption {
+  id: string
+  name: string
+  price_amount: number
+  kind: 'one_time' | 'recurring'
+  interval: 'week' | 'month' | 'year' | null
+  is_active: boolean
+}
+
+const OFFER_INTERVAL_LABEL: Record<'week' | 'month' | 'year', string> = { week: 'тиждень', month: 'місяць', year: 'рік' }
+
+function OfferNodeView({ data }: NodeProps<NodeData>) {
+  const config = data.config
+  const [offers, setOffers] = useState<OfferOption[]>([])
+
+  useEffect(() => {
+    supabase
+      .from('offers')
+      .select('id, name, price_amount, kind, interval, is_active')
+      .order('name')
+      .then(({ data: rows }) => setOffers((rows ?? []) as OfferOption[]))
+  }, [])
+
+  const selected = offers.find((o) => o.id === config.offer_id)
+
+  return (
+    <div className="flow-node flow-node-offer">
+      <Handle type="target" position={Position.Left} />
+      <div className="flow-node-header">
+        <span className="flow-node-badge badge-offer">Оплата</span>
+        <button type="button" className="flow-node-copy" onClick={data.onDuplicate} aria-label="Дублювати" title="Дублювати">
+          <IconDuplicate size={13} />
+        </button>
+        <button type="button" className="flow-node-delete" onClick={data.onDelete} aria-label="Видалити">
+          <IconTrash size={13} />
+        </button>
+      </div>
+      <NodeLabel value={config.label} placeholder="Оплата" onChange={(label) => data.onChange({ label })} />
+
+      <label className="node-inspector-label">Оффер</label>
+      <select className="input nodrag" value={config.offer_id ?? ''} onChange={(e) => data.onChange({ offer_id: e.target.value || undefined })}>
+        <option value="">Оберіть оффер</option>
+        {offers.map((o) => (
+          <option key={o.id} value={o.id} disabled={!o.is_active}>
+            {o.name} — {(o.price_amount / 100).toLocaleString('uk-UA')} грн
+            {o.kind === 'recurring' && o.interval ? ` / ${OFFER_INTERVAL_LABEL[o.interval]}` : ''}
+            {!o.is_active ? ' (неактивний)' : ''}
+          </option>
+        ))}
+      </select>
+
+      <p className="flow-node-hint">
+        {!config.offer_id
+          ? 'Оберіть оффер — без нього вузол не спрацює.'
+          : !selected
+            ? 'Оффер видалено з каталогу — оберіть інший.'
+            : selected.kind === 'recurring' && selected.interval
+              ? `Лід отримає рахунок на ${(selected.price_amount / 100).toLocaleString('uk-UA')} грн/${OFFER_INTERVAL_LABEL[selected.interval]} (картка збережеться) і піде далі щойно оплатить.`
+              : `Лід отримає рахунок на ${(selected.price_amount / 100).toLocaleString('uk-UA')} грн і піде далі щойно оплатить.`}
+      </p>
+
+      <Handle type="source" position={Position.Right} />
+    </div>
+  )
+}
+
 function AiNodeView({ id, data }: NodeProps<NodeData>) {
   const config = data.config
   const openRouterModels = useOpenRouterModels(true)
@@ -2661,6 +2732,7 @@ const NODE_TYPES: NodeTypes = {
   delay: DelayNodeView,
   condition: ConditionNodeView,
   conversion: ConversionNodeView,
+  offer: OfferNodeView,
 }
 
 const PALETTE_ITEMS: { type: NodeKind; label: string; accentClass: string; icon: typeof IconLogIn; tooltip: string }[] = [
@@ -2716,6 +2788,14 @@ const PALETTE_ITEMS: { type: NodeKind; label: string; accentClass: string; icon:
     icon: IconSparkles,
     tooltip:
       'Передає розмову моделі: з цього кроку на кожне повідомлення ліда відповідає AI за вашим системним промптом, доки дія «Відкрити чат» не поверне тред людині.',
+  },
+  {
+    type: 'offer',
+    label: 'Оплата',
+    accentClass: 'palette-item-offer',
+    icon: IconWallet,
+    tooltip:
+      'Надсилає ліду рахунок за обраний оффер (з каталогу «Офери») з кнопкою «Оплатити» і чекає оплати. Щойно оплата підтверджена — веде далі по гілці.',
   },
 ]
 
@@ -3064,7 +3144,9 @@ function FunnelBuilderInner() {
                 ? `Затримка ${nth}`
                 : type === 'condition'
                   ? `Умова ${nth}`
-                  : `AI ${nth}`
+                  : type === 'offer'
+                    ? `Оплата ${nth}`
+                    : `AI ${nth}`
       const initialConfig: NodeConfig =
         type === 'message'
           ? {

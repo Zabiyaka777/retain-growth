@@ -56,6 +56,11 @@
   --conversion: #4ade80;
   --conversion-soft: rgba(74, 222, 128, 0.14);
 
+  /* Offer nodes — gold, the one hue left that still reads as "money" and
+     isn't already claimed by ai/delay/condition/conversion */
+  --offer: #fbbf24;
+  --offer-soft: rgba(251, 191, 36, 0.14);
+
   /* Radius — bigger, organic */
   --radius-sm: 10px;
   --radius-md: 16px;
@@ -2611,6 +2616,10 @@ button.sidebar-link.active { background: var(--accent-soft); }
   --palette-accent: var(--conversion);
 }
 
+.palette-item-offer {
+  --palette-accent: var(--offer);
+}
+
 .palette-item-tooltip {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -2747,6 +2756,11 @@ button.sidebar-link.active { background: var(--accent-soft); }
 
 .flow-node-conversion {
   --node-accent: var(--conversion);
+  width: 240px;
+}
+
+.flow-node-offer {
+  --node-accent: var(--offer);
   width: 240px;
 }
 
@@ -3068,6 +3082,11 @@ button.sidebar-link.active { background: var(--accent-soft); }
 .badge-conversion {
   background: var(--conversion-soft);
   color: var(--conversion);
+}
+
+.badge-offer {
+  background: var(--offer-soft);
+  color: var(--offer);
 }
 
 /* Opens the condition modal; mirrors .delay-summary. */

@@ -7,8 +7,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { maybeSendStageConversion } from "./stage-conversion";
 import { logLeadActivity } from "./activity-log";
 import { markBotBlocked } from "./bot-block";
+import { createOfferInvoice } from "./payments";
+import { formatUah } from "./monobank";
 
-export type NodeType = "message" | "action" | "entry" | "ai" | "delay" | "condition" | "conversion";
+export type NodeType = "message" | "action" | "entry" | "ai" | "delay" | "condition" | "conversion" | "offer";
 
 // 'conversion' nodes only — marks the lead as having reached one stage of the
 // analytics funnel. Carrying a money value off a variable comes later; for
@@ -16,6 +18,15 @@ export type NodeType = "message" | "action" | "entry" | "ai" | "delay" | "condit
 export interface ConversionConfig {
   stage_id?: string;
 }
+
+// 'offer' nodes only — sends a payment card for one catalog offer and pauses
+// the walk until mono-webhook.ts confirms payment (see processGraphState's
+// "offer" branch below and mono-webhook.ts's funnel_state_id handling).
+export interface OfferConfig {
+  offer_id?: string;
+}
+
+const OFFER_INTERVAL_LABEL: Record<"week" | "month" | "year", string> = { week: "тиждень", month: "місяць", year: "рік" };
 
 export interface DelayConfig {
   delay_mode?: "relative" | "exact";
@@ -882,6 +893,105 @@ export async function processGraphState(
       }
       nodeId = nextId;
       continue;
+    }
+
+    // Sends a payment card (one Mono invoice) for the configured offer, then
+    // parks — same "pause here, an external event resolves it forward" shape
+    // as a message node with buttons, except the resolving event is
+    // mono-webhook.ts confirming payment instead of a button tap.
+    if (type === "offer") {
+      const config = (node.config ?? {}) as OfferConfig;
+      if (!config.offer_id) {
+        console.error("funnel-graph: offer node with no offer_id", nodeId);
+        await supabase.from("funnel_states").update({ status: "stopped", funnel_node_id: nodeId }).eq("id", state.id);
+        return;
+      }
+
+      // Re-entry after mono-webhook.ts resumed this exact node: already paid,
+      // don't invoice a second time — just walk on.
+      const { data: paidAlready } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("funnel_state_id", state.id)
+        .eq("offer_id", config.offer_id)
+        .eq("status", "success")
+        .limit(1)
+        .maybeSingle();
+
+      if (paidAlready) {
+        const nextId = await resolveNextNode(supabase, nodeId, null);
+        if (!nextId) {
+          await supabase.from("funnel_states").update({ status: "completed", funnel_node_id: nodeId }).eq("id", state.id);
+          return;
+        }
+        nodeId = nextId;
+        continue;
+      }
+
+      // Persist progress before the gateway call — a retry after this
+      // invocation's lease expires must resume on this node, not re-run
+      // whatever preceded it (same reasoning the message-node branch uses).
+      await supabase.from("funnel_states").update({ funnel_node_id: nodeId }).eq("id", state.id);
+
+      const siteUrl = process.env.URL;
+      if (!siteUrl) {
+        console.error("funnel-graph: URL сайту не сконфігуровано, не можу створити рахунок");
+        return;
+      }
+      const { data: leadRow } = await supabase.from("threads").select("lead_id").eq("id", state.thread_id).maybeSingle();
+      const leadId = (leadRow?.lead_id as string | undefined) ?? null;
+
+      const invoiceResult = await createOfferInvoice(supabase, {
+        orgId: state.org_id,
+        offerId: config.offer_id,
+        leadId,
+        threadId: state.thread_id,
+        funnelStateId: state.id,
+        siteUrl,
+      });
+
+      if (!invoiceResult.ok || !invoiceResult.pageUrl) {
+        console.error("funnel-graph: createOfferInvoice failed", nodeId, invoiceResult.error);
+        const { error: eventError } = await supabase.from("events").insert({
+          org_id: state.org_id,
+          type: "offer_invoice_failed",
+          level: "error",
+          payload: { funnel_node_id: nodeId, offer_id: config.offer_id, error: invoiceResult.error ?? null },
+        });
+        if (eventError) console.error("funnel-graph: events insert failed", eventError);
+        return; // leased row retries on the next cron pass
+      }
+
+      const messageText =
+        invoiceResult.kind === "recurring" && invoiceResult.interval
+          ? `${invoiceResult.offerName} — ${formatUah(invoiceResult.amount!)} грн / ${OFFER_INTERVAL_LABEL[invoiceResult.interval]}\nОплата активує підписку: картка буде збережена для наступних списань.`
+          : `${invoiceResult.offerName} — ${formatUah(invoiceResult.amount!)} грн`;
+
+      // Same block shape every saved channel config uses — formatting is
+      // purely descriptive metadata here (no send path actually branches on
+      // it, only on which blocks/attachments exist), so "markdown_v2" is
+      // safe on every channel slot despite the name.
+      const offerMessageConfig: MessageConfig = {
+        channels: {
+          telegram: { formatting: "markdown_v2", blocks: [{ id: "text", kind: "text", text: messageText }] },
+          whatsapp: { formatting: "markdown_v2", blocks: [{ id: "text", kind: "text", text: messageText }] },
+          instagram: { formatting: "markdown_v2", blocks: [{ id: "text", kind: "text", text: messageText }] },
+          fbm: null,
+        },
+        buttons: [{ id: "pay", label: "Оплатити", actionType: "link", url: invoiceResult.pageUrl }],
+      };
+
+      const { threadInfo, botToken } = await loadThreadContext();
+      const sent = await sendGraphMessage(supabase, state, offerMessageConfig, threadInfo, botToken);
+      if (!sent) return; // retried by the lease, same as a message node
+
+      // Park indefinitely — resumed only by mono-webhook.ts on payment
+      // success (funnel_state_id), never by time.
+      await supabase
+        .from("funnel_states")
+        .update({ funnel_node_id: nodeId, waiting_until: new Date(Date.now() + AWAITING_INPUT_PAUSE_MS).toISOString() })
+        .eq("id", state.id);
+      return;
     }
 
     if (type === "ai") {

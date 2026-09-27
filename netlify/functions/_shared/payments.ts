@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logLeadActivity } from "./activity-log";
-import { MONO_STATUSES, formatUah, type MonoInvoiceState } from "./monobank";
+import { MONO_STATUSES, MonoError, createInvoice, formatUah, readOrgMonoToken, type MonoInvoiceState } from "./monobank";
 
 export interface PaymentRow {
   id: string;
@@ -194,5 +195,110 @@ export async function applySubscriptionRenewalOutcome(supabase: SupabaseClient, 
       actorType: "system",
       details: { subscription_id: subscription.id, attempts, payment_id: payment.id },
     });
+  }
+}
+
+const OFFER_INVOICE_VALIDITY_SECONDS = 7 * 24 * 60 * 60;
+
+export interface OfferInvoiceResult {
+  ok: boolean;
+  paymentId?: string;
+  pageUrl?: string;
+  offerName?: string;
+  amount?: number;
+  ccy?: number;
+  kind?: "one_time" | "recurring";
+  interval?: "week" | "month" | "year" | null;
+  error?: string;
+}
+
+/**
+ * The offer-catalog counterpart of create-payment.ts's "action: create" —
+ * factored out here (rather than duplicated) so both a chat-side caller and
+ * _shared/funnel-graph.ts's 'offer' node create invoices the exact same way:
+ * amount/currency/name always come from the offers row itself, a recurring
+ * offer gets a subscriptions row before the invoice (same reserve-then-
+ * fulfil shape payments rows already follow), and saveCardData is attached
+ * automatically when it's recurring.
+ *
+ * `funnelStateId`, when given, is stamped on the payments row so
+ * mono-webhook.ts knows which parked 'offer' node to resume on success —
+ * chat-side callers simply omit it.
+ */
+export async function createOfferInvoice(
+  supabase: SupabaseClient,
+  params: { orgId: string; offerId: string; leadId: string | null; threadId: string | null; funnelStateId?: string | null; siteUrl: string },
+): Promise<OfferInvoiceResult> {
+  const { orgId, offerId, leadId, threadId, funnelStateId, siteUrl } = params;
+
+  const creds = await readOrgMonoToken(supabase, orgId);
+  if (!creds) return { ok: false, error: "Plata by Mono не підключено" };
+
+  const { data: offerRow } = await supabase.from("offers").select("id, name, price_amount, ccy, kind, interval, is_active").eq("id", offerId).eq("org_id", orgId).maybeSingle();
+  if (!offerRow || !offerRow.is_active) return { ok: false, error: "Оффер не знайдено або він неактивний" };
+
+  const amount = offerRow.price_amount as number;
+  const ccy = offerRow.ccy as number;
+  const destination = offerRow.name as string;
+  const kind = offerRow.kind as "one_time" | "recurring";
+  const interval = offerRow.interval as "week" | "month" | "year" | null;
+  const reference = randomUUID().replace(/-/g, "");
+
+  let subscriptionId: string | null = null;
+  if (kind === "recurring" && interval) {
+    const { data: subscription, error: subError } = await supabase
+      .from("subscriptions")
+      .insert({ org_id: orgId, offer_id: offerId, lead_id: leadId, thread_id: threadId, funnel_state_id: funnelStateId ?? null, status: "awaiting_card", amount, ccy, interval })
+      .select("id")
+      .single();
+    if (subError || !subscription) {
+      console.error("createOfferInvoice: subscription insert failed", subError);
+      return { ok: false, error: "Не вдалося створити підписку" };
+    }
+    subscriptionId = subscription.id as string;
+  }
+
+  const { data: payment, error: insertError } = await supabase
+    .from("payments")
+    .insert({
+      org_id: orgId,
+      provider: "monobank",
+      test_mode: creds.account.test_mode,
+      reference,
+      lead_id: leadId,
+      thread_id: threadId,
+      funnel_state_id: funnelStateId ?? null,
+      amount,
+      ccy,
+      destination,
+      status: "created",
+      offer_id: offerId,
+      subscription_id: subscriptionId,
+    })
+    .select("id")
+    .single();
+  if (insertError || !payment) {
+    console.error("createOfferInvoice: payment insert failed", insertError);
+    if (subscriptionId) await supabase.from("subscriptions").delete().eq("id", subscriptionId);
+    return { ok: false, error: "Не вдалося створити платіж" };
+  }
+
+  try {
+    const invoice = await createInvoice(creds.token, {
+      amount,
+      ccy,
+      reference,
+      destination,
+      webHookUrl: `${siteUrl}/.netlify/functions/mono-webhook`,
+      validitySeconds: OFFER_INVOICE_VALIDITY_SECONDS,
+      ...(subscriptionId ? { saveCardData: { saveCard: true as const, walletId: subscriptionId } } : {}),
+    });
+    await supabase.from("payments").update({ invoice_id: invoice.invoiceId, page_url: invoice.pageUrl, updated_at: new Date().toISOString() }).eq("id", payment.id);
+    return { ok: true, paymentId: payment.id as string, pageUrl: invoice.pageUrl, offerName: destination, amount, ccy, kind, interval };
+  } catch (err) {
+    await supabase.from("payments").delete().eq("id", payment.id);
+    if (subscriptionId) await supabase.from("subscriptions").delete().eq("id", subscriptionId);
+    console.error("createOfferInvoice: createInvoice failed", err);
+    return { ok: false, error: err instanceof MonoError ? err.message : "monobank не відповідає" };
   }
 }
