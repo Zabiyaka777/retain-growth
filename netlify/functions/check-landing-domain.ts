@@ -103,5 +103,14 @@ export const handler: Handler = async (event) => {
     if (error) console.error("check-landing-domain: status update failed", error);
   }
 
-  return jsonResponse(200, { ok: true, dnsResolved, sslIssued, status: verified ? "verified" : "pending" });
+  // dnsTarget too, not just from save-landing-domain: the editor only learns
+  // the CNAME value from one of these two calls, and after a reload the
+  // tenant never re-binds — they come back to press "Перевірити".
+  return jsonResponse(200, {
+    ok: true,
+    dnsResolved,
+    sslIssued,
+    status: verified ? "verified" : "pending",
+    dnsTarget: site?.default_domain ?? null,
+  });
 };

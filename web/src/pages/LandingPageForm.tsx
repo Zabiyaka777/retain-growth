@@ -22,7 +22,7 @@ import {
   type OrbSize,
 } from '../components/LandingTemplates'
 import { RESERVED_SLUGS } from '../lib/reservedSlugs'
-import { IconAlert, IconArrowLeft, IconCheckCircle, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
+import { IconAlert, IconArrowLeft, IconCheckCircle, IconDuplicate, IconLink, IconPlus, IconSpinner, IconTrash } from '../components/icons'
 
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession()
@@ -192,6 +192,50 @@ function Acc({ title, filled, children }: { title: string; filled?: boolean; chi
   )
 }
 
+// Second-level suffixes a tenant is likely to register under — without them
+// "shop.com.ua" would read as the subdomain "shop" of "com.ua".
+const TWO_PART_SUFFIXES = new Set(['com.ua', 'org.ua', 'net.ua', 'in.ua', 'kiev.ua', 'kyiv.ua', 'co.uk', 'org.uk', 'com.pl', 'com.au'])
+
+// What goes into the registrar's "Host / Ім'я" column: everything left of the
+// registered domain, or "@" for the bare domain itself.
+function dnsHostFor(domain: string): { host: string; apex: boolean } {
+  const labels = domain.split('.')
+  const baseLen = TWO_PART_SUFFIXES.has(labels.slice(-2).join('.')) ? 3 : 2
+  if (labels.length <= baseLen) return { host: '@', apex: true }
+  return { host: labels.slice(0, labels.length - baseLen).join('.'), apex: false }
+}
+
+function CopyValue({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  async function handleCopy() {
+    let ok = false
+    try {
+      await navigator.clipboard.writeText(text)
+      ok = true
+    } catch {
+      // Clipboard API denied (permissions policy, embedded browser, older
+      // Safari) — the legacy selection copy still works inside a click.
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
+      document.body.appendChild(ta)
+      ta.select()
+      ok = document.execCommand('copy')
+      ta.remove()
+    }
+    if (!ok) return
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button type="button" className="btn btn-ghost lpe-dns-copy" onClick={handleCopy}>
+      {copied ? <IconCheckCircle size={13} /> : <IconDuplicate size={13} />}
+      {copied ? 'Скопійовано' : 'Скопіювати'}
+    </button>
+  )
+}
+
 export default function LandingPageForm() {
   const navigate = useNavigate()
   const { pageId } = useParams<{ pageId: string }>()
@@ -268,6 +312,10 @@ export default function LandingPageForm() {
           setCustomDomain(p.custom_domain ?? '')
           setDomainInput(p.custom_domain ?? '')
           setDomainStatus(p.custom_domain_status)
+          // A pending domain needs its CNAME value on screen, and that value
+          // comes only from the backend — so ask once quietly on open (which
+          // also picks up DNS that propagated while the editor was closed).
+          if (p.custom_domain && p.custom_domain_status !== 'verified') void checkDomain({ silent: true })
         }
       }
       setLoading(false)
@@ -503,13 +551,15 @@ export default function LandingPageForm() {
     }
   }
 
-  async function checkDomain() {
+  // silent: the automatic check on open — updates status and the CNAME value
+  // but never greets the tenant with an error they didn't ask for.
+  async function checkDomain({ silent = false }: { silent?: boolean } = {}) {
     if (!pageId) return
     setCheckingDomain(true)
     setDomainError(null)
     const accessToken = await getAccessToken()
     if (!accessToken) {
-      setDomainError('Сесія недійсна, увійдіть знову')
+      if (!silent) setDomainError('Сесія недійсна, увійдіть знову')
       setCheckingDomain(false)
       return
     }
@@ -521,14 +571,16 @@ export default function LandingPageForm() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setDomainError(data.error ?? 'Не вдалося перевірити домен')
+        if (!silent) setDomainError(data.error ?? 'Не вдалося перевірити домен')
       } else {
         setDomainStatus(data.status ?? null)
+        if (data.dnsTarget) setDnsTarget(data.dnsTarget)
+        if (silent) return
         if (!data.dnsResolved) setDomainError('DNS ще не вказує на нас — перевірте запис і спробуйте ще раз за кілька хвилин')
         else if (!data.sslIssued) setDomainError('DNS налаштовано, сертифікат ще видається — спробуйте перевірити ще раз за хвилину')
       }
     } catch {
-      setDomainError('Мережева помилка. Спробуйте ще раз')
+      if (!silent) setDomainError('Мережева помилка. Спробуйте ще раз')
     } finally {
       setCheckingDomain(false)
     }
@@ -901,6 +953,52 @@ export default function LandingPageForm() {
                 <div className="lpe-fields">
                   {isEditing && (
                     <Acc title="Свій домен" filled={!!customDomain}>
+                      <details className="lpe-howto">
+                        <summary>Як підключити</summary>
+                        <ol>
+                          <li>
+                            Якщо домену ще немає — купіть на будь-якому реєстраторі (Namecheap, GoDaddy або український imena.ua). Кілька
+                            хвилин, зазвичай $10–15/рік.
+                          </li>
+                          <li>
+                            Найпростіше — під’єднати піддомен (наприклад <code>promo.вашдомен.com</code> чи <code>go.вашдомен.com</code>), а не
+                            голий домен. Впишіть його в поле нижче і натисніть «Прив’язати».
+                          </li>
+                          <li>
+                            Зайдіть у DNS-налаштування свого домену в реєстратора (розділ зазвичай зветься «DNS», «Управління записами» або
+                            «DNS Zone Editor») і додайте запис:
+                            <ul>
+                              <li>Тип: <code>CNAME</code></li>
+                              <li>
+                                Host / Ім’я: піддомен, який ви вписали (наприклад{' '}
+                                <code>{customDomain && !dnsHostFor(customDomain).apex ? dnsHostFor(customDomain).host : 'promo'}</code>)
+                              </li>
+                              <li>
+                                Значення:{' '}
+                                {customDomain && dnsTarget ? (
+                                  <>
+                                    <code>{dnsTarget}</code> <CopyValue text={dnsTarget} />
+                                  </>
+                                ) : customDomain ? (
+                                  'натисніть «Перевірити», щоб побачити'
+                                ) : (
+                                  'з’явиться нижче після прив’язки'
+                                )}
+                              </li>
+                            </ul>
+                          </li>
+                          <li>
+                            Якщо потрібен саме голий домен без піддомену — CNAME на корені більшість реєстраторів не дозволяють. Потрібен запис
+                            ALIAS або ANAME з тим самим значенням; якщо такого пункту нема — напишіть у підтримку реєстратора з проханням
+                            прописати корінь домену на Netlify.
+                          </li>
+                          <li>DNS оновлюється не миттєво — від кількох хвилин до кількох годин.</li>
+                          <li>
+                            Поверніться сюди й натисніть «Перевірити». Статус «Підключено» означає, що лендінг вже відкривається на вашому
+                            домені.
+                          </li>
+                        </ol>
+                      </details>
                       <div className="field">
                         <label htmlFor="lpe-domain">Домен для цього лендінга</label>
                         <div className="input-wrap" style={{ alignItems: 'center' }}>
@@ -930,7 +1028,7 @@ export default function LandingPageForm() {
                             </button>
                           )}
                           {customDomain && (
-                            <button type="button" className="btn btn-secondary" disabled={checkingDomain} onClick={checkDomain}>
+                            <button type="button" className="btn btn-secondary" disabled={checkingDomain} onClick={() => checkDomain()}>
                               {checkingDomain ? <IconSpinner size={14} /> : 'Перевірити'}
                             </button>
                           )}
@@ -944,18 +1042,40 @@ export default function LandingPageForm() {
                             {domainStatus === 'verified' ? (
                               <span>Лендінг відкривається за адресою https://{customDomain}</span>
                             ) : (
-                              <span>Додайте у DNS вашого домену CNAME-запис на {dnsTarget || 'адресу, показану після прив’язки'}, потім натисніть «Перевірити»</span>
+                              <span>Додайте у DNS вашого домену запис нижче, потім натисніть «Перевірити»</span>
                             )}
                           </p>
+                        )}
+                        {customDomain && domainStatus !== 'verified' && (
+                          <div className="lpe-dns-record">
+                            <span>
+                              Тип: <code>{dnsHostFor(customDomain).apex ? 'ALIAS / ANAME' : 'CNAME'}</code>
+                            </span>
+                            <span className="sep">·</span>
+                            <span>
+                              Host: <code>{dnsHostFor(customDomain).host}</code>
+                            </span>
+                            <span className="sep">·</span>
+                            <span className="lpe-dns-value">
+                              Значення:{' '}
+                              {dnsTarget ? (
+                                <>
+                                  <code>{dnsTarget}</code>
+                                  <CopyValue text={dnsTarget} />
+                                </>
+                              ) : checkingDomain ? (
+                                <IconSpinner size={12} />
+                              ) : (
+                                'натисніть «Перевірити», щоб отримати'
+                              )}
+                            </span>
+                          </div>
                         )}
                         {domainError && (
                           <p className="flow-node-hint" style={{ margin: '0.5rem 0 0', color: 'var(--danger)' }}>
                             {domainError}
                           </p>
                         )}
-                        <p className="flow-node-hint" style={{ margin: '0.5rem 0 0' }}>
-                          Для кореневого домену (без піддомену) замість CNAME вкажіть A-запис на IP-адресу, яку Netlify показує для нього.
-                        </p>
                       </div>
                     </Acc>
                   )}
