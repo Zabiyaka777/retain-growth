@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom'
 import type { RealtimePostgresInsertPayload, RealtimePostgresUpdatePayload } from '@supabase/supabase-js'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabaseClient'
-import { IconArchiveBox, IconBan, IconBolt, IconChat, IconClose, IconCpu, IconEdit, IconFile, IconInbox, IconLink, IconPaperclip, IconSpinner, IconUser } from '../components/icons'
+import { IconArchiveBox, IconBan, IconBolt, IconChat, IconClose, IconCpu, IconEdit, IconFile, IconInbox, IconLink, IconMail, IconPaperclip, IconSpinner, IconUser } from '../components/icons'
+import { ChatFilterBar } from '../components/ChatFilters'
+import { EMPTY_CHAT_FILTERS, isFiltering, toRpcArgs, type ChatFilterState } from '../lib/chatFilters'
 import Marquee from '../components/Marquee'
 import LeadProfile from '../components/LeadProfile'
 import LeadIndicatorIcons from '../components/LeadIndicatorIcons'
@@ -575,6 +577,9 @@ export default function Chats() {
   // the URL happens in this file.
   const [searchParams] = useSearchParams()
   const [threads, setThreads] = useState<ThreadRow[]>([])
+  // Read by the filter effect, which must not re-run on every realtime patch.
+  const threadsRef = useRef<ThreadRow[]>([])
+  threadsRef.current = threads
   const [threadsLoading, setThreadsLoading] = useState(true)
   const [threadsError, setThreadsError] = useState<string | null>(null)
 
@@ -625,6 +630,17 @@ export default function Chats() {
 
   const [onlyUnread, setOnlyUnread] = useState(false)
   const [showClosed, setShowClosed] = useState(false)
+
+  // Search + filter panel. The paginated `threads` only ever holds the pages
+  // scrolled so far, so a filter can't just narrow it in the browser: the
+  // matching ids come from chat_filter_threads (the whole org, server-side),
+  // any of those threads not loaded yet are fetched and merged into
+  // `threads` — so realtime updates and selection keep working on them as on
+  // any other row — and the list shows exactly that id set. null = no filter.
+  const [filters, setFilters] = useState<ChatFilterState>(EMPTY_CHAT_FILTERS)
+  const [filterIds, setFilterIds] = useState<Set<string> | null>(null)
+  const [filterBusy, setFilterBusy] = useState(false)
+  const [filterError, setFilterError] = useState<string | null>(null)
 
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -1026,7 +1042,50 @@ export default function Chats() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!isFiltering(filters)) {
+      setFilterIds(null)
+      setFilterError(null)
+      return
+    }
+    let cancelled = false
+    setFilterBusy(true)
+    void (async () => {
+      const { data, error } = await supabase.rpc('chat_filter_threads', toRpcArgs(filters))
+      if (cancelled) return
+      if (error) {
+        setFilterError(error.message)
+        setFilterBusy(false)
+        return
+      }
+      const ids = ((data ?? []) as { id: string }[]).map((r) => r.id)
+      const known = new Set(threadsRef.current.map((t) => t.id))
+      const missing = ids.filter((id) => !known.has(id))
+      if (missing.length > 0) {
+        const { data: rows } = await supabase
+          .from('threads')
+          .select(THREAD_SELECT)
+          .in('id', missing)
+          .order('created_at', { referencedTable: 'messages', ascending: false })
+          .limit(1, { referencedTable: 'messages' })
+        if (cancelled) return
+        const fetched = (rows ?? []) as unknown as ThreadRow[]
+        setThreads((prev) => {
+          const have = new Set(prev.map((t) => t.id))
+          return [...prev, ...fetched.filter((t) => !have.has(t.id))]
+        })
+      }
+      setFilterError(null)
+      setFilterIds(new Set(ids))
+      setFilterBusy(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [filters])
+
   async function loadMoreThreads() {
+    if (filterIds) return // a filtered list is already complete (up to the RPC's limit)
     if (!threadsCursor || !threadsHasMore || threadsLoadingMore) return
     setThreadsLoadingMore(true)
 
@@ -1410,22 +1469,33 @@ export default function Chats() {
       ) : (
         <div className="chats-layout">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignSelf: 'flex-start' }}>
+            <div className="chat-toggles" role="group" aria-label="Швидкі фільтри">
               <button
                 type="button"
-                className={`btn ${onlyUnread ? 'btn-primary' : 'btn-secondary'}`}
+                className={`chat-toggle${onlyUnread ? ' is-on' : ''}`}
                 onClick={() => setOnlyUnread((v) => !v)}
+                aria-pressed={onlyUnread}
               >
-                Тільки непрочитані
+                <IconMail size={13} />
+                Непрочитані
+                {(() => {
+                  const n = threads.filter((t) => t.unread_count > 0 && t.status !== 'closed' && t.leads?.status !== 'archived').length
+                  return n > 0 ? <span className="chat-toggle-count">{n}</span> : null
+                })()}
               </button>
               <button
                 type="button"
-                className={`btn ${showClosed ? 'btn-primary' : 'btn-secondary'}`}
+                className={`chat-toggle${showClosed ? ' is-on' : ''}`}
                 onClick={() => setShowClosed((v) => !v)}
+                aria-pressed={showClosed}
               >
-                Показати закриті
+                <IconArchiveBox size={13} />
+                Закриті
               </button>
             </div>
+
+            <ChatFilterBar value={filters} onChange={setFilters} busy={filterBusy} />
+            {filterError && <div className="alert alert-error">{filterError}</div>}
 
             <div
               className="card card-tight thread-list"
@@ -1447,7 +1517,10 @@ export default function Chats() {
                 // rather than widening one: off shows only open threads, on
                 // shows only closed ones. Previously "on" fell through to
                 // everything, which read as the toggle doing nothing.
-                const statusFiltered = threads.filter((t) => {
+                const base = filterIds
+                  ? threads.filter((t) => filterIds.has(t.id)).sort((a, b) => (a.updated_at < b.updated_at ? 1 : a.updated_at > b.updated_at ? -1 : 0))
+                  : threads
+                const statusFiltered = base.filter((t) => {
                   if (t.leads?.status === 'archived') return false
                   return showClosed ? t.status === 'closed' : t.status !== 'closed'
                 })
@@ -1456,7 +1529,7 @@ export default function Chats() {
                 if (visible.length === 0) {
                   return (
                     <p style={{ color: 'var(--fg-muted)', fontSize: '0.8125rem', textAlign: 'center', padding: '1rem' }}>
-                      Нічого не знайдено за поточним фільтром.
+                      {filterIds ? 'Нічого не знайдено — змініть або скиньте фільтри.' : 'Нічого не знайдено за поточним фільтром.'}
                     </p>
                   )
                 }
