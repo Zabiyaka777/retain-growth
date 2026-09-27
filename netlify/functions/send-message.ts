@@ -193,6 +193,34 @@ export const handler: Handler = async (event) => {
     }
   }
 
+  // Same isolation as the WhatsApp branch above: delegated whole to
+  // instagram-send.ts. Attachments aren't forwarded yet — instagram-send.ts
+  // only sends text today — so a manager attaching a file to an Instagram
+  // reply gets a clear error instead of the file silently vanishing.
+  if (thread.channel_type === "instagram") {
+    if (attachments && attachments.length > 0) {
+      return jsonResponse(400, { error: "Вкладення для Instagram поки не підтримуються" });
+    }
+    const siteUrl = process.env.URL;
+    if (!siteUrl) {
+      return jsonResponse(500, { error: "URL сайту не сконфігуровано" });
+    }
+    try {
+      const res = await fetch(`${siteUrl}/.netlify/functions/instagram-send`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-internal-secret": serviceRoleKey },
+        body: JSON.stringify({ threadId, text, sender: "agent", sentBy: userData.user.id, senderName: displayName(userData.user.email) }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: unknown } | null;
+      if (!res.ok || data?.ok === false) {
+        return jsonResponse(res.status === 404 ? 404 : 502, { error: data?.error ?? "Не вдалося надіслати повідомлення" });
+      }
+      return jsonResponse(200, { ok: true, message: data?.message ?? null });
+    } catch {
+      return jsonResponse(502, { error: "Мережева помилка. Спробуйте ще раз" });
+    }
+  }
+
   const { data: credential, error: credentialError } = await supabase
     .from("channel_credentials")
     .select("bot_token_secret_id")

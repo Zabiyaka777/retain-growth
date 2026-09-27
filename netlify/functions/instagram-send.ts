@@ -29,8 +29,8 @@ function jsonResponse(statusCode: number, body: unknown) {
 interface SendBody {
   threadId?: string;
   text?: string;
-  /** Recorded on the stored message row: 'system' (funnel) or 'agent'. */
-  sender?: "system" | "agent";
+  /** Recorded on the stored message row: 'system' (funnel), 'agent' (manager) or 'ai'. */
+  sender?: "system" | "agent" | "ai";
   /** Only set for an agent reply, so Chats can attribute it. */
   sentBy?: string | null;
   /** The manager's display name (send-message.ts derives it from their email). */

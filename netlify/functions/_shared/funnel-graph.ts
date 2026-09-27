@@ -92,10 +92,18 @@ export function computeDelayUntil(config: DelayConfig, now: Date = new Date()): 
 // renders as a direct URL button instead — Telegram never sends a callback
 // for those, so processGraphState's button-click handling above naturally
 // never sees a link button's id (untouched, no change needed there).
+// "quick_reply" (Instagram/Messenger-only) is wired exactly like "edge" for
+// graph purposes — it's edge-routable, gets a Handle, resolveNextNode
+// matches on its id the same way — the only difference is how
+// toInstagramButtons renders it (an ephemeral chip instead of a persistent
+// button). Telegram/WhatsApp never emit this value; buildReplyMarkup treats
+// anything that isn't "link" as a callback button regardless, so a node
+// shared across channels keeps working on Telegram even if one of its
+// buttons is marked quick_reply for the Instagram tab.
 export interface FunnelButton {
   id: string;
   label: string;
-  actionType?: "edge" | "link";
+  actionType?: "edge" | "link" | "quick_reply";
   url?: string;
 }
 
@@ -130,9 +138,10 @@ export interface TelegramChannelConfig {
 export interface MessageConfig {
   /** Strip the inline keyboard off the message once a button has been used. */
   clear_buttons_after_use?: boolean;
-  // whatsapp uses the same block shape as telegram — the builder writes both
-  // through the same editor; only the formatting marks differ.
-  channels?: { telegram: TelegramChannelConfig | null; whatsapp: TelegramChannelConfig | null; fbm: null };
+  // whatsapp/instagram use the same block shape as telegram — the builder
+  // writes all of them through the same editor; only the formatting marks
+  // (and, for instagram, the button rendering) differ.
+  channels?: { telegram: TelegramChannelConfig | null; whatsapp: TelegramChannelConfig | null; instagram: TelegramChannelConfig | null; fbm: null };
   buttons?: FunnelButton[];
 }
 
@@ -473,6 +482,22 @@ function buildReplyMarkup(buttons: FunnelButton[] | undefined): ReplyMarkup {
       b.actionType === "link" && b.url ? [{ text: b.label, url: b.url }] : [{ text: b.label, callback_data: b.id }],
     ),
   };
+}
+
+// Instagram's Send API has two independent button surfaces (see
+// _shared/instagram.ts): a persistent button template (max 3 — "edge"/"link"
+// buttons) and ephemeral quick replies (max 10 — "quick_reply" buttons).
+// Both come out of the same flat FunnelButton[] the builder already stores.
+function toInstagramButtons(buttons: FunnelButton[] | undefined) {
+  const baseButtons = (buttons ?? [])
+    .filter((b) => b.actionType !== "quick_reply")
+    .slice(0, 3)
+    .map((b) => (b.actionType === "link" && b.url ? { type: "web_url" as const, title: b.label, url: b.url } : { type: "postback" as const, title: b.label, payload: b.id }));
+  const quickReplies = (buttons ?? [])
+    .filter((b) => b.actionType === "quick_reply")
+    .slice(0, 10)
+    .map((b) => ({ content_type: "text" as const, title: b.label, payload: b.id }));
+  return { baseButtons, quickReplies };
 }
 
 // Guards a single invocation against looping forever on a malformed graph
@@ -1069,6 +1094,10 @@ async function sendGraphMessage(
   if (threadInfo.channel_type === "whatsapp") {
     return sendGraphWhatsAppMessage(state, config);
   }
+  // Same isolation for Instagram, delegated whole to instagram-send.ts.
+  if (threadInfo.channel_type === "instagram") {
+    return sendGraphInstagramMessage(state, config);
+  }
 
   const telegram = config.channels?.telegram;
   if (!telegram) {
@@ -1196,6 +1225,53 @@ async function sendGraphWhatsAppMessage(state: ClaimedState, config: MessageConf
     return true;
   } catch (err) {
     console.error("funnel-graph: whatsapp-send invoke failed", err);
+    return false;
+  }
+}
+
+// Falls back to the fbm block first (same 'none' formatting as instagram —
+// no stray markdown marks leak through), then telegram as a last resort, so
+// a node authored before the Instagram tab existed still sends something
+// rather than nothing. See sendGraphWhatsAppMessage above for why a fallback
+// exists at all.
+async function sendGraphInstagramMessage(state: ClaimedState, config: MessageConfig): Promise<boolean> {
+  const channel = config.channels?.instagram ?? config.channels?.fbm ?? config.channels?.telegram;
+  if (!channel) {
+    console.error("funnel-graph: instagram message node with no content", state.id);
+    return false;
+  }
+
+  const { text } = getChannelContent(channel);
+  if (!text) {
+    console.error("funnel-graph: instagram message node with no text", state.id);
+    return false;
+  }
+
+  const siteUrl = process.env.URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!siteUrl || !serviceRoleKey) {
+    console.error("funnel-graph: URL/service key не сконфігуровано, не можу викликати instagram-send");
+    return false;
+  }
+
+  const { baseButtons, quickReplies } = toInstagramButtons(config.buttons);
+
+  try {
+    const res = await fetch(`${siteUrl}/.netlify/functions/instagram-send`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-internal-secret": serviceRoleKey },
+      body: JSON.stringify({ threadId: state.thread_id, text, sender: "system", baseButtons, quickReplies }),
+    });
+    const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+
+    if (!res.ok || data?.ok === false) {
+      console.error("funnel-graph: instagram-send failed", res.status, data);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("funnel-graph: instagram-send invoke failed", err);
     return false;
   }
 }

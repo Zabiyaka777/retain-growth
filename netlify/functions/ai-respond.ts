@@ -1101,6 +1101,47 @@ export const handler: Handler = async (event) => {
     return jsonResponse(200, { ok: false, reason: "ai_empty_reply" });
   }
 
+  // Isolated parallel path, same shape as the funnel graph's own branch
+  // (_shared/funnel-graph.ts's sendGraphInstagramMessage): delegated whole to
+  // instagram-send.ts, so the Telegram-specific code below is untouched.
+  // Returns before reaching it either way.
+  if (thread.channel_type === "instagram") {
+    const siteUrl = process.env.URL;
+    if (!siteUrl) {
+      console.error("ai-respond: URL сайту не сконфігуровано, не можу викликати instagram-send");
+      return jsonResponse(500, { error: "Не вдалося надіслати повідомлення" });
+    }
+    try {
+      const igRes = await fetch(`${siteUrl}/.netlify/functions/instagram-send`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-internal-secret": serviceRoleKey },
+        body: JSON.stringify({ threadId, text: replyText, sender: "ai" }),
+      });
+      const igData = (await igRes.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!igRes.ok || igData?.ok === false) {
+        console.error("ai-respond: instagram-send failed", igRes.status, igData);
+        return jsonResponse(502, { error: igData?.error ?? "Не вдалося надіслати повідомлення" });
+      }
+    } catch (err) {
+      console.error("ai-respond: instagram-send invoke failed", err);
+      return jsonResponse(500, { error: "Не вдалося надіслати повідомлення" });
+    }
+
+    // instagram-send.ts already wrote the outbound `messages` row (sender
+    // 'ai') — only the AI-transcript log is this function's own job.
+    const { error: assistantLogError } = await supabase.from("ai_conversation_log").insert({
+      org_id: orgId,
+      thread_id: threadId,
+      funnel_state_id: state.id,
+      role: "assistant",
+      content: replyText,
+    });
+    if (assistantLogError) console.error("ai-respond: assistant turn log insert failed", assistantLogError);
+
+    if (exitRequested) await advanceFromAiNode(supabase, state, orgId, exitRequested);
+    return jsonResponse(200, { ok: true, advanced: !!exitRequested, exit: exitRequested, completedTaskIds: completedNow, failedAttempts: failedAttemptsNow });
+  }
+
   const { data: telegramCredential, error: telegramCredentialError } = await supabase
     .from("channel_credentials")
     .select("bot_token_secret_id")
