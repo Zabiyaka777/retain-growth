@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabaseClient'
 import { IconArchiveBox, IconBan, IconBolt, IconChat, IconClose, IconCpu, IconEdit, IconFile, IconInbox, IconLink, IconMail, IconPaperclip, IconSpinner, IconUser } from '../components/icons'
 import { ChatFilterBar } from '../components/ChatFilters'
+import { PaymentLinkButton } from '../components/PaymentLink'
 import { EMPTY_CHAT_FILTERS, isFiltering, toRpcArgs, type ChatFilterState } from '../lib/chatFilters'
 import Marquee from '../components/Marquee'
 import LeadProfile from '../components/LeadProfile'
@@ -227,6 +228,14 @@ function activityText(entry: ActivityRow): string {
       const where = d.funnel_name ? ` (${quoted(d.funnel_name)}${d.node_label ? ` → ${quoted(d.node_label)}` : ''})` : ''
       return `AI увімкнено${where}${d.replied ? ' — з відповіддю на останнє повідомлення' : ''}`
     }
+    case 'payment_link_created':
+      return `Надіслано рахунок ${d.amount ?? ''} грн${d.destination ? ` — ${quoted(d.destination)}` : ''}${d.test_mode ? ' (тест)' : ''}`
+    case 'payment_success':
+      return `Оплачено ${d.amount ?? ''} грн${d.destination ? ` — ${quoted(d.destination)}` : ''}${d.test_mode ? ' (тест)' : ''}`
+    case 'payment_failed':
+      return `Оплата не пройшла${d.failure_reason ? `: ${d.failure_reason}` : ''}${d.test_mode ? ' (тест)' : ''}`
+    case 'payment_reversed':
+      return `Оплату повернено ${d.amount ?? ''} грн${d.test_mode ? ' (тест)' : ''}`
     case 'bot_blocked':
       return 'Користувач заблокував бота'
     case 'bot_unblocked':
@@ -256,7 +265,7 @@ function activityActor(entry: ActivityRow): string {
 // Colour groups the action families so the timeline is scannable without
 // reading every line: green for progress, red for removals, amber for tasks.
 function activityTone(actionType: string): string {
-  if (actionType === 'stage_changed' || actionType === 'tag_added' || actionType === 'funnel_connected' || actionType === 'ai_resumed_by_manager' || actionType === 'bot_unblocked') return 'is-positive'
+  if (actionType === 'stage_changed' || actionType === 'tag_added' || actionType === 'funnel_connected' || actionType === 'ai_resumed_by_manager' || actionType === 'bot_unblocked' || actionType === 'payment_success') return 'is-positive'
   if (
     actionType === 'tag_removed' ||
     actionType === 'funnel_stopped' ||
@@ -264,7 +273,9 @@ function activityTone(actionType: string): string {
     actionType === 'task_deleted' ||
     actionType === 'ai_paused_by_manager' ||
     actionType === 'bot_blocked' ||
-    actionType === 'ai_reply_failed'
+    actionType === 'ai_reply_failed' ||
+    actionType === 'payment_failed' ||
+    actionType === 'payment_reversed'
   )
     return 'is-negative'
   if (actionType.startsWith('task_')) return 'is-task'
@@ -1940,6 +1951,7 @@ export default function Chats() {
                   >
                     {attachUploading ? <IconSpinner size={16} /> : <IconPaperclip size={16} />}
                   </button>
+                  <PaymentLinkButton threadId={selectedThread.id} onInsert={(text) => setReply((prev) => (prev.trim() ? `${prev.trimEnd()}\n\n${text}` : text))} />
                   <textarea
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}

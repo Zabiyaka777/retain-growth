@@ -2,6 +2,7 @@ import type { Handler } from "@netlify/functions";
 import { WebSocket as NodeWebSocket } from "ws";
 import { createClient } from "@supabase/supabase-js";
 import { logAdminAction, requirePlatformAdmin } from "./_shared/platform-admin";
+import { getMerchantDetails, type MonoMerchant } from "./_shared/monobank";
 
 // See connect-telegram.ts for why this polyfill is needed (Node <22 has no
 // global WebSocket, which @supabase/supabase-js requires internally).
@@ -12,7 +13,9 @@ if (typeof globalThis.WebSocket === "undefined") {
 const supabaseUrl = process.env.SUPABASE_URL!;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-const KNOWN_KEYS = new Set(["netlify_api_token"]);
+// monobank_platform_token — Plata by Mono for Retain Growth's own billing
+// (charging organizations), not any org's own gateway (payment-account.ts).
+const KNOWN_KEYS = new Set(["netlify_api_token", "monobank_platform_token"]);
 
 function jsonResponse(statusCode: number, body: unknown) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
@@ -31,21 +34,49 @@ export const handler: Handler = async (event) => {
 
   let key = "";
   let value = "";
+  let action = "save";
   try {
     const body = JSON.parse(event.body || "{}");
     key = typeof body.key === "string" ? body.key.trim() : "";
     value = typeof body.value === "string" ? body.value.trim() : "";
+    if (body.action === "verify") action = "verify";
   } catch {
     return jsonResponse(400, { error: "Невалідне тіло запиту" });
   }
 
   if (!KNOWN_KEYS.has(key)) return jsonResponse(400, { error: "Невідомий ключ налаштування" });
-  if (!value) return jsonResponse(400, { error: "Значення обов'язкове" });
+  if (action === "save" && !value) return jsonResponse(400, { error: "Значення обов'язкове" });
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
   const admin = await requirePlatformAdmin(supabase, accessToken);
   if (!admin) return jsonResponse(403, { error: "Доступ лише для адміністраторів платформи" });
+
+  // «Перевірити»: the stored token against the gateway, nothing written.
+  if (action === "verify") {
+    if (key !== "monobank_platform_token") return jsonResponse(400, { error: "Перевірка доступна лише для токена monobank" });
+    const { data: row } = await supabase.from("platform_settings").select("secret_id").eq("key", key).maybeSingle();
+    if (!row) return jsonResponse(404, { error: "Токен ще не збережено" });
+    const { data: token } = await supabase.rpc("vault_read_secret", { secret_id: row.secret_id });
+    if (!token) return jsonResponse(500, { error: "Не вдалося прочитати токен" });
+    try {
+      const merchant = await getMerchantDetails(String(token));
+      await logAdminAction(supabase, admin, "platform_setting_verified", { key, merchant_id: merchant.merchantId });
+      return jsonResponse(200, { ok: true, merchant });
+    } catch (err) {
+      return jsonResponse(400, { error: (err as Error).message });
+    }
+  }
+
+  // A payment token is checked against monobank before it replaces anything.
+  let merchant: MonoMerchant | null = null;
+  if (key === "monobank_platform_token") {
+    try {
+      merchant = await getMerchantDetails(value);
+    } catch (err) {
+      return jsonResponse(400, { error: (err as Error).message });
+    }
+  }
 
   const { data: secretId, error: secretError } = await supabase.rpc("vault_create_secret", {
     secret: value,
@@ -74,7 +105,7 @@ export const handler: Handler = async (event) => {
     if (error) console.error("save-platform-setting: vault_delete_secret (old) failed", error);
   }
 
-  await logAdminAction(supabase, admin, "platform_setting_saved", { key });
+  await logAdminAction(supabase, admin, "platform_setting_saved", { key, ...(merchant ? { merchant_id: merchant.merchantId } : {}) });
 
-  return jsonResponse(200, { ok: true });
+  return jsonResponse(200, { ok: true, merchant });
 };

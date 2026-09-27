@@ -9622,3 +9622,307 @@ a.lp-cta-custom:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.38), inset 0
   letter-spacing: 0.06em;
   color: var(--fg-subtle);
 }
+
+/* ---------- Plata by Mono: integration card, payment link modal, payment list ---------- */
+
+.mono-card {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.mono-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.mono-head h3 {
+  font-size: 1.0625rem;
+  margin-bottom: 0.25rem;
+}
+.mono-head p {
+  color: var(--fg-muted);
+  font-size: 0.875rem;
+}
+.mono-logo {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #1a1a1f, #000);
+  border: 1px solid var(--border-strong);
+  color: #fff;
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.9);
+}
+.mono-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--success-soft), transparent 70%), var(--bg-subtle);
+}
+.mono-status-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+.mono-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 10px var(--success);
+}
+.mono-test-badge,
+.pay-test {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 0.375rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  border-radius: 5px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.mono-dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+.mono-dl dt {
+  font-size: 0.6875rem;
+  color: var(--fg-subtle);
+}
+.mono-dl dd {
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.mono-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.mono-toggle input {
+  margin-top: 0.1875rem;
+  accent-color: var(--warning);
+}
+.mono-toggle small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--fg-subtle);
+}
+.mono-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.mono-form {
+  gap: 0.75rem;
+}
+.mono-guide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-hover);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mono-guide {
+  margin: 0;
+  padding: 0.875rem 1rem 0.875rem 2.125rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
+.mono-guide b {
+  color: var(--fg);
+}
+.mono-guide a {
+  color: var(--accent-hover);
+}
+
+.pay-modal {
+  width: min(460px, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+.pay-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+.pay-modal-head > div {
+  flex: 1;
+  min-width: 0;
+}
+.pay-modal-head .modal-title {
+  margin: 0;
+}
+.pay-modal-head p {
+  font-size: 0.75rem;
+  color: var(--fg-subtle);
+}
+.pay-modal-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--success-soft);
+  color: var(--success);
+}
+.pay-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+.pay-form .btn-primary {
+  align-self: flex-start;
+}
+.pay-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pay-amount .input {
+  flex: 1;
+  height: 48px;
+  font-size: 1.375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pay-amount span {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+.pay-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.pay-history-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+.pay-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.pay-list li {
+  --tone: var(--fg-subtle);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.125rem 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--tone);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+}
+.pay-list li.tone-ok { --tone: var(--success); }
+.pay-list li.tone-wait { --tone: var(--warning); }
+.pay-list li.tone-bad { --tone: var(--danger); }
+.pay-list-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pay-list-main b {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.pay-list-main span {
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pay-list-side {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.pay-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--tone);
+  white-space: nowrap;
+}
+.pay-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+.pay-refresh {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.pay-refresh:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.pay-list-date {
+  grid-column: 1 / -1;
+  font-size: 0.6875rem;
+  color: var(--fg-subtle);
+}
+.pay-error {
+  font-size: 0.75rem;
+  color: var(--danger);
+}
+.profile-pay-total {
+  margin-left: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--success);
+  text-transform: none;
+  letter-spacing: 0;
+}

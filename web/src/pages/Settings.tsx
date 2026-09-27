@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
+import MonoIntegration from '../components/MonoIntegration'
 import { IconAlert, IconBuilding, IconCheckCircle, IconPlug, IconPlus, IconSparkles, IconSpinner, IconTrash } from '../components/icons'
 
 type Tab = 'integrations' | 'organization' | 'ai'
@@ -55,6 +56,7 @@ export default function Settings() {
         <div className="integrations-grid">
           <IntegrationsPanel />
           <WhatsAppPanel />
+          <MonoIntegration />
         </div>
       )}
       {tab === 'ai' && <AiPanel />}

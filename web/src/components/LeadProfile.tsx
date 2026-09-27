@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+import { PaymentList } from './PaymentLink'
+import { usePayments } from '../lib/payments'
 import { leadDisplayName, leadInitial } from '../lib/leadDisplayName'
 import LeadAvatar from './LeadAvatar'
 import { useLeadAvatars } from '../hooks/useLeadAvatars'
@@ -1498,6 +1500,8 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
         )}
       </section>
 
+      <LeadPayments leadId={leadId} />
+
       <section className="profile-section">
         <h4>Теги</h4>
         {loading ? (
@@ -1720,5 +1724,27 @@ export default function LeadProfile({ leadId, threadId, onClose, onLeadStatusCha
         </button>
       </section>
     </div>
+  )
+}
+
+// Invoices sent to this lead through the org's Plata by Mono — hidden
+// entirely when there are none, so orgs without payments never see it.
+function LeadPayments({ leadId }: { leadId: string }) {
+  const { payments, reload } = usePayments({ leadId })
+  if (payments.length === 0) return null
+  const paid = payments.filter((p) => p.status === 'success' && !p.test_mode)
+  const total = paid.reduce((sum, p) => sum + (p.final_amount && p.final_amount > 0 ? p.final_amount : p.amount), 0)
+  return (
+    <section className="profile-section">
+      <h4>
+        Платежі
+        {paid.length > 0 && (
+          <span className="profile-pay-total">
+            оплачено {(total / 100).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} грн
+          </span>
+        )}
+      </h4>
+      <PaymentList payments={payments} onChanged={reload} />
+    </section>
   )
 }

@@ -77,6 +77,8 @@ export default function AdminSettings() {
         </div>
       </div>
 
+      <PlatformMonoCard />
+
       <div className="card" style={{ maxWidth: 480 }}>
         <div className="settings-row-label">Netlify API токен</div>
         <p className="settings-row-hint" style={{ margin: '0.25rem 0 1rem' }}>
@@ -129,6 +131,133 @@ export default function AdminSettings() {
           </form>
         )}
       </div>
+    </div>
+  )
+}
+
+interface MonoMerchant {
+  merchantId: string
+  merchantName: string
+  edrpou: string
+}
+
+// Plata by Mono for Retain Growth's own billing — the platform's merchant
+// account, not any organization's (those connect their own in Settings →
+// Інтеграції). Token goes to Vault via save-platform-setting.ts, which checks
+// it against monobank first; charging organizations comes with the billing work.
+function PlatformMonoCard() {
+  const { session } = useAuth()
+  const [hasToken, setHasToken] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState<'save' | 'verify' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [merchant, setMerchant] = useState<MonoMerchant | null>(null)
+
+  useEffect(() => {
+    if (!session) return
+    supabase
+      .from('platform_settings')
+      .select('key')
+      .eq('key', 'monobank_platform_token')
+      .maybeSingle()
+      .then(({ data }) => {
+        setHasToken(!!data)
+        setLoading(false)
+      })
+  }, [session])
+
+  async function call(action: 'save' | 'verify') {
+    setBusy(action)
+    setError(null)
+    const accessToken = await getAccessToken()
+    if (!accessToken) {
+      setError('Сесія недійсна, увійдіть знову')
+      setBusy(null)
+      return
+    }
+    try {
+      const res = await fetch('/.netlify/functions/save-platform-setting', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ key: 'monobank_platform_token', action, ...(action === 'save' ? { value: token.trim() } : {}) }),
+      })
+      const data = await res.json()
+      if (!res.ok) setError(data.error ?? 'Не вдалося виконати дію')
+      else {
+        setMerchant(data.merchant ?? null)
+        if (action === 'save') {
+          setHasToken(true)
+          setToken('')
+        }
+      }
+    } catch {
+      setError('Мережева помилка. Спробуйте ще раз')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 480 }}>
+      <div className="settings-row-label">Платіжні шлюзи · Plata by Mono</div>
+      <p className="settings-row-hint" style={{ margin: '0.25rem 0 1rem' }}>
+        Мерчант-акаунт самої платформи — для власного білінгу Retain Growth (оплата підписки організаціями). Організації підключають свою Plata by Mono окремо,
+        у своїх Налаштуваннях → Інтеграції. Токен (X-Token) — з web.monobank.ua, розділ еквайрингу; тестовий — з api.monobank.ua. Перед збереженням токен
+        перевіряється в monobank і зберігається лише у Vault.
+      </p>
+      {loading ? (
+        <p className="settings-row-hint">Завантаження…</p>
+      ) : (
+        <form
+          className="auth-form"
+          autoComplete="off"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (token.trim()) void call('save')
+          }}
+        >
+          {hasToken && (
+            <div className="alert alert-info">
+              <IconCheckCircle size={16} />
+              <span>
+                Токен збережено
+                {merchant ? ` · ${merchant.merchantName} (ЄДРПОУ ${merchant.edrpou})` : ''}
+              </span>
+            </div>
+          )}
+          <div className="field">
+            <label htmlFor="admin-mono-token">{hasToken ? 'Замінити токен' : 'Токен'}</label>
+            <input
+              id="admin-mono-token"
+              className="input input-masked"
+              type="text"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder={hasToken ? 'Збережено — введіть новий, щоб замінити' : 'X-Token з кабінету monobank'}
+            />
+          </div>
+          {error && (
+            <div className="alert alert-error">
+              <IconAlert size={16} />
+              <span>{error}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button type="submit" className="btn btn-primary" disabled={busy !== null || !token.trim()}>
+              {busy === 'save' ? <IconSpinner size={16} /> : hasToken ? 'Замінити' : 'Зберегти'}
+            </button>
+            {hasToken && (
+              <button type="button" className="btn btn-secondary" disabled={busy !== null} onClick={() => void call('verify')}>
+                {busy === 'verify' ? <IconSpinner size={16} /> : 'Перевірити'}
+              </button>
+            )}
+          </div>
+        </form>
+      )}
     </div>
   )
 }
