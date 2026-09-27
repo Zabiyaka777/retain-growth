@@ -9,6 +9,7 @@ import Funnels from './pages/Funnels'
 import FunnelBuilder from './pages/FunnelBuilder'
 import AdminLayout from './components/AdminLayout'
 import AdminOrganizations from './pages/AdminOrganizations'
+import AdminOrganization from './pages/AdminOrganization'
 import AdminSecurity from './pages/AdminSecurity'
 import Elements from './pages/Elements'
 import LeadGenTools from './pages/LeadGenTools'
@@ -60,6 +61,7 @@ function App() {
       <Route path="/admin" element={<AdminLayout />}>
         <Route index element={<Navigate to="/admin/organizations" replace />} />
         <Route path="organizations" element={<AdminOrganizations />} />
+        <Route path="organizations/:orgId" element={<AdminOrganization />} />
         <Route path="security" element={<AdminSecurity />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>

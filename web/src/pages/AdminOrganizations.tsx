@@ -1,95 +1,104 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { IconAlert, IconSearch, IconSpinner, IconTrash } from '../components/icons'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { IconAlert, IconBuilding, IconChevronRight, IconSearch, IconSpinner, IconTrendingUp, IconUsers, IconWallet } from '../components/icons'
+import {
+  CHANNEL_LABELS,
+  STATUS_META,
+  adminOrgsApi,
+  formatDate,
+  orgInitial,
+  relativeTime,
+  trialDaysLeft,
+  usd,
+  type AdminOrgListItem,
+  type AdminOrgTotals,
+  type PlanStatus,
+} from '../lib/adminOrgs'
 
-interface AdminOrg {
-  id: string
-  name: string
-  created_at: string
-  lead_count: number
-  channels: string[]
-  last_thread_at: string | null
-}
+type StatusFilter = 'all' | PlanStatus | 'none'
+type SortKey = 'new' | 'mrr' | 'leads' | 'activity'
 
-interface OrgDiscount {
-  id: string
-  label: string
-  percent: number
-  expires_at: string | null
-  created_at: string
-}
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: 'new', label: 'Новіші' },
+  { key: 'mrr', label: 'Рахунок' },
+  { key: 'leads', label: 'Ліди' },
+  { key: 'activity', label: 'Активність' },
+]
 
-const CHANNEL_LABELS: Record<string, string> = {
-  telegram: 'Telegram',
-  whatsapp: 'WhatsApp',
-  fbm: 'Messenger',
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('uk-UA', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-async function getAccessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
+function Stat({ label, value, sub, tone, icon, index }: { label: string; value: string; sub?: string; tone: string; icon: React.ReactNode; index: number }) {
+  return (
+    <div className={`adm-stat tone-${tone}`} style={{ '--i': index } as React.CSSProperties}>
+      <div className="adm-stat-top">
+        <span className="adm-stat-label">{label}</span>
+        <span className="adm-stat-icon" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
+      <div className="adm-stat-value">{value}</div>
+      {sub && <div className="adm-stat-sub">{sub}</div>}
+    </div>
+  )
 }
 
 export default function AdminOrganizations() {
-  const [orgs, setOrgs] = useState<AdminOrg[]>([])
+  const navigate = useNavigate()
+  const [orgs, setOrgs] = useState<AdminOrgListItem[]>([])
+  const [totals, setTotals] = useState<AdminOrgTotals | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<AdminOrg | null>(null)
-
-  async function load(searchTerm: string) {
-    setLoading(true)
-    setError(null)
-
-    const accessToken = await getAccessToken()
-    if (!accessToken) {
-      setError('Сесія недійсна, увійдіть знову')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const res = await fetch('/.netlify/functions/admin-organizations', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ search: searchTerm }),
-      })
-      const data = await res.json()
-      if (!res.ok) setError(data.error ?? 'Не вдалося отримати список організацій')
-      else setOrgs((data.organizations ?? []) as AdminOrg[])
-    } catch {
-      setError('Мережева помилка. Спробуйте ще раз')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<StatusFilter>('all')
+  const [sort, setSort] = useState<SortKey>('new')
 
   useEffect(() => {
-    void load('')
+    let cancelled = false
+    adminOrgsApi<{ organizations: AdminOrgListItem[]; totals: AdminOrgTotals | null }>({ action: 'list' })
+      .then((data) => {
+        if (cancelled) return
+        setOrgs(data.organizations)
+        setTotals(data.totals)
+      })
+      .catch((err: Error) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  function handleSearch(e: FormEvent) {
-    e.preventDefault()
-    void load(search)
-  }
+  // The whole list is already here (one tenant = one row), so search, status
+  // and sort are instant and don't re-read — and re-log — the platform.
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const rows = orgs.filter((o) => {
+      if (status !== 'all' && (o.plan_status ?? 'none') !== status) return false
+      if (!q) return true
+      return o.name.toLowerCase().includes(q) || (o.owner_email ?? '').toLowerCase().includes(q) || o.id.startsWith(q)
+    })
+    const by: Record<SortKey, (a: AdminOrgListItem, b: AdminOrgListItem) => number> = {
+      new: (a, b) => b.created_at.localeCompare(a.created_at),
+      mrr: (a, b) => b.bill.net - a.bill.net,
+      leads: (a, b) => b.lead_count - a.lead_count,
+      activity: (a, b) => (b.last_thread_at ?? '').localeCompare(a.last_thread_at ?? ''),
+    }
+    return rows.sort(by[sort])
+  }, [orgs, query, status, sort])
+
+  const dist = totals ? (['active', 'trial', 'free', 'none'] as const).map((k) => ({ k, n: totals.by_status[k] })) : []
 
   return (
-    <div className="page fade-in">
-      <div className="page-header">
+    <div className="adm fade-in">
+      <div className="adm-hero">
         <div>
-          <h1 className="page-title">Організації</h1>
-          <p className="page-description">Огляд усіх тенантів платформи — лише метадані, без доступу в самі кабінети</p>
+          <div className="adm-eyebrow">
+            <span className="adm-pulse" aria-hidden="true" />
+            ROOT ACCESS · MISSION CONTROL
+          </div>
+          <h1 className="adm-title">Організації</h1>
+          <p className="adm-subtitle">Усі тенанти платформи, їхній білінг і стан — лише метадані, без доступу до переписок.</p>
+        </div>
+        <div className="adm-hero-badges">
+          <span className="adm-badge tone-danger">SECURITY ZONE</span>
+          <span className="adm-badge tone-active">SYSTEM ONLINE</span>
         </div>
       </div>
 
@@ -100,315 +109,135 @@ export default function AdminOrganizations() {
         </div>
       )}
 
-      <form className="analytics-filter-row" onSubmit={handleSearch}>
-        <input
-          className="input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Пошук за назвою…"
-          aria-label="Пошук організації"
+      <div className="adm-stats">
+        <Stat index={0} tone="ai" icon={<IconBuilding size={15} />} label="Всього організацій" value={totals ? String(totals.organizations) : '…'} sub={totals ? `+${totals.new_30d} за 30 днів` : undefined} />
+        <Stat index={1} tone="active" icon={<IconTrendingUp size={15} />} label="Платні (active)" value={totals ? String(totals.by_status.active) : '…'} sub={totals ? `${totals.active_30d} з активністю за 30 днів` : undefined} />
+        <Stat
+          index={2}
+          tone="trial"
+          icon={<IconUsers size={15} />}
+          label="На тріалі"
+          value={totals ? String(totals.by_status.trial) : '…'}
+          sub={totals ? `потенційно ${usd(totals.trial_pipeline)}/міс` : undefined}
         />
-        <button type="submit" className="btn btn-secondary" disabled={loading}>
-          {loading ? <IconSpinner size={15} /> : <IconSearch size={15} />}
-          Знайти
-        </button>
-        {search && (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              setSearch('')
-              void load('')
-            }}
-          >
-            Скинути
-          </button>
-        )}
-      </form>
+        <Stat index={3} tone="accent" icon={<IconWallet size={15} />} label="MRR платформи" value={totals ? usd(totals.mrr) : '…'} sub="сума рахунків active-організацій" />
+      </div>
 
-      <div className="card card-tight">
-        {loading ? (
-          <p className="settings-row-hint" style={{ padding: '0 1rem 1rem' }}>
-            Завантаження…
-          </p>
-        ) : orgs.length === 0 ? (
-          <div className="empty-state" style={{ border: 'none', background: 'transparent' }}>
-            <h3>Нічого не знайдено</h3>
-            <p>За цим запитом немає організацій.</p>
+      {totals && totals.organizations > 0 && (
+        <div className="adm-dist" aria-label="Розподіл за статусом плану">
+          <div className="adm-dist-bar">
+            {dist.map(({ k, n }) =>
+              n > 0 ? <span key={k} className={`tone-${STATUS_META[k].tone}`} style={{ flex: n }} title={`${STATUS_META[k].label}: ${n}`} /> : null,
+            )}
           </div>
+          <div className="adm-dist-legend">
+            {dist.map(({ k, n }) => (
+              <button key={k} type="button" className={`tone-${STATUS_META[k].tone}${status === k ? ' is-on' : ''}`} onClick={() => setStatus(status === k ? 'all' : k)}>
+                <i />
+                {STATUS_META[k].label} <b>{n}</b>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="adm-panel">
+        <div className="adm-toolbar">
+          <label className="adm-search">
+            <IconSearch size={14} aria-hidden="true" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Назва, email власника або ID" aria-label="Пошук організації" />
+          </label>
+          <div className="adm-seg" role="group" aria-label="Статус">
+            {(['all', 'active', 'trial', 'free', 'none'] as const).map((k) => (
+              <button key={k} type="button" className={status === k ? 'is-on' : ''} onClick={() => setStatus(k)}>
+                {k === 'all' ? 'Усі' : STATUS_META[k].label}
+              </button>
+            ))}
+          </div>
+          <div className="adm-seg" role="group" aria-label="Сортування">
+            {SORTS.map((s) => (
+              <button key={s.key} type="button" className={sort === s.key ? 'is-on' : ''} onClick={() => setSort(s.key)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="adm-loading">
+            <IconSpinner size={16} /> Сканую платформу…
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="adm-empty">Нічого не знайдено за цими умовами.</div>
         ) : (
-          <div className="crm-table-wrap">
-            <table className="crm-table">
-              <thead>
-                <tr>
-                  <th>Організація</th>
-                  <th>Створена</th>
-                  <th>Лідів</th>
-                  <th>Канали</th>
-                  <th>Остання активність</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orgs.map((org) => (
-                  <tr key={org.id} className="crm-row" onClick={() => setSelected(org)}>
-                    <td>{org.name}</td>
-                    <td className="crm-cell-muted">{formatDate(org.created_at)}</td>
-                    <td>{org.lead_count}</td>
-                    <td>
-                      {org.channels.length === 0 ? (
-                        <span className="crm-cell-muted">—</span>
-                      ) : (
-                        org.channels.map((c) => (
-                          <span key={c} className="badge badge-neutral" style={{ marginRight: '0.25rem' }}>
-                            {CHANNEL_LABELS[c] ?? c}
-                          </span>
-                        ))
-                      )}
-                    </td>
-                    <td className="crm-cell-muted">{formatDate(org.last_thread_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="adm-list">
+            <div className="adm-row adm-row-head">
+              <span>Організація</span>
+              <span>Статус</span>
+              <span>Рахунок / міс</span>
+              <span>Ліди</span>
+              <span>Активність</span>
+              <span>Створена</span>
+              <span />
+            </div>
+            {visible.map((o, i) => {
+              const meta = STATUS_META[o.plan_status ?? 'none']
+              const days = o.plan_status === 'trial' ? trialDaysLeft(o.trial_ends_at) : null
+              return (
+                <button
+                  type="button"
+                  key={o.id}
+                  className={`adm-row tone-${meta.tone}`}
+                  style={{ '--i': Math.min(i, 12) } as React.CSSProperties}
+                  onClick={() => navigate(`/admin/organizations/${o.id}`)}
+                >
+                  <span className="adm-org">
+                    <span className="adm-emblem" aria-hidden="true">
+                      {orgInitial(o.name)}
+                    </span>
+                    <span className="adm-org-text">
+                      <b>{o.name}</b>
+                      <small>{o.owner_email ?? 'власник невідомий'}</small>
+                    </span>
+                  </span>
+                  <span className="adm-cell" data-label="Статус">
+                    <span className={`adm-status tone-${meta.tone}`}>
+                      <i />
+                      {meta.label}
+                      {days !== null && <em>{days} дн</em>}
+                    </span>
+                  </span>
+                  <span className="adm-cell adm-num" data-label="Рахунок / міс">
+                    {o.bill.gross > 0 ? (
+                      <>
+                        {usd(o.bill.net)}
+                        <small>
+                          {o.addons_count} мод.{o.bill.discountPct > 0 ? ` · −${o.bill.discountPct}%` : ''}
+                        </small>
+                      </>
+                    ) : (
+                      <span className="adm-muted">—</span>
+                    )}
+                  </span>
+                  <span className="adm-cell adm-num" data-label="Ліди">
+                    {o.lead_count.toLocaleString('uk-UA')}
+                    <small>{o.channels.map((c) => CHANNEL_LABELS[c] ?? c).join(' · ') || 'без каналів'}</small>
+                  </span>
+                  <span className="adm-cell" data-label="Активність">
+                    {relativeTime(o.last_thread_at)}
+                  </span>
+                  <span className="adm-cell adm-muted" data-label="Створена">
+                    {formatDate(o.created_at)}
+                  </span>
+                  <span className="adm-chevron" aria-hidden="true">
+                    <IconChevronRight size={15} />
+                  </span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
-
-      {selected && (
-        <div className="card admin-detail">
-          <div className="admin-detail-head">
-            <h3>{selected.name}</h3>
-            <button type="button" className="btn btn-ghost" onClick={() => setSelected(null)}>
-              Закрити
-            </button>
-          </div>
-          <dl className="admin-detail-grid">
-            <div>
-              <dt>ID</dt>
-              <dd className="admin-detail-mono">{selected.id}</dd>
-            </div>
-            <div>
-              <dt>Створена</dt>
-              <dd>{formatDate(selected.created_at)}</dd>
-            </div>
-            <div>
-              <dt>Лідів</dt>
-              <dd>{selected.lead_count}</dd>
-            </div>
-            <div>
-              <dt>Підключені канали</dt>
-              <dd>{selected.channels.map((c) => CHANNEL_LABELS[c] ?? c).join(', ') || '—'}</dd>
-            </div>
-            <div>
-              <dt>Останній активний тред</dt>
-              <dd>{formatDate(selected.last_thread_at)}</dd>
-            </div>
-          </dl>
-          <p className="settings-row-hint">
-            Тільки метадані. Переписки, ліди й креденшели цієї організації звідси недоступні.
-          </p>
-
-          <DiscountsSection orgId={selected.id} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-function isExpired(discount: OrgDiscount): boolean {
-  return !!discount.expires_at && new Date(discount.expires_at).getTime() < Date.now()
-}
-
-// Platform-admin-only view/edit of org_discounts for one org — a modifier
-// layered on top of the client's own billing calculation, never touching
-// org_billing_state/org_billing_addons themselves.
-function DiscountsSection({ orgId }: { orgId: string }) {
-  const [discounts, setDiscounts] = useState<OrgDiscount[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [label, setLabel] = useState('')
-  const [percent, setPercent] = useState('')
-  const [expiresAt, setExpiresAt] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  async function callDiscountApi(body: Record<string, unknown>) {
-    const accessToken = await getAccessToken()
-    if (!accessToken) throw new Error('Сесія недійсна, увійдіть знову')
-
-    const res = await fetch('/.netlify/functions/save-org-discount', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error ?? 'Не вдалося виконати дію')
-    return data
-  }
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await callDiscountApi({ action: 'list', orgId })
-      setDiscounts((data.discounts ?? []) as OrgDiscount[])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не вдалося отримати знижки')
-    } finally {
-      setLoading(false)
-    }
-  }, [orgId])
-
-  useEffect(() => {
-    void load()
-    setLabel('')
-    setPercent('')
-    setExpiresAt('')
-  }, [orgId, load])
-
-  async function handleAdd(e: FormEvent) {
-    e.preventDefault()
-    const percentNum = Number(percent)
-    if (!label.trim() || Number.isNaN(percentNum) || percentNum < 0 || percentNum > 100) {
-      setError('Вкажіть назву й відсоток від 0 до 100')
-      return
-    }
-
-    setSubmitting(true)
-    setError(null)
-    try {
-      await callDiscountApi({
-        action: 'create',
-        orgId,
-        label: label.trim(),
-        percent: percentNum,
-        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-      })
-      setLabel('')
-      setPercent('')
-      setExpiresAt('')
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не вдалося створити знижку')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleDelete(discountId: string) {
-    setDeletingId(discountId)
-    setError(null)
-    try {
-      await callDiscountApi({ action: 'delete', orgId, discountId })
-      setDiscounts((prev) => prev.filter((d) => d.id !== discountId))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не вдалося видалити знижку')
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  return (
-    <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
-      <h4 style={{ margin: '0 0 0.75rem' }}>Знижки</h4>
-
-      {loading ? (
-        <p className="settings-row-hint">Завантаження…</p>
-      ) : discounts.length === 0 ? (
-        <p className="settings-row-hint">Знижок для цієї організації ще немає.</p>
-      ) : (
-        <ul style={{ listStyle: 'none', margin: '0 0 1rem', padding: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {discounts.map((d) => {
-            const expired = isExpired(d)
-            return (
-              <li
-                key={d.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '0.75rem',
-                  padding: '0.625rem 0.75rem',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid var(--border)',
-                  opacity: expired ? 0.55 : 1,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', minWidth: 0 }}>
-                  <span className={`badge ${expired ? 'badge-neutral' : 'badge-success'}`}>−{d.percent}%</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label}</span>
-                  {d.expires_at && (
-                    <span className="settings-row-hint">
-                      {expired ? 'прострочено' : 'до'} {formatShortDate(d.expires_at)}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: '0.375rem' }}
-                  onClick={() => handleDelete(d.id)}
-                  disabled={deletingId === d.id}
-                  aria-label={`Видалити знижку ${d.label}`}
-                >
-                  {deletingId === d.id ? <IconSpinner size={14} /> : <IconTrash size={14} />}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-
-      <form onSubmit={handleAdd} style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end' }}>
-        <div style={{ flex: '2 1 200px' }}>
-          <label className="settings-row-hint" htmlFor="discount-label" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Назва
-          </label>
-          <input
-            id="discount-label"
-            className="input"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Знижка для раннього клієнта"
-          />
-        </div>
-        <div style={{ flex: '1 1 90px' }}>
-          <label className="settings-row-hint" htmlFor="discount-percent" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Відсоток
-          </label>
-          <input
-            id="discount-percent"
-            className="input"
-            type="number"
-            min={0}
-            max={100}
-            step="0.01"
-            value={percent}
-            onChange={(e) => setPercent(e.target.value)}
-            placeholder="20"
-          />
-        </div>
-        <div style={{ flex: '1 1 150px' }}>
-          <label className="settings-row-hint" htmlFor="discount-expires" style={{ display: 'block', marginBottom: '0.25rem' }}>
-            Діє до (опційно)
-          </label>
-          <input id="discount-expires" className="input" type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
-        </div>
-        <button type="submit" className="btn btn-secondary" disabled={submitting}>
-          {submitting ? <IconSpinner size={15} /> : 'Додати знижку'}
-        </button>
-      </form>
-
-      {error && (
-        <div className="alert alert-error" style={{ marginTop: '0.75rem' }}>
-          <IconAlert size={16} />
-          <span>{error}</span>
-        </div>
-      )}
     </div>
   )
 }
