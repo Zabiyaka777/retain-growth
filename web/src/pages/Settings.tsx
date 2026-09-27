@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
 import { IconAlert, IconBuilding, IconCheckCircle, IconPlug, IconPlus, IconSparkles, IconSpinner, IconTrash } from '../components/icons'
@@ -434,6 +434,22 @@ function WhatsAppPanel() {
             <div className="alert alert-info">
               <IconCheckCircle size={16} />
               <span>WhatsApp підключено</span>
+            </div>
+
+            {/* Shown for as long as WhatsApp stays connected, not just once:
+                outside Meta's 24-hour customer-service window only an approved
+                template can open the conversation again. */}
+            <div className="alert alert-info" style={{ alignItems: 'flex-start' }}>
+              <IconAlert size={16} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <span>
+                  Щоб писати клієнту після 24 годин з його останнього повідомлення, Meta вимагає затверджений шаблон
+                  повідомлення (message template). Це займає 1–2 хвилини.
+                </span>
+                <Link to="/dashboard/templates" className="btn btn-secondary">
+                  Налаштувати шаблони
+                </Link>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.625rem' }}>
